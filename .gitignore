@@ -7,3 +7,12 @@ venv/
 dist/
 build/
 *.egg-info/
+
+# Remotion video (video/): dependencies and generated media
+video/node_modules/
+video/out/
+video/public/footage/
+video/public/audio/
+video/public/capture.json
+video/person.jpg
+video/person.y4m
