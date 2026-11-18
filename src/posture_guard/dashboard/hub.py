@@ -68,6 +68,7 @@ class MetricsSnapshot:
     needle: float | None = None  # smoothed posture needle, -1 upright .. +1 bad
     needle_calibrated: bool = False  # True when driven by good/slouch calibration
     calibration: dict[str, object] | None = None  # CalibrationStatus.to_payload()
+    cue: dict[str, object] | None = None  # PostureCue.to_payload(): what to fix
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -104,6 +105,7 @@ class MetricsSnapshot:
                 "calibrated": self.needle_calibrated,
             },
             "calibration": self.calibration,
+            "cue": self.cue,
         }
 
 

@@ -86,3 +86,14 @@ coached to better posture with nothing to install.
 3. WHEN the tab is hidden, THE page SHALL keep tracking (worker-driven ticks, about 5 fps) and keep reminding.
 4. Audio SHALL start only inside a user gesture; chimes use Web Audio, the prompt uses speech synthesis; custom good/bad sounds can be picked from files.
 5. Video and landmarks SHALL never leave the browser; calibration, settings and daily totals persist in `localStorage`.
+
+### Requirement 9: Say what to fix
+**User Story:** As a user, I want a reminder to tell me what is wrong and how to fix
+it ("your neck is too far forward"), not just "fix your posture".
+
+#### Acceptance Criteria
+1. ON every scored frame, THE System SHALL pick the metric furthest past its band, as a multiple of its threshold, using the raw angle and the drift from the slow baseline, and SHALL produce a cue with a title, a fix and a spoken sentence. WHEN every metric is inside its exit band, THERE SHALL be no cue.
+2. Sides in a cue SHALL be the person's own left and right, and SHALL NOT change when the camera image is mirrored.
+3. WHEN a chime or voice reminder fires and a cue exists, THE reminder banner SHALL show it; WHEN `audio.specific_cues` (browser: *Say what to fix*) is on, THE spoken prompt SHALL be the cue's sentence, otherwise `audio.voice_text`.
+4. THE dashboard and browser app SHALL show the cue live while a reminder is active or a metric is past its threshold.
+5. THE browser and Python versions SHALL produce the same cue on every frame of the golden timeline.

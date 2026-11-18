@@ -443,3 +443,72 @@ def test_no_player_at_all_is_status_not_exception(tmp_path):
         assert wait_until(lambda: len(runner.play_calls()) == 2)
     finally:
         worker.close()
+
+
+# -- specific spoken cues ------------------------------------------------------------
+
+
+def test_voice_with_text_renders_and_plays_that_sentence(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        worker.enqueue(Nudge.VOICE, text="Head forward. Tuck your chin.")
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        renders = runner.render_calls("pico2wave")
+        assert renders[-1][-1] == "Head forward. Tuck your chin."
+        assert runner.play_calls()[0][-1] == renders[-1][2]  # plays the cue WAV
+        assert "cue-" in runner.play_calls()[0][-1]
+    finally:
+        worker.close()
+
+
+def test_repeated_cue_sentence_is_rendered_once(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        for expected in (1, 2):
+            worker.enqueue(Nudge.VOICE, text="Level your shoulders.")
+            assert wait_until(lambda n=expected: len(runner.play_calls()) == n)
+        renders = runner.render_calls("pico2wave")
+        cue_renders = [c for c in renders if c[-1] == "Level your shoulders."]
+        assert len(cue_renders) == 1
+    finally:
+        worker.close()
+
+
+def test_failed_cue_render_falls_back_to_the_configured_prompt(tmp_path):
+    class CueRenderFails(FakeRunner):
+        def __call__(self, cmd):  # noqa: ANN001, ANN204
+            if cmd[0].endswith("pico2wave") and "cue-" in cmd[2]:
+                self.calls.append(list(cmd))
+                return CommandResult(returncode=1)
+            return super().__call__(cmd)
+
+    runner = CueRenderFails()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        worker.enqueue(Nudge.VOICE, text="Sit up straight.")
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1].endswith("voice.wav")
+    finally:
+        worker.close()
+
+
+def test_text_is_ignored_for_non_voice_nudges(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        worker.enqueue(Nudge.CHIME, text="should not be spoken")
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1].endswith("chime.wav")
+        assert not any(c[-1] == "should not be spoken" for c in runner.calls)
+    finally:
+        worker.close()

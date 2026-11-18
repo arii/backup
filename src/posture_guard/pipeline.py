@@ -20,6 +20,7 @@ from numpy.typing import NDArray
 from posture_guard.calibration import CalibrationRecorder
 from posture_guard.camera import Frame, FrameSource, SourceStatus
 from posture_guard.config import AppConfig, ScoringConfig
+from posture_guard.cues import PostureCue, mirror_sign, posture_cue
 from posture_guard.dashboard.hub import DashboardHub, MetricsSnapshot, ScoringThresholds
 from posture_guard.feedback import RuntimeFeedback
 from posture_guard.pose import PoseDetection, PoseDetector, default_detector, tracked_landmarks
@@ -49,7 +50,9 @@ class NudgeSink(Protocol):
     the dashboard payload.
     """
 
-    def enqueue(self, nudge: Nudge, *, force: bool = False) -> None: ...
+    def enqueue(
+        self, nudge: Nudge, *, force: bool = False, text: str | None = None
+    ) -> None: ...
 
 
 FrameRenderer = Callable[
@@ -245,6 +248,7 @@ class PosturePipeline:
         self._calibration_version = self.calibration.version
         self._needle = NeedleSmoother(config.needle)
         self._needle_calibrated = False
+        self._cue: PostureCue | None = None
 
     @property
     def state(self) -> PostureState:
@@ -259,6 +263,14 @@ class PosturePipeline:
         self._sync_calibration()
         transition = self._state_machine.update(result, frame.timestamp_s)
         self._update_needle(result, frame.timestamp_s)
+        self._cue = (
+            posture_cue(
+                result, self._config.scoring, self._state_machine.baseline_metrics,
+                mirror_sign(detection.landmarks),
+            )
+            if isinstance(result, ScoredPosture)
+            else None
+        )
         nudges = [transition.nudge] if transition.nudge is not Nudge.NONE else []
         if transition.recovered and self._config.feedback.recovery_chime.enabled:
             nudges.append(Nudge.RECOVERY)
@@ -267,9 +279,13 @@ class PosturePipeline:
             # keeps sole emission authority; silent/chime-only drop the audio
             # here while state logic advances identically.
             allowed = self._feedback is None or self._feedback.allows(nudge)
+            spoken = self._spoken_cue(nudge)
             if allowed and self._audio is not None:
-                self._audio.enqueue(nudge)
-            self._nudge_event = self._emit_nudge_event(nudge, allowed)
+                if spoken is not None:
+                    self._audio.enqueue(nudge, text=spoken)
+                else:
+                    self._audio.enqueue(nudge)
+            self._nudge_event = self._emit_nudge_event(nudge, allowed, spoken)
         self._update_fps(frame.timestamp_s)
         if self._hub is not None:
             self._publish(detection, result, transition.state, frame)
@@ -279,6 +295,21 @@ class PosturePipeline:
     def needle(self) -> float | None:
         """Smoothed posture needle in [-1, 1], or None before a scored frame."""
         return self._needle.value
+
+    @property
+    def cue(self) -> PostureCue | None:
+        """What is off and how to fix it on the latest frame (None when every
+        metric is inside its band, or the frame was not scored)."""
+        return self._cue
+
+    def _spoken_cue(self, nudge: Nudge) -> str | None:
+        """Specific spoken prompt for a voice reminder, when enabled and a cue
+        applies; None keeps the configured voice_text."""
+        if nudge is not Nudge.VOICE or self._cue is None:
+            return None
+        if not self._config.audio.specific_cues:
+            return None
+        return self._cue.say
 
     def _sync_calibration(self) -> None:
         """Push a newly recorded (or reset) good centroid into the state
@@ -301,15 +332,20 @@ class PosturePipeline:
 
     # -- dashboard publication -----------------------------------------------------
 
-    def _emit_nudge_event(self, nudge: Nudge, allowed: bool) -> dict[str, object]:
-        """Build the visible reminder event. Voice events carry the prompt text
-        so the banner can read 'Reminder: <text>'; sequence numbers come from
-        the hub when wired so snapshot and test-endpoint events never collide."""
-        text = (
-            self._feedback.prompt_text()
-            if nudge is Nudge.VOICE and self._feedback is not None
-            else None
-        )
+    def _emit_nudge_event(
+        self, nudge: Nudge, allowed: bool, spoken: str | None = None
+    ) -> dict[str, object]:
+        """Build the visible reminder event. Voice events carry the spoken text
+        and chime events the cue title, so the banner can say what to fix;
+        sequence numbers come from the hub when wired so snapshot and
+        test-endpoint events never collide."""
+        text: str | None = None
+        if nudge is Nudge.VOICE:
+            text = spoken or (
+                self._feedback.prompt_text() if self._feedback is not None else None
+            )
+        elif nudge is Nudge.CHIME and self._cue is not None:
+            text = self._cue.title
         if self._hub is not None:
             return self._hub.next_nudge_event(
                 nudge.value, muted=not allowed, text=text
@@ -373,6 +409,7 @@ class PosturePipeline:
             ),
             nudge_event=self._nudge_event,
             needle=self._needle.value,
+            cue=self._cue.to_payload() if self._cue is not None else None,
             needle_calibrated=self._needle_calibrated,
             calibration=self.calibration.status.to_payload(),
         )

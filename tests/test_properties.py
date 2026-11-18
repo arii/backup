@@ -17,6 +17,9 @@ P4 Idempotent reminders: at most one CHIME per bad episode and only on entry,
 P5 Glitch transparency: inserting NaN/inf frames anywhere leaves the state and
    reminders on every other frame unchanged (held state, nothing reset).
 P6 Time safety: update() never raises for non-decreasing timestamps.
+P7 Cue mirror invariance: mirroring the image (x -> 1 - x) never changes the
+   posture cue - same metric, same side of the person - and a cue is never
+   reported for a metric inside its exit band.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ import numpy as np
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from conftest import make_pose
+from conftest import make_pose, mirror_x
 from posture_guard.camera import Frame, SyntheticFrameSource
 from posture_guard.config import (
     AppConfig,
@@ -39,6 +42,7 @@ from posture_guard.config import (
     ScoringConfig,
     StateConfig,
 )
+from posture_guard.cues import mirror_sign, posture_cue
 from posture_guard.pipeline import PosturePipeline
 from posture_guard.pose import PoseDetection
 from posture_guard.posture_needle import Calibration, NeedleSmoother, raw_needle
@@ -66,8 +70,8 @@ SLACK = 1e-6
 
 GOOD = ScoredPosture(0.0, 0.0, 0.0, 0.0)
 BAD = ScoredPosture(18.0, 0.0, 0.0, 0.0)
-# Shoulder level 2.5 deg: past the exit threshold (4 - 3 = 1), below enter (4).
-NEUTRAL = ScoredPosture(0.0, 0.0, 0.0, 2.5)
+# Shoulder level 4.5 deg: past the exit threshold (6 - 3 = 3), below enter (6).
+NEUTRAL = ScoredPosture(0.0, 0.0, 0.0, 4.5)
 NO_POSE = Unreliable(UnreliableReason.NO_POSE)
 LOW_VIS = Unreliable(UnreliableReason.LOW_VISIBILITY)
 GLITCH = Unreliable(UnreliableReason.NON_FINITE)
@@ -265,7 +269,7 @@ class RecordingAudio:
     def __init__(self) -> None:
         self.enqueued: list[Nudge] = []
 
-    def enqueue(self, nudge: Nudge, *, force: bool = False) -> None:
+    def enqueue(self, nudge: Nudge, *, force: bool = False, text: str | None = None) -> None:
         self.enqueued.append(nudge)
 
 
@@ -354,3 +358,41 @@ def test_p6_update_never_raises_for_non_decreasing_time(steps):
         now += dt
         tr = sm.update(result, now)
         assert tr.state in PostureState
+
+
+# -- P7: cue mirror invariance ----------------------------------------------------------
+
+
+@PROPS
+@given(
+    deltas=st.lists(st.tuples(st.floats(-0.08, 0.08), st.floats(-0.08, 0.08)), min_size=6,
+                    max_size=6),
+    baseline=st.none() | st.builds(
+        ScoredPosture,
+        head_forward_deg=st.floats(-10, 10), trunk_lean_deg=st.floats(-10, 10),
+        head_tilt_deg=st.floats(-10, 10), shoulder_level_deg=st.floats(-10, 10),
+    ),
+)
+def test_p7_cue_is_mirror_invariant_and_only_names_metrics_past_their_band(deltas, baseline):
+    base = make_pose()
+    pairs = zip(TRACKED, deltas, strict=True)
+    pose = pose_from([(base[i].x + dx, base[i].y + dy) for i, (dx, dy) in pairs])
+    mirrored = mirror_x(pose)
+    a = score_pose(pose, CFG)
+    b = score_pose(mirrored, CFG)
+    if not (isinstance(a, ScoredPosture) and isinstance(b, ScoredPosture)):
+        return
+    # A mirrored baseline flips the x-dependent angles the same way the pose does.
+    mirrored_baseline = None if baseline is None else ScoredPosture(
+        -baseline.head_forward_deg, -baseline.trunk_lean_deg,
+        -baseline.head_tilt_deg, baseline.shoulder_level_deg,
+    )
+    cue_a = posture_cue(a, CFG, baseline, mirror_sign(pose))
+    cue_b = posture_cue(b, CFG, mirrored_baseline, mirror_sign(mirrored))
+    assert (cue_a is None) == (cue_b is None)
+    if cue_a is not None:
+        assert cue_a.id == cue_b.id, (a, b)
+        value = getattr(a, cue_a.metric + "_deg")
+        threshold = getattr(CFG, cue_a.metric + "_deg")
+        ref = 0.0 if baseline is None else getattr(baseline, cue_a.metric + "_deg")
+        assert max(abs(value), abs(value - ref)) > CFG.bad_exit(threshold) - 1e-9

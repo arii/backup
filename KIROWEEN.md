@@ -12,7 +12,9 @@ and chimes when you slouch. Nothing leaves your computer.
 Posture Guard runs MediaPipe Pose on your webcam, measures head-forward, head
 tilt, shoulder level and trunk lean, and runs a reminder state machine: a chime
 after 2 s of sustained slouching, a spoken prompt 10 s later, and a reward chime
-when you sit back up. A posture needle shows how close you are to slouching, and
+when you sit back up. Reminders say what is wrong and how to fix it ("Right
+shoulder dropped: lift your right shoulder and take your weight off that elbow"),
+using your own left and right even when the camera image is mirrored. A posture needle shows how close you are to slouching, and
 "Record good posture" / "Record slouch posture" calibrate it to your own desk.
 
 It comes in two forms that share one behavior:
@@ -44,6 +46,8 @@ What the Kiro phase changed (PRs #19 onward):
 - **From a Linux install to a web page.** A browser version on GitHub Pages:
   MediaPipe in the tab, a JavaScript port of the scoring and state machine, Web
   Audio, background-tab tracking. No install, no special camera.
+- **Specific advice.** Reminders name the problem, the side and the fix, instead
+  of a generic "fix your posture".
 - **Robustness.** NaN/inf tracking glitches hold the current state instead of
   resetting it; frame-rate-independent smoothing; strict `config.yaml`
   validation; custom good/bad sounds; good/slouch calibration.
@@ -53,8 +57,8 @@ What the Kiro phase changed (PRs #19 onward):
 ## How Kiro was used
 
 - **Spec-driven development.** [`.kiro/specs/posture-guard/`](.kiro/specs/posture-guard/)
-  holds EARS-style requirements (8 requirement groups), a design with six numbered
-  correctness properties, and a 10-task plan that was checked off as each task's
+  holds EARS-style requirements (9 requirement groups), a design with seven numbered
+  correctness properties, and a 12-task plan that was checked off as each task's
   tests passed.
 - **Steering.** [`.kiro/steering/architecture.md`](.kiro/steering/architecture.md)
   fixes the rules every change follows: `config.yaml` as the single source of
@@ -68,7 +72,8 @@ What the Kiro phase changed (PRs #19 onward):
   design's properties: the needle stays finite in [-1, 1] for any input including
   NaN/inf; angles don't change when landmarks are scaled; neutral-band noise and
   short slouches never remind; one chime per slouch episode; NaN frames change
-  nothing; the state machine never raises. Deliberately broken versions of the
+  nothing; the state machine never raises; mirroring the image never changes
+  the posture advice. Deliberately broken versions of the
   code (removed glitch hold, broken voice cooldown, shortened sustain, removed
   clamp, doubled recovery chime) were each caught.
 - **Python-to-browser parity.** `tests/browser_golden.py` runs the real Python
@@ -84,8 +89,8 @@ What the Kiro phase changed (PRs #19 onward):
   the slow baseline that slouching is normal. Mitigated: "Record good posture"
   anchors the baseline, and the README says to record it once per session.
 - **Over-strict shoulder threshold.** The end-to-end test showed an upright person
-  being reminded: shoulder level 3-4 deg against a 4 deg threshold. Not yet
-  changed (see Known limitations).
+  being reminded, and the golden timeline showed ~1 deg landmark jitter crossing
+  the 1 deg exit band of the 4 deg shoulder threshold. Fixed: raised to 6 deg.
 
 ## Testing
 
@@ -99,8 +104,6 @@ What the Kiro phase changed (PRs #19 onward):
 
 ## Known limitations
 
-- **Shoulder threshold.** `scoring.shoulder_level_deg` is 4 deg, which reminds
-  some people who are sitting upright. Raising it to 6 deg is a one-line change.
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.
@@ -124,8 +127,9 @@ What the Kiro phase changed (PRs #19 onward):
 
 1. **0:00** "Posture to die for": open the live URL, press *Start with webcam*.
 2. **0:20** Sit up straight: the badge reads GOOD POSTURE, the skeleton is green.
-3. **0:40** Slouch: the needle swings right, the chime plays, "SIT UP" appears;
-   keep slouching for the spoken prompt.
+3. **0:40** Slouch: the needle swings right, the chime plays and the *What to fix*
+   box says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
+   Drop one shoulder to show "Right shoulder dropped".
 4. **1:10** Sit up: the recovery chime and "Back to good posture".
 5. **1:30** Record good and slouch posture; show the calibrated needle.
 6. **1:50** Switch tabs: reminders still fire in the background.

@@ -33,7 +33,7 @@
     Tests: `tests/test_audio.py`, `tests/test_dashboard.py`.
   - _Requirements: 6_
 - [x] 8. Property-based tests
-  - `tests/test_properties.py`: P1-P6 from design.md, plus mutation checks.
+  - `tests/test_properties.py`: P1-P7 from design.md, plus mutation checks.
 - [x] 9. Kiro hook, CI and docs
   - `.kiro/hooks/pytest-on-change.json`; CI runs on branches with `/`; README.
 - [x] 10. Browser version on GitHub Pages (`docs/app/`)
@@ -49,3 +49,13 @@
     rules and the RealSense preflight. `ColorDepth` becomes `Frame(color, timestamp_s)`.
   - Verified: the regenerated golden timeline is frame-for-frame identical (only the two
     depth config keys dropped), so webcam behavior did not change.
+- [x] 12. Say what to fix
+  - `cues.py` (`posture_cue`, `mirror_sign`) and its port `postureCue` in
+    `posture-core.js`; cue on the snapshot payload, in reminder events and in the
+    spoken prompt (`audio.specific_cues`, cached TTS per sentence); "What to fix" box
+    in the browser app and dashboard. Golden timeline records the cue per frame.
+  - Raised `scoring.shoulder_level_deg` 4 -> 6: at 4 the 1 deg exit band sat inside
+    landmark jitter, so upright people got "shoulder dropped".
+  - Tests: `tests/test_cues.py`, property P7 (mirror invariance), audio and pipeline
+    tests, JS golden parity on the cue.
+  - _Requirements: 9_

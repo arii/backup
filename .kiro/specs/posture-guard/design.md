@@ -42,6 +42,20 @@ FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine 
   it. Both directions are guarded: Python changes fail `test_browser_golden.py`
   until regenerated, JS drift fails `tests/js/`.
 
+## Posture cues (`cues.py`)
+- `posture_cue(metrics, cfg, baseline, mirror)`: for each metric, candidates are the
+  raw angle and its drift from the baseline; a candidate counts only past the exit
+  band (`threshold - hysteresis_margin_deg`); the largest `|value| / threshold` wins
+  (ties broken in the fixed order head_forward, head_tilt, shoulder_level, trunk_lean).
+- Sides: `mirror = sign(right_shoulder.x - left_shoulder.x)`. Shoulder level is
+  already mirror-independent (`dy` sign); head tilt: right ear lower iff
+  `sign(tilt) * mirror < 0`; trunk lean: toward the right iff `sign(lean) * mirror > 0`.
+  Head forward has no side.
+- The pipeline computes the cue after the state update (so the baseline is current),
+  publishes it, puts its title on chime events and its sentence on voice events, and
+  passes the sentence to `AudioWorker.enqueue(VOICE, text=...)`, which renders it with
+  TTS on the playback thread (cached per sentence; falls back to the default prompt).
+
 ## Gate order in `score_pose`
 1. No landmarks -> `NO_POSE` (the only absence signal).
 2. Ears/shoulders below the visibility floor (or hips, when degraded feedback is off) -> `LOW_VISIBILITY`.
@@ -111,8 +125,12 @@ baseline and removes this. Property P3 states the precondition (session starts u
    nudge and recovered identical on every original frame.
 6. **P6 Time safety.** `update()` never raises for non-decreasing time, for any mix of
    results including NaN-valued metrics.
+7. **P7 Cue mirror invariance.** Mirroring the image (x -> 1 - x, with the baseline
+   mirrored the same way) never changes the cue id, and a cue never names a metric
+   inside its exit band.
 
 Mutation checks run during development: removing the glitch hold, breaking the voice
 cooldown, shortening the sustain, removing the needle clamp and doubling the
-recovery cue are each caught by the properties. The midpoint-overflow guard is
+recovery cue are each caught by the properties, and so is dropping the mirror term
+from the head-tilt side (P7). The metric-overflow guard is
 pinned by a deterministic test in `test_scoring.py`.

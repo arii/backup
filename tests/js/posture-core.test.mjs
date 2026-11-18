@@ -73,7 +73,17 @@ test("golden timeline parity with the Python pipeline", () => {
     assert.equal(out.transition.recovered, e.recovered, `${where} recovered`);
     close(out.needle, e.needle, `${where} needle`);
     assert.deepEqual(out.nudges, e.nudges, `${where} nudges`);
+    // Same cue (metric, side and wording) as Python on every frame, and the
+    // Python voice reminder spoke exactly that cue.
+    const cue = out.cue === null ? null
+      : { id: out.cue.id, title: out.cue.title, fix: out.cue.fix, say: out.cue.say };
+    assert.deepEqual(cue, e.cue, `${where} cue`);
+    if (e.spoken.length) assert.deepEqual(e.spoken, [out.cue.say], `${where} spoken`);
   });
+  const cues = new Set(golden.frames.map((f) => f.expect.cue && f.expect.cue.id));
+  for (const id of ["head_forward:-", "head_tilt:left", "shoulder_level:right"]) {
+    assert.ok(cues.has(id), `golden timeline covers cue ${id}`);
+  }
   const all = golden.frames.flatMap((f) => f.expect.nudges);
   assert.ok(all.includes("chime") && all.includes("voice") && all.includes("recovery"));
 });
@@ -152,7 +162,7 @@ test("P2: angles are scale invariant", () => {
 
 const GOOD = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
 const BAD = scored({ head_forward_deg: 18, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
-const NEUTRAL = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 2.5 });
+const NEUTRAL = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 4.5 }); // exit 3 < 4.5 < enter 6
 const KINDS = [GOOD, BAD, NEUTRAL, unreliable(Reason.NO_POSE), unreliable(Reason.LOW_VISIBILITY),
   unreliable(Reason.NON_FINITE), unreliable(Reason.FRAMING_OUT_OF_BAND, "too far")];
 

@@ -27,7 +27,7 @@ export const DEFAULTS = Object.freeze({
     head_forward_deg: 8.0,
     trunk_lean_deg: 7.0,
     head_tilt_deg: 8.0,
-    shoulder_level_deg: 4.0,
+    shoulder_level_deg: 6.0,
     hysteresis_margin_deg: 3.0,
     visibility_floor: 0.5,
     trunk_lean_required: true,
@@ -658,6 +658,77 @@ export class CalibrationRecorder {
   }
 }
 
+// -- cues.py --------------------------------------------------------------------
+
+const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
+
+/** +1 when the person's right shoulder is at larger image x, else -1. */
+export function mirrorSign(landmarks) {
+  if (landmarks === null || landmarks === undefined) return 1.0;
+  return landmarks[RIGHT_SHOULDER].x - landmarks[LEFT_SHOULDER].x < 0 ? -1.0 : 1.0;
+}
+
+function cueText(metric, side) {
+  if (metric === "head_forward") {
+    return [
+      "Head forward",
+      "Tuck your chin and bring your ears back over your shoulders.",
+      "Head forward. Tuck your chin and bring your ears back over your shoulders.",
+    ];
+  }
+  if (metric === "head_tilt") {
+    return [
+      `Head tilted toward your ${side} shoulder`,
+      "Straighten your neck so your ears are level.",
+      `Your head is tilted to the ${side}. Straighten your neck.`,
+    ];
+  }
+  if (metric === "shoulder_level") {
+    return [
+      `${side.charAt(0).toUpperCase()}${side.slice(1)} shoulder dropped`,
+      `Lift your ${side} shoulder and take your weight off that elbow.`,
+      `Your ${side} shoulder is low. Level your shoulders.`,
+    ];
+  }
+  return [
+    `Leaning to your ${side}`,
+    "Sit up straight with your weight even on both hips.",
+    `You're leaning to the ${side}. Sit up straight.`,
+  ];
+}
+
+function cueSide(metric, signed, mirror) {
+  if (metric === "head_forward") return null;
+  if (metric === "shoulder_level") return signed > 0 ? "right" : "left";
+  if (metric === "head_tilt") return signed * mirror < 0 ? "right" : "left";
+  return signed * mirror > 0 ? "right" : "left";
+}
+
+/** cues.posture_cue: what is off and how to fix it, or null. */
+export function postureCue(m, cfg, baseline = null, mirror = 1.0) {
+  const trunkOk = cfg.trunk_lean_required && m.trunk_lean_available;
+  let best = null; // [ratio, metric, signed]
+  for (const metric of CUE_METRICS) {
+    if (metric === "trunk_lean" && !trunkOk) continue;
+    const value = m[`${metric}_deg`];
+    const threshold = cfg[`${metric}_deg`];
+    if (threshold <= 0) continue;
+    const exitAt = badExit(cfg, threshold);
+    const candidates = [value];
+    if (baseline !== null) candidates.push(value - baseline[`${metric}_deg`]);
+    for (const signed of candidates) {
+      if (Math.abs(signed) <= exitAt) continue;
+      const ratio = Math.abs(signed) / threshold;
+      if (best === null || ratio > best[0]) best = [ratio, metric, signed];
+    }
+  }
+  if (best === null) return null;
+  const [, metric, signed] = best;
+  const side = cueSide(metric, signed, mirror);
+  const [title, fix, say] = cueText(metric, side ?? "");
+  return { id: `${metric}:${side ?? "-"}`, metric, side, title, fix, say };
+}
+
 // -- pipeline.py process_once (minus video/audio I/O) --------------------------
 
 /** One object per session: feed it landmarks + frame time, get back everything
@@ -689,8 +760,12 @@ export class PostureEngine {
       }
       this.needle.update(rawNeedle(result, this.config.scoring, usable ? cal : null), now);
     }
+    const baseline = this.machine.baseline === null ? null : this.machine.baseline.metrics;
+    const cue = result.kind === "scored"
+      ? postureCue(result, this.config.scoring, baseline, mirrorSign(landmarks))
+      : null;
     const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
-    return { result, transition: tr, needle: this.needle.value, nudges };
+    return { result, transition: tr, needle: this.needle.value, nudges, cue };
   }
 }
