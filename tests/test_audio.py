@@ -261,3 +261,75 @@ def test_test_nudge_forces_chime_then_voice_past_dedupe(tmp_path):
     finally:
         runner.release_first_play.set()
         worker.close()
+
+
+# -- custom good / bad sounds (Requirement 5) -------------------------------------------
+
+
+def _wav(path) -> str:  # noqa: ANN001 - tmp_path child
+    path.write_bytes(b"RIFF....WAVE")
+    return str(path)
+
+
+def test_custom_bad_sound_replaces_chime(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    bad = _wav(tmp_path / "bad.wav")
+    worker = make_worker(tmp_path, runner, config=AudioConfig(bad_sound=bad))
+    worker.start()
+    try:
+        worker.enqueue(Nudge.CHIME)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1] == bad
+        assert worker.status.warnings == ()
+    finally:
+        worker.close()
+
+
+def test_custom_good_sound_plays_on_recovery(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    good = _wav(tmp_path / "good.wav")
+    worker = make_worker(tmp_path, runner, config=AudioConfig(good_sound=good))
+    worker.start()
+    try:
+        worker.enqueue(Nudge.RECOVERY)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1] == good
+    finally:
+        worker.close()
+
+
+def test_missing_custom_sounds_warn_and_fall_back(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    config = AudioConfig(
+        bad_sound=str(tmp_path / "nope-bad.wav"), good_sound=str(tmp_path / "nope-good.wav")
+    )
+    worker = make_worker(tmp_path, runner, config=config)
+    status = worker.start()
+    try:
+        assert len(status.warnings) == 2
+        assert all("not found" in w for w in status.warnings)
+        worker.enqueue(Nudge.CHIME)  # built-in chime still plays
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1].endswith("chime.wav")
+        worker.enqueue(Nudge.RECOVERY)  # no good sound -> silent no-op
+        worker._queue.join()
+        assert len(runner.play_calls()) == 1
+    finally:
+        worker.close()
+
+
+def test_test_sound_reports_availability(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        assert worker.test_sound("bad") is True  # built-in chime
+        assert worker.test_sound("good") is False  # no good sound configured
+        assert worker.test_sound("other") is False
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+    finally:
+        worker.close()

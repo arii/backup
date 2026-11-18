@@ -38,6 +38,9 @@ class Nudge(Enum):
     NONE = "none"
     CHIME = "chime"
     VOICE = "voice"
+    # Not emitted as Transition.nudge (recovery stays silent by default); the
+    # pipeline enqueues it on Transition.recovered when a good sound is set.
+    RECOVERY = "recovery"
 
 
 _ABSENT_REASONS = (UnreliableReason.NO_POSE, UnreliableReason.DEPTH_OUT_OF_BAND)
@@ -48,6 +51,7 @@ class Transition:
     state: PostureState
     nudge: Nudge
     seconds_bad: float | None = None  # bad-posture streak length at nudge time
+    recovered: bool = False  # True only on the update that leaves a bad state for GOOD
 
 
 class PostureStateMachine:
@@ -168,7 +172,7 @@ class PostureStateMachine:
             self._bad_since = None
             self._chime_at = None
             self._voice_at = None
-            return Transition(PostureState.GOOD, Nudge.NONE)
+            return Transition(PostureState.GOOD, Nudge.NONE, recovered=True)
         if self._state is PostureState.BAD_CHIME and self._chime_at is not None:
             if now - self._chime_at >= self._t.voice_delay_s - _EPS:
                 self._state = PostureState.BAD_VOICE

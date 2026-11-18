@@ -10,6 +10,7 @@ injected runner, so tests stub the subprocess layer entirely.
 
 from __future__ import annotations
 
+import logging
 import math
 import queue
 import shutil
@@ -26,6 +27,8 @@ from posture_guard.config import AudioConfig
 from posture_guard.state import Nudge
 
 SAMPLE_RATE = 44100
+
+log = logging.getLogger(__name__)
 
 Runner = Callable[[Sequence[str]], "CommandResult"]
 Which = Callable[[str], str | None]
@@ -45,6 +48,7 @@ class AudioStatus:
     sink: str | None  # resolved sink name, None = paplay default
     tts_backend: str | None  # "pico2wave" | "espeak-ng" | None
     error: str | None = None
+    warnings: tuple[str, ...] = ()  # e.g. a configured custom sound is missing
 
 
 def _render_chime(path: Path) -> None:
@@ -93,6 +97,7 @@ class AudioWorker:
         self._sink: str | None = None
         self._tts_backend: str | None = None
         self._error: str | None = None
+        self._warnings: list[str] = []
         self._thread: threading.Thread | None = None
 
     # -- lifecycle -----------------------------------------------------------------
@@ -119,6 +124,7 @@ class AudioWorker:
             sink=self._sink,
             tts_backend=self._tts_backend,
             error=self._error,
+            warnings=tuple(self._warnings),
         )
 
     # -- public API (caller-side, never blocks on playback) -------------------------
@@ -140,6 +146,16 @@ class AudioWorker:
         for nudge in (Nudge.CHIME, Nudge.VOICE):
             self.enqueue(nudge, force=True)
 
+    def test_sound(self, kind: str) -> bool:
+        """Dashboard hook: force-play the bad ("bad") or good ("good") sound.
+
+        Returns False when nothing is playable for that kind."""
+        nudge = {"bad": Nudge.CHIME, "good": Nudge.RECOVERY}.get(kind)
+        if nudge is None or nudge not in self._sounds:
+            return False
+        self.enqueue(nudge, force=True)
+        return True
+
     # -- internals -------------------------------------------------------------------
 
     def _render_sounds(self) -> None:
@@ -147,7 +163,26 @@ class AudioWorker:
         chime_path = self._sound_dir / "chime.wav"
         _render_chime(chime_path)
         self._sounds[Nudge.CHIME] = chime_path
+        bad = self._custom_sound("bad_sound", self._config.bad_sound)
+        if bad is not None:
+            self._sounds[Nudge.CHIME] = bad
+        good = self._custom_sound("good_sound", self._config.good_sound)
+        if good is not None:
+            self._sounds[Nudge.RECOVERY] = good
         self._tts_backend = self._render_voice()
+
+    def _custom_sound(self, key: str, value: str | None) -> Path | None:
+        """Validated path for a configured custom sound, or None (with a
+        logged warning when it was configured but is not a readable file)."""
+        if not value:
+            return None
+        path = Path(value).expanduser()
+        if path.is_file():
+            return path
+        message = f"audio.{key}: {path} not found; using the default"
+        log.warning(message)
+        self._warnings.append(message)
+        return None
 
     def _render_voice(self) -> str | None:
         """Render the spoken prompt; pico2wave first, espeak-ng fallback."""
