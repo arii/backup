@@ -152,7 +152,7 @@ What the Kiro phase changed (PRs #19 onward):
 | Working demo link | Yes: <https://arii.github.io/posture-guard/app/> |
 | How Kiro was used | This file and the README's "Built with Kiro" section |
 | Category | Frankenstein |
-| Demo video | To record |
+| Demo video | Draft rendered by the `demo-video` workflow from real footage of the live site ([`video/`](video/)); add your own webcam clip and voiceover, then upload to YouTube |
 
 ### Demo video outline (about 3 minutes)
 

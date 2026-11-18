@@ -1,0 +1,88 @@
+name: demo-video
+
+# Records real footage of the deployed app with Playwright, then renders the
+# Kiroween demo video with Remotion (video/). The MP4 is uploaded as the
+# "posture-guard-demo" artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Site to record
+        default: https://arii.github.io/posture-guard/
+  push:
+    paths:
+      - "video/**"
+      - ".github/workflows/demo-video.yml"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: video
+    env:
+      BASE_URL: ${{ inputs.base || 'https://arii.github.io/posture-guard/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: System packages (ffmpeg, espeak-ng, fonts)
+        timeout-minutes: 8
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core
+      - name: Install Remotion and Playwright
+        timeout-minutes: 10
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Fake camera feed
+        run: bash scripts/make-fake-camera.sh person.y4m
+      - name: Sounds
+        run: |
+          pip install -q pyyaml
+          bash scripts/make-audio.sh
+      - name: Record footage from the live site
+        timeout-minutes: 6
+        run: node scripts/capture.mjs "$BASE_URL" "$PWD/person.y4m" public
+      - name: Render with Remotion
+        timeout-minutes: 25
+        run: >
+          npx remotion render src/index.ts PostureGuardDemo out/posture-guard-demo.mp4
+          --props=public/capture.json --concurrency=2
+      - name: Stills for review
+        # One frame from each scene, plus a contact sheet, so the edit can be
+        # reviewed without downloading the full video.
+        run: |
+          mkdir -p out/stills
+          for t in 4 14 18.5 25.5 31 38 48.5 52 62 72 78.5 90 102 108; do
+            ffmpeg -loglevel error -y -ss "$t" -i out/posture-guard-demo.mp4 -frames:v 1 \
+              -vf scale=960:540 "out/stills/t$(printf '%05.1f' "$t").png"
+          done
+          ffmpeg -loglevel error -y -pattern_type glob -i 'out/stills/t*.png' \
+            -vf "scale=480:270,tile=4x4:padding=6" -frames:v 1 out/stills/contact-sheet.png
+          ls out/stills
+      - name: Upload stills
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posture-guard-demo-stills
+          path: video/out/stills/
+          if-no-files-found: warn
+      - name: Upload video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: posture-guard-demo
+          path: |
+            video/out/posture-guard-demo.mp4
+            video/public/capture.json
+            video/public/footage/*.webm
+          if-no-files-found: warn

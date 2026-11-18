@@ -1,0 +1,27 @@
+{
+  "name": "posture-guard-video",
+  "version": "1.0.0",
+  "description": "Kiroween demo video for Posture Guard, made with Remotion",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "capture": "node scripts/capture.mjs",
+    "render": "remotion render src/index.ts PostureGuardDemo out/posture-guard-demo.mp4 --props=public/capture.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.543",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.543"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "playwright": "^1.49.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  }
+}
