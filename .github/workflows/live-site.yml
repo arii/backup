@@ -1,0 +1,51 @@
+name: live-site
+
+# End-to-end check of the deployed GitHub Pages app (docs/app): demo mode, plus
+# webcam mode with Chromium's fake camera playing a photo of a person, so the
+# real MediaPipe bundle, WASM and model are loaded from the CDN and run.
+on:
+  page_build:            # after every Pages deploy
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"  # weekly: catches CDN / model URL drift
+  push:
+    paths:
+      - ".github/workflows/live-site.yml"
+      - "tests/e2e/**"
+
+jobs:
+  live-site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Build the fake camera feed
+        # Apache-2.0 sample photo from google-ai-edge/mediapipe-samples-web,
+        # cropped around the person to a webcam-like waist-up framing.
+        run: |
+          curl -fsSL -o person.jpg \
+            https://raw.githubusercontent.com/google-ai-edge/mediapipe-samples-web/main/public/images/id_photos/id_fail_distant_waist_up.jpg
+          ffmpeg -loglevel error -loop 1 -i person.jpg -t 3 -r 15 \
+            -vf "crop=480:640:208:480,scale=480:640" -pix_fmt yuv420p person.y4m
+          ls -la person.jpg person.y4m
+      - name: Wait for the deployed app
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null "https://arii.github.io/posture-guard/app/posture-core.js" && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Run the live-site check
+        run: node tests/e2e/live-site.mjs https://arii.github.io/posture-guard/ "$PWD/person.y4m" live-site-report
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-site-report
+          path: live-site-report/
