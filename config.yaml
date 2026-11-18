@@ -33,3 +33,16 @@ audio:
   # PulseAudio/PipeWire sink name; null = first USB audio sink.
   sink: null
   chime_text: "fix your posture"
+  # Optional custom WAV files (absolute or relative to the working directory).
+  # bad_sound replaces the built-in chime; good_sound plays once when you
+  # recover to GOOD after a nudge. null = built-in chime / silent recovery.
+  bad_sound: null
+  good_sound: null
+
+needle:
+  # Posture needle on the dashboard: -1 upright, +1 at the bad thresholds.
+  tau_s: 0.5                  # EMA time constant (display smoothing only)
+
+calibration:
+  window_s: 3.0               # seconds recorded per "Calibrate good/bad"
+  min_samples: 5              # scored frames required for a valid centroid

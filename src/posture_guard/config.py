@@ -54,9 +54,27 @@ class StateConfig:
 
 
 @dataclass(frozen=True)
+class NeedleConfig:
+    """Posture needle smoothing (display only; nudges use the thresholds)."""
+
+    tau_s: float = 0.5  # EMA time constant; alpha = 1 - exp(-dt / tau_s)
+
+
+@dataclass(frozen=True)
+class CalibrationConfig:
+    window_s: float = 3.0  # seconds of samples averaged per calibration
+    min_samples: int = 5  # fewer scored frames than this -> calibration fails
+
+
+@dataclass(frozen=True)
 class AudioConfig:
     sink: str | None = None
     chime_text: str = "fix your posture"
+    # Optional WAV paths. bad_sound replaces the built-in chime; good_sound
+    # plays once on recovery to GOOD after a nudge. Missing files fall back
+    # (bad) or stay silent (good) with a logged warning.
+    bad_sound: str | None = None
+    good_sound: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +83,8 @@ class AppConfig:
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     state: StateConfig = field(default_factory=StateConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
+    needle: NeedleConfig = field(default_factory=NeedleConfig)
+    calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
 
 
 def _build(cls, data: dict | None):  # noqa: ANN201 - factory helper
@@ -88,4 +108,6 @@ def load_config(path: str | Path) -> AppConfig:
         scoring=_build(ScoringConfig, raw.get("scoring")),
         state=_build(StateConfig, raw.get("state")),
         audio=_build(AudioConfig, raw.get("audio")),
+        needle=_build(NeedleConfig, raw.get("needle")),
+        calibration=_build(CalibrationConfig, raw.get("calibration")),
     )
