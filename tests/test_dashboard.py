@@ -506,4 +506,6 @@ def test_ws_payload_and_index_carry_the_posture_cue() -> None:
 
     html = client.get("/").text
     assert 'id="posture-cue"' in html
+    # A tracked person still in the start state reads "settling in", not "no person".
+    assert "settling in" in html
     assert "applyCue(payload)" in html

@@ -349,7 +349,12 @@ function render(out, landmarks) {
   const { result, transition, needle, cue } = out;
   renderFix(transition.state, result, cue);
   const badge = $("state-badge");
-  badge.textContent = STATE_LABELS[transition.state] || transition.state;
+  // NO_PERSON is also the start state: it lasts until posture is clearly good
+  // or clearly bad, so a tracked person sitting in the in-between band would
+  // otherwise read "no one in view" while being scored.
+  badge.textContent = transition.state === State.NO_PERSON && result.kind === "scored"
+    ? "settling in"
+    : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
   $("warnings").textContent = causeFor(result, landmarks);
   const cfg = DEFAULTS.scoring;

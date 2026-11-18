@@ -11,7 +11,8 @@
 // 2. Demo mode: GOOD, then the scripted slouch triggers a reminder.
 // 3. Webcam mode with Chromium's fake camera playing a photo of a person:
 //    the real tasks-vision bundle, WASM and pose model load from the CDN and
-//    detectForVideo finds the person (any state except "no one in view").
+//    detectForVideo finds the person (metrics shown, any state except "no one
+//    in view"), and the person - who is standing upright - gets no reminder.
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
@@ -110,7 +111,9 @@ try {
     report.webcam = { loaded, seen };
     await page.screenshot({ path: path.join(outDir, "webcam-fake-camera.png") });
     if (y4m) {
-      check("pose detected on the fake camera feed", seen.badge !== "no one in view" && seen.badge !== "waiting", seen);
+      check("pose detected on the fake camera feed",
+        seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-", seen);
+      check("upright person gets no reminder", seen.reminders === "0", seen);
     }
     check("webcam mode has no errors", errors.length === 0, errors);
     await page.close();
