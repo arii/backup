@@ -156,9 +156,16 @@ export const Webcam: React.FC<{ p: VideoProps }> = ({ p }) => {
       <Clip src={w.src} fromSec={from} />
       {remindAt !== null && remindAt >= 0 && remindAt < 10 ? <Sound file="chime.wav" atSec={remindAt} /> : null}
       <Caption accent={color.good}>
-        The real pose model, in the browser tab, on a real person.{" "}
-        <span style={{ color: color.muted, fontSize: 32 }}>
-          (A test photo from MediaPipe&rsquo;s samples, fed in as a fake webcam. Paperwork: Apache-2.0.)
+        The real pose model on a real person. Tilt her and it notices
+        {w.reminder !== null ? (
+          <>
+            : <b style={{ color: color.warn }}>{w.cue}.</b>
+          </>
+        ) : (
+          "."
+        )}{" "}
+        <span style={{ color: color.muted, fontSize: 30 }}>
+          (A MediaPipe sample photo, fed in as a fake webcam and tilted 12&deg;. Paperwork: Apache-2.0.)
         </span>
       </Caption>
     </FootageScene>
@@ -260,16 +267,17 @@ export const Proof: React.FC = () => {
             <Rise key={big} delay={Math.round((0.5 + i * 0.8) * fps)}>
               <div
                 style={{
-                  width: 520,
-                  height: 250,
+                  width: 540,
+                  minHeight: 230,
                   background: color.panel,
                   border: `2px solid ${color.line}`,
                   borderRadius: 18,
-                  padding: 30,
+                  padding: "26px 30px",
+                  boxSizing: "border-box",
                 }}
               >
-                <div style={{ fontSize: 72, fontWeight: 800, color: color.good }}>{big}</div>
-                <div style={{ fontSize: 30, color: color.muted, marginTop: 12 }}>{small}</div>
+                <div style={{ fontSize: 62, fontWeight: 800, color: color.good, whiteSpace: "nowrap" }}>{big}</div>
+                <div style={{ fontSize: 28, lineHeight: 1.3, color: color.muted, marginTop: 12 }}>{small}</div>
               </div>
             </Rise>
           ))}

@@ -124,6 +124,7 @@ To install by hand: `pip install -e '.[webcam]'` (OpenCV + MediaPipe), plus
 
 ```
 docs/                  # GitHub Pages: landing page + the browser app (docs/app/)
+video/                 # Remotion demo video, rendered in CI from footage of the live app
 src/posture_guard/
     config.py          # config.yaml -> typed dataclasses; rejects unknown keys
     webcam.py          # WebcamFrameSource (cv2.VideoCapture), the default input
