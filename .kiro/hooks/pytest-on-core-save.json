@@ -2,13 +2,13 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "Run pytest when scoring or state changes",
+      "name": "Run pytest when core scoring code changes",
       "trigger": "PostFileSave",
-      "description": "Runs the scoring and state tests whenever scoring.py or state.py is saved.",
-      "matcher": "posture_guard/(scoring|state)\\.py$",
+      "description": "Runs the scoring, state, needle and property tests whenever scoring.py, state.py or needle.py is saved.",
+      "matcher": "posture_guard/(scoring|state|needle)\\.py$",
       "action": {
         "type": "command",
-        "command": "cd \"$(git rev-parse --show-toplevel)\" && . .venv/bin/activate 2>/dev/null; pytest -q tests/test_scoring.py tests/test_state.py"
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && . .venv/bin/activate 2>/dev/null; pytest -q tests/test_scoring.py tests/test_state.py tests/test_needle.py tests/test_properties.py"
       }
     }
   ]

@@ -31,11 +31,13 @@ src/posture_guard/
     config.py    # config.yaml -> typed dataclasses (single source of truth)
     camera.py    # FrameSource interface + synthetic + RealSense sources
     scoring.py   # pure posture metrics, depth gate, visibility floor
+    needle.py    # posture needle: -1 upright .. +1 bad, time-aware EMA
+    calibration.py  # few-shot good/bad centroids for the needle
     state.py     # nudge state machine (injected timestamps, no sleeps)
     audio.py     # chime + TTS prompts on a serialized paplay queue
     pipeline.py  # capture -> pose -> score -> state -> dashboard/audio wiring
     dashboard/   # FastAPI app: MJPEG video, WS metrics, test-nudge endpoint
-tests/           # pytest: pose fixtures + deterministic timeline tests
+tests/           # pytest: pose fixtures, timeline tests, hypothesis properties
 config.yaml      # thresholds, durations, distance band, camera settings
 setup.sh         # system packages, venv, install, hardware preflight report
 ```
@@ -95,6 +97,39 @@ state machine. (From the CLI: `curl -X POST http://127.0.0.1:8000/nudge/test`.)
 4. Sit up straight. After ~3 s of good posture the state returns to **GOOD** and
    everything goes quiet — no pending escalations fire.
 
+### 5. Posture needle and calibration
+
+The **Posture needle** panel shows one smoothed number: **-1** is upright, **+1** is
+at (or past) your bad-posture thresholds. Out of the box it is driven by the
+`scoring.*_deg` thresholds (caption: *thresholds*).
+
+To fit it to your chair and camera:
+
+1. Sit well and press **Calibrate good**. Hold still for 3 s (`calibration.window_s`).
+2. Slouch the way you usually do and press **Calibrate bad**. Hold for 3 s.
+
+The caption switches to *calibrated*: your good posture reads -1 and your slouch
+reads +1. **Reset** returns to the thresholds. Calibration only moves the needle;
+nudges still follow the `scoring` thresholds and `state` timings. It lives in
+memory and is lost on restart. Nothing leaves the machine.
+
+From the CLI: `curl -X POST http://127.0.0.1:8000/calibrate/good`, `.../calibrate/bad`,
+`curl -X DELETE .../calibrate`, `curl .../calibrate/status`.
+
+### 6. Custom sounds
+
+Set WAV paths in `config.yaml`:
+
+```yaml
+audio:
+  bad_sound: ~/sounds/uh-oh.wav     # replaces the built-in chime
+  good_sound: ~/sounds/nice.wav     # plays once when you recover after a nudge
+```
+
+A missing file logs a warning and falls back to the built-in chime (bad) or
+silence (good). Preview with **▶ Good sound** / **▶ Bad sound**
+(`POST /sound/test/good`, `POST /sound/test/bad`; 409 when nothing is playable).
+
 Leave the desk entirely: after ~2 s with no person in the depth band the state
 becomes **NO PERSON** (silent, distinct dashboard badge). Nudges never fire on bad
 data — if landmark confidence or depth drops, the badge reads **UNRELIABLE** and
@@ -111,6 +146,9 @@ the system stays silent.
 | Person scored too far / too close | `scoring.depth_min_m` / `scoring.depth_max_m` |
 | Video resolution or fps | `camera.*` |
 | Wrong speakers | `audio.sink` (set your sink name from the preflight report) |
+| Needle too jumpy / too sluggish | `needle.tau_s` (EMA time constant) |
+| Calibration fails ("N scored frames") | sit fully in frame; `calibration.window_s`, `calibration.min_samples` |
+| Custom chime / recovery sound | `audio.bad_sound`, `audio.good_sound` |
 
 All durations are seconds, all angles degrees.
 
@@ -125,3 +163,23 @@ pytest
 The full test suite (scoring, state machine timelines, audio queueing, camera
 abstraction, dashboard API) runs against a synthetic frame source with no hardware
 attached, and CI runs the same suite on every push.
+
+`tests/test_properties.py` uses [hypothesis](https://hypothesis.readthedocs.io/)
+to check invariants over generated inputs: the needle stays finite in [-1, 1]
+for any landmarks (including NaN/inf), angles are unchanged by uniform scaling,
+neutral-band noise and short slouches never nudge, and there is exactly one
+chime per bad episode with voice spacing honoring the delay and cooldown.
+
+## Building with Kiro
+
+This repo carries its [Kiro](https://kiro.dev) setup in `.kiro/`:
+
+- `.kiro/steering/architecture.md`: standing rules for the agent (config.yaml is
+  the single source of truth, injected timestamps in `state.py`, hardware-optional
+  execution, file headers on new files).
+- `.kiro/specs/posture-guard/`: the feature spec. `requirements.md` (EARS
+  acceptance criteria), `design.md` (modules and the correctness properties
+  behind the hypothesis tests), and `tasks.md` (the implementation plan, checked
+  off as it was built).
+- `.kiro/hooks/pytest-on-core-save.json`: runs the scoring, state, needle and
+  property tests whenever `scoring.py`, `state.py` or `needle.py` is saved.
