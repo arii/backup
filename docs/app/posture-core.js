@@ -1,0 +1,724 @@
+// Author: Ariel Anders
+// Copyright (c) 2026 Ariel Anders. All rights reserved.
+//
+// Posture Guard core, in the browser: a faithful port of scoring.py,
+// state.py, posture_needle.py, calibration.py and the pipeline frame path.
+// Pure functions and classes, no DOM, no clock: every method takes the frame
+// time `now` (seconds), exactly like the Python code. Parity with Python is
+// enforced by tests/js/posture-core.test.mjs replaying a golden timeline
+// generated from the real Python pipeline (tests/browser_golden.py).
+
+// MediaPipe Pose landmark indices.
+export const LEFT_EAR = 7;
+export const RIGHT_EAR = 8;
+export const LEFT_SHOULDER = 11;
+export const RIGHT_SHOULDER = 12;
+export const LEFT_HIP = 23;
+export const RIGHT_HIP = 24;
+export const TRACKED = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP];
+
+const EPS = 1e-9; // state.py _EPS (window comparisons)
+const NEEDLE_EPS = 1e-9; // posture_needle.py _EPS
+const RAD_TO_DEG = 180 / Math.PI; // CPython math.degrees: x * (180 / pi)
+
+// Defaults mirror config.yaml (the golden test asserts they match).
+export const DEFAULTS = Object.freeze({
+  scoring: {
+    head_forward_deg: 8.0,
+    trunk_lean_deg: 7.0,
+    head_tilt_deg: 8.0,
+    shoulder_level_deg: 4.0,
+    hysteresis_margin_deg: 3.0,
+    visibility_floor: 0.5,
+    trunk_lean_required: true,
+    degraded_feedback: true,
+    depth_min_m: 0.6,
+    depth_max_m: 2.5,
+    shoulder_width_min: 0.12,
+    shoulder_width_max: 0.65,
+    baseline_deviation: { enabled: true, window_s: 300.0 },
+  },
+  state: {
+    smoothing_window_s: 0.3,
+    bad_sustain_s: 2.0,
+    good_confirm_s: 1.0,
+    recovery_good_s: 3.0,
+    voice_delay_s: 10.0,
+    voice_repeat_cooldown_s: 30.0,
+    no_person_timeout_s: 2.0,
+  },
+  feedback: {
+    positive_chime: { enabled: true, every_seconds: 120 },
+    recovery_chime: { enabled: true },
+  },
+  needle: { tau_s: 0.5 },
+  calibration: { window_s: 3.0, min_samples: 5 },
+});
+
+export const Reason = Object.freeze({
+  NO_POSE: "no_pose",
+  LOW_VISIBILITY: "low_visibility",
+  DEPTH_UNREADABLE: "depth_unreadable",
+  DEPTH_OUT_OF_BAND: "depth_out_of_band",
+  NON_FINITE: "non_finite",
+  FRAMING_OUT_OF_BAND: "framing_out_of_band",
+});
+
+export const State = Object.freeze({
+  NO_PERSON: "no_person",
+  GOOD: "good",
+  BAD_CHIME: "bad_chime",
+  BAD_VOICE: "bad_voice",
+  UNRELIABLE: "unreliable",
+});
+
+export const Nudge = Object.freeze({
+  NONE: "none",
+  CHIME: "chime",
+  VOICE: "voice",
+  POSITIVE_CHIME: "positive_chime",
+  RECOVERY: "recovery",
+});
+
+const isFinite_ = Number.isFinite;
+
+// -- scoring.py ---------------------------------------------------------------
+
+export function scored(m) {
+  return {
+    kind: "scored",
+    head_forward_deg: m.head_forward_deg,
+    trunk_lean_deg: m.trunk_lean_deg,
+    head_tilt_deg: m.head_tilt_deg,
+    shoulder_level_deg: m.shoulder_level_deg,
+    depth_m: m.depth_m ?? null,
+    trunk_lean_available: m.trunk_lean_available ?? true,
+  };
+}
+
+export function unreliable(reason, detail = "") {
+  return { kind: "unreliable", reason, detail };
+}
+
+function mid(a, b) {
+  return [(a.x + b.x) / 2, (a.y + b.y) / 2];
+}
+
+function angleFromVertical(dx, dy) {
+  return Math.atan2(dx, dy) * RAD_TO_DEG;
+}
+
+export function measureHeadForward(lm) {
+  const ear = mid(lm[LEFT_EAR], lm[RIGHT_EAR]);
+  const sh = mid(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
+  return angleFromVertical(ear[0] - sh[0], sh[1] - ear[1]);
+}
+
+export function measureTrunkLean(lm) {
+  const sh = mid(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
+  const hip = mid(lm[LEFT_HIP], lm[RIGHT_HIP]);
+  return angleFromVertical(sh[0] - hip[0], hip[1] - sh[1]);
+}
+
+export function measureHeadTilt(lm) {
+  const ex = lm[RIGHT_EAR].x - lm[LEFT_EAR].x;
+  const ey = lm[RIGHT_EAR].y - lm[LEFT_EAR].y;
+  const sx = lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x;
+  const sy = lm[RIGHT_SHOULDER].y - lm[LEFT_SHOULDER].y;
+  return Math.atan2(ex * sy - ey * sx, ex * sx + ey * sy) * RAD_TO_DEG;
+}
+
+export function measureShoulderLevel(lm) {
+  const dy = lm[RIGHT_SHOULDER].y - lm[LEFT_SHOULDER].y;
+  const dx = lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x;
+  return Math.atan2(dy, Math.abs(dx)) * RAD_TO_DEG;
+}
+
+export function shoulderWidth(lm) {
+  return Math.abs(lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x);
+}
+
+const GROUPS = [
+  ["ears", [LEFT_EAR, RIGHT_EAR]],
+  ["shoulders", [LEFT_SHOULDER, RIGHT_SHOULDER]],
+  ["hips", [LEFT_HIP, RIGHT_HIP]],
+];
+
+function fmt2(v) {
+  return Number.isNaN(v) ? "nan" : v.toFixed(2);
+}
+
+export function lowVisibilityDetail(lm, cfg) {
+  const parts = [];
+  let hipsHidden = false;
+  for (const [name, [l, r]] of GROUPS) {
+    const below = [];
+    [["left", l], ["right", r]].forEach(([side, i]) => {
+      // `<` (not `!(>=)`) on purpose: a NaN visibility is not listed, as in Python.
+      if (lm[i].visibility < cfg.visibility_floor) below.push(`${side} ${fmt2(lm[i].visibility)}`);
+    });
+    if (below.length) {
+      parts.push(`${name} not visible (${below.join(", ")})`);
+      hipsHidden = hipsHidden || name === "hips";
+    }
+  }
+  if (!parts.length) return "landmark visibility below the floor";
+  const detail = parts.join("; ");
+  return hipsHidden ? detail + " - trunk lean unavailable" : detail;
+}
+
+function finiteXY(lm, indices) {
+  return indices.every((i) => isFinite_(lm[i].x) && isFinite_(lm[i].y));
+}
+
+/** scoring.score_pose. landmarks: array of {x, y, visibility} (33) or null. */
+export function scorePose(landmarks, depthM, cfg, { depthSensor = true } = {}) {
+  if (landmarks === null || landmarks === undefined) return unreliable(Reason.NO_POSE);
+  let depthValue = null;
+  if (depthSensor) {
+    if (depthM === null || depthM === undefined || !isFinite_(depthM) || depthM <= 0) {
+      return unreliable(Reason.DEPTH_UNREADABLE);
+    }
+    if (!(cfg.depth_min_m <= depthM && depthM <= cfg.depth_max_m)) {
+      return unreliable(Reason.DEPTH_OUT_OF_BAND,
+        `depth ${depthM.toFixed(2)} m outside ${cfg.depth_min_m}-${cfg.depth_max_m} m`);
+    }
+    depthValue = depthM;
+  } else if (depthM !== null && depthM !== undefined && isFinite_(depthM) && depthM > 0) {
+    depthValue = depthM;
+  }
+  const floor = cfg.visibility_floor;
+  const earsShoulders = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER];
+  const hips = [LEFT_HIP, RIGHT_HIP];
+  // `>=` is false for NaN, matching Python.
+  const esVisible = earsShoulders.every((i) => landmarks[i].visibility >= floor);
+  const hipsVisible = hips.every((i) => landmarks[i].visibility >= floor);
+  if (!esVisible || (cfg.trunk_lean_required && !hipsVisible && !cfg.degraded_feedback)) {
+    return unreliable(Reason.LOW_VISIBILITY, lowVisibilityDetail(landmarks, cfg));
+  }
+  if (!finiteXY(landmarks, earsShoulders)) {
+    return unreliable(Reason.NON_FINITE, "NaN/inf ear or shoulder coordinate");
+  }
+  let hipsOk = hipsVisible && finiteXY(landmarks, hips);
+  if (cfg.trunk_lean_required && !hipsOk && !cfg.degraded_feedback) {
+    return unreliable(Reason.NON_FINITE, "NaN/inf hip coordinate");
+  }
+  if (!depthSensor) {
+    const width = shoulderWidth(landmarks);
+    if (!(cfg.shoulder_width_min <= width && width <= cfg.shoulder_width_max)) {
+      const where = width < cfg.shoulder_width_min ? "too far" : "too close";
+      return unreliable(Reason.FRAMING_OUT_OF_BAND,
+        `${where}: shoulder width ${width.toFixed(2)} of frame outside ` +
+        `${cfg.shoulder_width_min}-${cfg.shoulder_width_max}`);
+    }
+  }
+  const headForward = measureHeadForward(landmarks);
+  const headTilt = measureHeadTilt(landmarks);
+  const shoulderLevel = measureShoulderLevel(landmarks);
+  if (![headForward, headTilt, shoulderLevel].every(isFinite_)) {
+    return unreliable(Reason.NON_FINITE, "metric overflow");
+  }
+  let trunk = finiteXY(landmarks, hips) ? measureTrunkLean(landmarks) : 0.0;
+  if (!isFinite_(trunk)) {
+    trunk = 0.0;
+    hipsOk = false;
+  }
+  return scored({
+    head_forward_deg: headForward,
+    trunk_lean_deg: trunk,
+    head_tilt_deg: headTilt,
+    shoulder_level_deg: shoulderLevel,
+    depth_m: depthValue,
+    trunk_lean_available: hipsOk,
+  });
+}
+
+function badExit(cfg, threshold) {
+  return threshold - cfg.hysteresis_margin_deg;
+}
+
+function classify(pairs, cfg) {
+  if (pairs.some(([v, t]) => Math.abs(v) > t)) return "bad";
+  if (pairs.every(([v, t]) => Math.abs(v) < badExit(cfg, t))) return "good";
+  return "neutral";
+}
+
+export function zoneOf(m, cfg) {
+  const pairs = [
+    [m.head_forward_deg, cfg.head_forward_deg],
+    [m.head_tilt_deg, cfg.head_tilt_deg],
+    [m.shoulder_level_deg, cfg.shoulder_level_deg],
+  ];
+  if (cfg.trunk_lean_required && m.trunk_lean_available) pairs.push([m.trunk_lean_deg, cfg.trunk_lean_deg]);
+  return classify(pairs, cfg);
+}
+
+function blend(oldV, newV, alpha) {
+  if (oldV === null) return newV;
+  if (newV === null) return oldV;
+  return oldV + alpha * (newV - oldV);
+}
+
+export class PostureBaseline {
+  constructor(cfg) {
+    this.windowS = cfg.window_s;
+    this.metrics = null;
+    this.lastT = null;
+    this.anchor = null;
+  }
+
+  setAnchor(m) {
+    this.anchor = m;
+    this.metrics = m;
+    this.lastT = null;
+  }
+
+  update(m, now) {
+    if (this.metrics === null) {
+      this.metrics = m;
+      this.lastT = now;
+      return;
+    }
+    if (this.lastT === null) {
+      this.lastT = now;
+      return;
+    }
+    const dt = Math.max(0, now - this.lastT);
+    const alpha = this.windowS <= 0 ? 1.0 : 1.0 - Math.exp(-dt / this.windowS);
+    const ref = this.metrics;
+    const trunkIn = m.trunk_lean_available ? m.trunk_lean_deg : ref.trunk_lean_deg;
+    this.metrics = scored({
+      head_forward_deg: ref.head_forward_deg + alpha * (m.head_forward_deg - ref.head_forward_deg),
+      trunk_lean_deg: ref.trunk_lean_deg + alpha * (trunkIn - ref.trunk_lean_deg),
+      head_tilt_deg: ref.head_tilt_deg + alpha * (m.head_tilt_deg - ref.head_tilt_deg),
+      shoulder_level_deg: ref.shoulder_level_deg + alpha * (m.shoulder_level_deg - ref.shoulder_level_deg),
+      depth_m: blend(ref.depth_m, m.depth_m, alpha),
+      trunk_lean_available: true,
+    });
+    this.lastT = now;
+  }
+
+  reset() {
+    this.metrics = this.anchor;
+    this.lastT = null;
+  }
+}
+
+export function deviationZone(m, baseline, cfg) {
+  const ref = baseline.metrics;
+  if (ref === null) return "good";
+  const pairs = [
+    [m.head_forward_deg - ref.head_forward_deg, cfg.head_forward_deg],
+    [m.head_tilt_deg - ref.head_tilt_deg, cfg.head_tilt_deg],
+    [m.shoulder_level_deg - ref.shoulder_level_deg, cfg.shoulder_level_deg],
+  ];
+  if (cfg.trunk_lean_required && m.trunk_lean_available) {
+    pairs.push([m.trunk_lean_deg - ref.trunk_lean_deg, cfg.trunk_lean_deg]);
+  }
+  return classify(pairs, cfg);
+}
+
+// -- state.py -----------------------------------------------------------------
+
+const BAD_STATES = new Set([State.BAD_CHIME, State.BAD_VOICE]);
+
+function transition(state, nudge, extra = {}) {
+  return { state, nudge, seconds_bad: extra.seconds_bad ?? null, recovered: extra.recovered ?? false };
+}
+
+export class PostureStateMachine {
+  /** timings: state config; thresholds: scoring config; feedback: feedback config.
+   *  voiceTimings: optional () => [delay_s, repeat_s] runtime override. */
+  constructor(timings, thresholds, feedback = DEFAULTS.feedback, voiceTimings = null) {
+    this.t = timings;
+    this.th = thresholds;
+    this.positive = feedback.positive_chime;
+    this.voiceTimings = voiceTimings;
+    this.state = State.NO_PERSON;
+    this.baseline = thresholds.baseline_deviation.enabled
+      ? new PostureBaseline(thresholds.baseline_deviation) : null;
+    this.history = [];
+    this.badSince = null;
+    this.goodSince = null;
+    this.absentSince = null;
+    this.chimeAt = null;
+    this.voiceAt = null;
+    this.goodStateSince = null;
+    this.positiveAt = null;
+  }
+
+  setBaselineAnchor(m) {
+    if (this.baseline !== null) this.baseline.setAnchor(m);
+  }
+
+  update(result, now) {
+    if (result.kind === "unreliable") return this.onUnreliable(result, now);
+    this.absentSince = null;
+    let zone = zoneOf(result, this.th);
+    if (this.baseline !== null) {
+      this.baseline.update(result, now);
+      const baseZone = deviationZone(result, this.baseline, this.th);
+      if (zone === "bad" || baseZone === "bad") zone = "bad";
+      else if (zone === "good" && baseZone === "good") zone = "good";
+      else zone = "neutral";
+    }
+    this.history.push([now, zone]);
+    this.pruneHistory(now);
+
+    const span = now - this.history[0][0];
+    const windowHasGood = this.history.some(([, z]) => z === "good");
+    const full = span >= this.t.smoothing_window_s - EPS;
+    const smoothedBad = full && this.history.every(([, z]) => z === "bad");
+    const smoothedGood = full && this.history.every(([, z]) => z === "good");
+    if (this.badSince === null && !windowHasGood) {
+      const bad = this.history.find(([, z]) => z === "bad");
+      if (bad) this.badSince = bad[0];
+    }
+    if (smoothedGood && this.goodSince === null) this.goodSince = this.history[0][0];
+    if (this.badSince !== null && smoothedGood) this.badSince = null;
+    if (!smoothedGood && this.goodSince !== null && smoothedBad) this.goodSince = null;
+    const sustainingBad = this.badSince !== null && !windowHasGood;
+
+    if (BAD_STATES.has(this.state)) return this.updateBad(smoothedGood, now);
+    const tr = this.updateIdle(sustainingBad, smoothedGood, now);
+    if (this.state === State.GOOD && this.positive.enabled) return this.maybePositiveChime(now);
+    return tr;
+  }
+
+  onUnreliable(result, now) {
+    if (result.reason === Reason.NON_FINITE) return transition(this.state, Nudge.NONE);
+    if (result.reason === Reason.NO_POSE) {
+      if (this.absentSince === null) this.absentSince = now;
+      if (now - this.absentSince >= this.t.no_person_timeout_s - EPS) {
+        this.enterNoPerson();
+        return transition(State.NO_PERSON, Nudge.NONE);
+      }
+      return transition(this.state, Nudge.NONE);
+    }
+    this.absentSince = null;
+    this.state = State.UNRELIABLE;
+    this.history = [];
+    this.badSince = null;
+    this.goodSince = null;
+    this.chimeAt = null;
+    this.voiceAt = null;
+    this.goodStateSince = null;
+    return transition(State.UNRELIABLE, Nudge.NONE);
+  }
+
+  enterNoPerson() {
+    this.state = State.NO_PERSON;
+    this.history = [];
+    if (this.baseline !== null) this.baseline.reset();
+    this.badSince = null;
+    this.goodSince = null;
+    this.chimeAt = null;
+    this.voiceAt = null;
+    this.goodStateSince = null;
+  }
+
+  currentVoiceTimings() {
+    if (this.voiceTimings) return this.voiceTimings();
+    return [this.t.voice_delay_s, this.t.voice_repeat_cooldown_s];
+  }
+
+  updateIdle(sustainingBad, smoothedGood, now) {
+    if (sustainingBad && this.badSince !== null && now - this.badSince >= this.t.bad_sustain_s - EPS) {
+      const secondsBad = now - this.badSince;
+      this.state = State.BAD_CHIME;
+      this.chimeAt = now;
+      this.voiceAt = null;
+      this.goodStateSince = null;
+      return transition(State.BAD_CHIME, Nudge.CHIME, { seconds_bad: secondsBad });
+    }
+    if (smoothedGood && this.goodSince !== null && now - this.goodSince >= this.t.good_confirm_s - EPS) {
+      this.state = State.GOOD;
+      return transition(State.GOOD, Nudge.NONE);
+    }
+    return transition(this.state, Nudge.NONE);
+  }
+
+  updateBad(smoothedGood, now) {
+    if (smoothedGood && this.goodSince !== null && now - this.goodSince >= this.t.recovery_good_s - EPS) {
+      this.state = State.GOOD;
+      this.badSince = null;
+      this.chimeAt = null;
+      this.voiceAt = null;
+      return transition(State.GOOD, Nudge.NONE, { recovered: true });
+    }
+    const [delayS, repeatS] = this.currentVoiceTimings();
+    if (this.state === State.BAD_CHIME && this.chimeAt !== null) {
+      if (now - this.chimeAt >= delayS - EPS) {
+        this.state = State.BAD_VOICE;
+        this.voiceAt = now;
+        return transition(State.BAD_VOICE, Nudge.VOICE);
+      }
+    } else if (this.state === State.BAD_VOICE && this.voiceAt !== null && now - this.voiceAt >= repeatS - EPS) {
+      this.voiceAt = now;
+      return transition(State.BAD_VOICE, Nudge.VOICE);
+    }
+    return transition(this.state, Nudge.NONE);
+  }
+
+  maybePositiveChime(now) {
+    if (this.goodStateSince === null) this.goodStateSince = now;
+    const every = this.positive.every_seconds;
+    const sustained = now - this.goodStateSince >= every - EPS;
+    const cooled = this.positiveAt === null || now - this.positiveAt >= every - EPS;
+    if (sustained && cooled) {
+      this.positiveAt = now;
+      return transition(State.GOOD, Nudge.POSITIVE_CHIME);
+    }
+    return transition(State.GOOD, Nudge.NONE);
+  }
+
+  pruneHistory(now) {
+    // Keep the window plus its boundary sample (see design.md).
+    const cutoff = now - this.t.smoothing_window_s + EPS;
+    let drop = 0;
+    while (drop + 1 < this.history.length && this.history[drop + 1][0] <= cutoff) drop += 1;
+    if (drop) this.history = this.history.slice(drop);
+  }
+}
+
+// -- posture_needle.py ----------------------------------------------------------
+
+export function clamp(v, lo = -1.0, hi = 1.0) {
+  if (Number.isNaN(v)) return lo;
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function dims(m, includeTrunk) {
+  const v = [m.head_forward_deg, m.head_tilt_deg, m.shoulder_level_deg];
+  if (includeTrunk) v.push(m.trunk_lean_deg);
+  return v;
+}
+
+export function axisOk(cal) {
+  const g = dims(cal.good, false);
+  const b = dims(cal.bad, false);
+  if (!g.every(isFinite_) || !b.every(isFinite_)) return false;
+  return g.reduce((s, gi, i) => s + (b[i] - gi) ** 2, 0) > NEEDLE_EPS;
+}
+
+export function thresholdNeedle(m, cfg) {
+  const pairs = [
+    [m.head_forward_deg, cfg.head_forward_deg],
+    [m.head_tilt_deg, cfg.head_tilt_deg],
+    [m.shoulder_level_deg, cfg.shoulder_level_deg],
+  ];
+  if (cfg.trunk_lean_required && m.trunk_lean_available) pairs.push([m.trunk_lean_deg, cfg.trunk_lean_deg]);
+  if (!pairs.every(([v]) => isFinite_(v))) return null;
+  const sev = pairs.map(([v, t]) => Math.min(1.0, Math.abs(v) / Math.max(t, NEEDLE_EPS)));
+  return clamp((2.0 * sev.reduce((a, b) => a + b, 0)) / sev.length - 1.0);
+}
+
+export function calibratedNeedle(m, cal) {
+  const trunk = m.trunk_lean_available && cal.good.trunk_lean_available && cal.bad.trunk_lean_available;
+  const vec = dims(m, trunk);
+  const good = dims(cal.good, trunk);
+  const bad = dims(cal.bad, trunk);
+  if (![...vec, ...good, ...bad].every(isFinite_)) return null;
+  const axis = good.map((g, i) => bad[i] - g);
+  const normSq = axis.reduce((s, a) => s + a * a, 0);
+  if (!isFinite_(normSq) || normSq <= NEEDLE_EPS) return null;
+  const proj = vec.reduce((s, v, i) => s + (v - good[i]) * axis[i], 0) / normSq;
+  if (!isFinite_(proj)) return null;
+  return clamp(2.0 * proj - 1.0);
+}
+
+export function rawNeedle(m, cfg, cal = null) {
+  if (cal !== null) {
+    const v = calibratedNeedle(m, cal);
+    if (v !== null) return v;
+  }
+  return thresholdNeedle(m, cfg);
+}
+
+export class NeedleSmoother {
+  constructor(cfg) {
+    this.tau = cfg.tau_s;
+    this.value = null;
+    this.lastT = null;
+  }
+
+  reset() {
+    this.value = null;
+    this.lastT = null;
+  }
+
+  update(raw, now) {
+    if (raw === null || raw === undefined || !isFinite_(raw) || !isFinite_(now)) return this.value;
+    raw = clamp(raw);
+    if (this.value === null || this.lastT === null) {
+      this.value = raw;
+      this.lastT = now;
+      return this.value;
+    }
+    const dt = now - this.lastT;
+    if (dt <= 0) return this.value;
+    const alpha = this.tau <= 0 ? 1.0 : 1.0 - Math.exp(-dt / this.tau);
+    this.value = clamp(alpha * raw + (1.0 - alpha) * this.value);
+    this.lastT = now;
+    return this.value;
+  }
+}
+
+// -- calibration.py -----------------------------------------------------------
+
+function centroid(samples) {
+  const n = samples.length;
+  const withTrunk = samples.filter((s) => s.trunk_lean_available);
+  const trunkOk = withTrunk.length * 2 >= n;
+  const mean = (key, arr) => arr.reduce((a, s) => a + s[key], 0) / arr.length;
+  return scored({
+    head_forward_deg: mean("head_forward_deg", samples),
+    trunk_lean_deg: trunkOk ? mean("trunk_lean_deg", withTrunk) : 0.0,
+    head_tilt_deg: mean("head_tilt_deg", samples),
+    shoulder_level_deg: mean("shoulder_level_deg", samples),
+    depth_m: null,
+    trunk_lean_available: trunkOk,
+  });
+}
+
+export class CalibrationRecorder {
+  constructor(cfg) {
+    this.cfg = cfg;
+    this.pending = null;
+    this.active = null;
+    this.startedAt = null;
+    this.lastNow = null;
+    this.samples = [];
+    this.centroids = { good: null, bad: null };
+    this.counts = { good: 0, bad: 0 };
+    this.error = null;
+    this.version = 0;
+  }
+
+  start(kind) {
+    this.pending = kind;
+    this.active = null;
+    this.startedAt = null;
+    this.samples = [];
+    this.error = null;
+  }
+
+  reset() {
+    this.pending = null;
+    this.active = null;
+    this.startedAt = null;
+    this.samples = [];
+    this.centroids = { good: null, bad: null };
+    this.counts = { good: 0, bad: 0 };
+    this.error = null;
+    this.version += 1;
+  }
+
+  /** Browser-only: restore centroids saved in localStorage. */
+  load(saved) {
+    this.centroids = { good: saved.good ? scored(saved.good) : null, bad: saved.bad ? scored(saved.bad) : null };
+    this.counts = { good: saved.good_samples ?? 0, bad: saved.bad_samples ?? 0 };
+    this.error = null;
+    this.version += 1;
+  }
+
+  get calibration() {
+    const { good, bad } = this.centroids;
+    return good && bad ? { good, bad } : null;
+  }
+
+  get status() {
+    let remaining = null;
+    if (this.active !== null && this.startedAt !== null) {
+      remaining = Math.max(0, this.cfg.window_s - ((this.lastNow ?? this.startedAt) - this.startedAt));
+    } else if (this.pending !== null) {
+      remaining = this.cfg.window_s;
+    }
+    return {
+      active: this.active ?? this.pending,
+      remaining_s: remaining,
+      good_samples: this.counts.good,
+      bad_samples: this.counts.bad,
+      calibrated: this.calibration !== null,
+      good: this.centroids.good,
+      bad: this.centroids.bad,
+      error: this.error,
+    };
+  }
+
+  feed(result, now) {
+    this.lastNow = now;
+    if (this.pending !== null) {
+      this.active = this.pending;
+      this.pending = null;
+      this.startedAt = now;
+      this.samples = [];
+    }
+    if (this.active === null || this.startedAt === null) return;
+    if (now - this.startedAt < this.cfg.window_s) {
+      if (result.kind === "scored") this.samples.push(result);
+      return;
+    }
+    this.finish();
+  }
+
+  finish() {
+    const kind = this.active;
+    const samples = this.samples;
+    this.active = null;
+    this.startedAt = null;
+    this.samples = [];
+    const needed = Math.max(1, this.cfg.min_samples);
+    if (samples.length < needed) {
+      this.error = `${kind} calibration failed: ${samples.length} scored frames ` +
+        `(need ${needed}) - sit fully in frame and retry`;
+      return;
+    }
+    this.centroids[kind] = centroid(samples);
+    this.counts[kind] = samples.length;
+    this.error = null;
+    this.version += 1;
+    const cal = this.calibration;
+    if (cal && !axisOk(cal)) {
+      this.error = "good and slouch recordings are identical - the needle uses the " +
+        "thresholds until one is re-recorded";
+    }
+  }
+}
+
+// -- pipeline.py process_once (minus video/audio I/O) --------------------------
+
+/** One object per session: feed it landmarks + frame time, get back everything
+ *  the UI needs. Order matches PosturePipeline.process_once exactly. */
+export class PostureEngine {
+  constructor(config = DEFAULTS, { voiceTimings = null } = {}) {
+    this.config = config;
+    this.machine = new PostureStateMachine(config.state, config.scoring, config.feedback, voiceTimings);
+    this.calibration = new CalibrationRecorder(config.calibration);
+    this.calibrationVersion = this.calibration.version;
+    this.needle = new NeedleSmoother(config.needle);
+    this.needleCalibrated = false;
+  }
+
+  process(landmarks, now, { depthM = null, depthSensor = false } = {}) {
+    const result = scorePose(landmarks, depthM, this.config.scoring, { depthSensor });
+    this.calibration.feed(result, now);
+    if (this.calibration.version !== this.calibrationVersion) {
+      this.calibrationVersion = this.calibration.version;
+      this.machine.setBaselineAnchor(this.calibration.centroids.good);
+    }
+    const tr = this.machine.update(result, now);
+    if (result.kind === "scored") {
+      const cal = this.calibration.calibration;
+      const usable = cal !== null && axisOk(cal);
+      if (usable !== this.needleCalibrated) {
+        this.needle.reset();
+        this.needleCalibrated = usable;
+      }
+      this.needle.update(rawNeedle(result, this.config.scoring, usable ? cal : null), now);
+    }
+    const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
+    if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
+    return { result, transition: tr, needle: this.needle.value, nudges };
+  }
+}
