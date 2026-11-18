@@ -520,3 +520,149 @@ def test_head_clipped_top_false_for_centered_pose() -> None:
 def test_head_clipped_top_false_when_ear_at_margin_boundary() -> None:
     pose = make_pose({LEFT_EAR: SimpleLandmark(x=0.46, y=HEAD_CLIP_MARGIN)})
     assert head_clipped_top(pose) is False
+
+
+class TestNonFiniteInput:
+    """NaN/inf coordinates never become a score (NON_FINITE, held by state.py)."""
+
+    @pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+    def test_non_finite_ear_or_shoulder_is_non_finite(self, bad):
+        for index in (LEFT_EAR, RIGHT_SHOULDER):
+            pose = make_pose({index: SimpleLandmark(x=bad, y=0.5)})
+            result = score_pose(pose, depth_m=1.4, cfg=CFG)
+            assert isinstance(result, Unreliable)
+            assert result.reason is UnreliableReason.NON_FINITE
+
+    @pytest.mark.parametrize("bad", [math.nan, math.inf])
+    def test_non_finite_depth_is_unreadable(self, good_pose, bad):
+        assert score_pose(good_pose, bad, CFG).reason is UnreliableReason.DEPTH_UNREADABLE
+
+    def test_non_finite_hips_degrade_to_trunk_unavailable(self):
+        pose = make_pose({LEFT_HIP: SimpleLandmark(x=math.nan, y=0.9)})
+        result = score_pose(pose, 1.4, CFG)
+        assert isinstance(result, ScoredPosture)
+        assert result.trunk_lean_available is False
+        assert math.isfinite(result.trunk_lean_deg)
+
+    def test_non_finite_hips_gate_when_degraded_feedback_off(self):
+        cfg = ScoringConfig(degraded_feedback=False)
+        pose = make_pose({RIGHT_HIP: SimpleLandmark(x=0.56, y=math.inf)})
+        assert score_pose(pose, 1.4, cfg).reason is UnreliableReason.NON_FINITE
+
+    def test_nan_visibility_is_low_visibility(self):
+        pose = make_pose({LEFT_EAR: SimpleLandmark(x=0.46, y=0.45, visibility=math.nan)})
+        assert score_pose(pose, 1.4, CFG).reason is UnreliableReason.LOW_VISIBILITY
+
+    def test_midpoint_overflow_inf_minus_inf_is_non_finite(self):
+        # Ears and shoulders all near float max: both midpoints overflow to
+        # inf, so ear_mid - shoulder_mid is inf - inf = NaN.
+        big = 1.7e308
+        pose = make_pose(
+            {
+                LEFT_EAR: SimpleLandmark(x=big, y=0.45),
+                RIGHT_EAR: SimpleLandmark(x=big, y=0.45),
+                LEFT_SHOULDER: SimpleLandmark(x=big, y=0.60),
+                RIGHT_SHOULDER: SimpleLandmark(x=big, y=0.60),
+            }
+        )
+        result = score_pose(pose, 1.4, CFG)
+        assert isinstance(result, Unreliable)
+        assert result.reason is UnreliableReason.NON_FINITE
+
+    def test_overflowing_coordinates_never_yield_non_finite_metrics(self):
+        pose = make_pose(
+            {
+                LEFT_EAR: SimpleLandmark(x=1.7e308, y=0.45),
+                RIGHT_EAR: SimpleLandmark(x=1.7e308, y=0.45),
+            }
+        )
+        result = score_pose(pose, 1.4, CFG)
+        if isinstance(result, ScoredPosture):
+            assert math.isfinite(result.head_forward_deg)
+        else:
+            assert result.reason is UnreliableReason.NON_FINITE
+
+
+class TestWebcamFraming:
+    """depth_sensor=False: shoulder width in the frame replaces the depth band."""
+
+    def test_good_pose_scores_without_depth(self, good_pose):
+        result = score_pose(good_pose, None, CFG, depth_sensor=False)
+        assert isinstance(result, ScoredPosture)
+        assert result.depth_m is None
+        assert abs(result.head_forward_deg) < ANGLE_TOLERANCE_DEG
+
+    def test_narrow_shoulders_read_too_far(self):
+        pose = make_pose(
+            {
+                LEFT_SHOULDER: SimpleLandmark(x=0.47, y=0.60),
+                RIGHT_SHOULDER: SimpleLandmark(x=0.53, y=0.60),
+                LEFT_EAR: SimpleLandmark(x=0.49, y=0.55),
+                RIGHT_EAR: SimpleLandmark(x=0.51, y=0.55),
+            }
+        )
+        result = score_pose(pose, None, CFG, depth_sensor=False)
+        assert result.reason is UnreliableReason.FRAMING_OUT_OF_BAND
+        assert result.detail.startswith("too far")
+
+    def test_wide_shoulders_read_too_close(self):
+        pose = make_pose(
+            {
+                LEFT_SHOULDER: SimpleLandmark(x=0.10, y=0.60),
+                RIGHT_SHOULDER: SimpleLandmark(x=0.90, y=0.60),
+            }
+        )
+        result = score_pose(pose, None, CFG, depth_sensor=False)
+        assert result.reason is UnreliableReason.FRAMING_OUT_OF_BAND
+        assert result.detail.startswith("too close")
+
+    def test_depth_gates_are_skipped(self, good_pose):
+        # A depth reading far outside the band does not gate a webcam frame.
+        result = score_pose(good_pose, 9.0, CFG, depth_sensor=False)
+        assert isinstance(result, ScoredPosture)
+
+
+class TestBaselineAnchorAndDecay:
+    def _m(self, head: float) -> ScoredPosture:
+        return ScoredPosture(head, 0.0, 0.0, 0.0, depth_m=None)
+
+    def test_decay_uses_exact_exponential(self):
+        baseline = PostureBaseline(BaselineDeviationConfig(window_s=10.0))
+        baseline.update(self._m(0.0), 0.0)
+        baseline.update(self._m(10.0), 5.0)
+        assert baseline.metrics.head_forward_deg == pytest.approx(10.0 * (1 - math.exp(-0.5)))
+
+    def test_decay_is_frame_rate_independent(self):
+        fast = PostureBaseline(BaselineDeviationConfig(window_s=10.0))
+        slow = PostureBaseline(BaselineDeviationConfig(window_s=10.0))
+        for b in (fast, slow):
+            b.update(self._m(0.0), 0.0)
+        for i in range(1, 301):  # 30 fps for 10 s
+            fast.update(self._m(10.0), i / 30)
+        for i in range(1, 11):  # 1 fps for 10 s
+            slow.update(self._m(10.0), float(i))
+        assert fast.metrics.head_forward_deg == pytest.approx(
+            slow.metrics.head_forward_deg, abs=1e-9
+        )
+
+    def test_anchor_survives_reset(self):
+        baseline = PostureBaseline(BaselineDeviationConfig())
+        baseline.set_anchor(self._m(3.0))
+        baseline.update(self._m(30.0), 0.0)  # starts the clock, keeps the anchor
+        assert baseline.metrics.head_forward_deg == 3.0
+        baseline.update(self._m(30.0), 60.0)
+        assert baseline.metrics.head_forward_deg > 3.0
+        baseline.reset()
+        assert baseline.metrics.head_forward_deg == 3.0
+
+    def test_unavailable_trunk_does_not_drift_the_trunk_baseline(self):
+        baseline = PostureBaseline(BaselineDeviationConfig(window_s=1.0))
+        baseline.update(ScoredPosture(0.0, 2.0, 0.0, 0.0, None), 0.0)
+        baseline.update(ScoredPosture(0.0, 80.0, 0.0, 0.0, None, trunk_lean_available=False), 5.0)
+        assert baseline.metrics.trunk_lean_deg == pytest.approx(2.0)
+
+    def test_none_depth_is_tolerated(self):
+        baseline = PostureBaseline(BaselineDeviationConfig())
+        baseline.update(ScoredPosture(0.0, 0.0, 0.0, 0.0, None), 0.0)
+        baseline.update(ScoredPosture(1.0, 0.0, 0.0, 0.0, 1.4), 1.0)
+        assert baseline.metrics.depth_m == 1.4
