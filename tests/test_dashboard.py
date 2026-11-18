@@ -394,9 +394,12 @@ def test_docs_page_is_served_and_linked_from_index() -> None:
     assert response.status_code == 200
     page = response.text
     assert "How it works" in page
-    # All five sections present: pipeline, model, privacy, story, roadmap.
-    for heading in ("The pipeline", "The model", "Privacy", "Where it came from", "Roadmap"):
+    # All five sections present: pipeline, model, privacy, browser version, roadmap.
+    for heading in ("The pipeline", "The model", "Privacy", "The browser version", "Roadmap"):
         assert heading in page
+    # The page links to the browser app and no longer carries the old origin story.
+    assert "arii.github.io/posture-guard/app/" in page
+    assert "Where it came from" not in page
     assert index.status_code == 200
     assert 'href="/docs"' in index.text
 
