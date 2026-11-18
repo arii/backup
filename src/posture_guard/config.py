@@ -65,7 +65,7 @@ class ScoringConfig:
     head_forward_deg: float = 8.0
     trunk_lean_deg: float = 7.0
     head_tilt_deg: float = 8.0
-    shoulder_level_deg: float = 4.0
+    shoulder_level_deg: float = 6.0
     hysteresis_margin_deg: float = 3.0
     visibility_floor: float = 0.5
     # Framing gate: shoulder width as a fraction of the frame width stands in
@@ -108,6 +108,10 @@ class AudioConfig:
     # Spoken-prompt wording rendered by TTS (the chime is a synthesized tone;
     # "chime_text" elsewhere in the UI/API means this spoken wording).
     voice_text: str = "Please fix your posture"
+    # Spoken prompt names what is off and how to fix it ("Your right shoulder is
+    # low. Level your shoulders.") instead of voice_text. voice_text is still
+    # used when no specific cue is available.
+    specific_cues: bool = True
     # Optional custom WAV files. bad_sound replaces the reminder chime;
     # good_sound replaces the positive/recovery chime. A missing file logs a
     # warning and keeps the built-in sound.
