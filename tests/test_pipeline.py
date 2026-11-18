@@ -24,6 +24,7 @@ from posture_guard.pose import PoseDetection, SyntheticPoseDetector, center_dept
 from posture_guard.scoring import (
     LEFT_EAR,
     LEFT_HIP,
+    LEFT_SHOULDER,
     RIGHT_EAR,
     RIGHT_HIP,
     RIGHT_SHOULDER,
@@ -546,3 +547,154 @@ def test_snapshot_carries_root_cause_and_wire_color() -> None:
     pipeline.process_once(make_frame(1))
     snapshot, _ = hub.latest_metrics()
     assert snapshot.to_payload()["root_cause"] is None
+
+
+# -- webcam frames, needle, calibration, recovery cue, glitch hold --------------------
+
+
+def _slouch() -> list[SimpleLandmark]:
+    return make_pose(
+        {
+            LEFT_EAR: SimpleLandmark(x=0.48, y=0.54),  # head-forward ~18.4 deg
+            RIGHT_EAR: SimpleLandmark(x=0.56, y=0.54),
+        }
+    )
+
+
+class WebcamDetector(MutableDetector):
+    """Detector over color-only frames: no depth reading at all."""
+
+    def __call__(self, frame: ColorDepth) -> PoseDetection:
+        return PoseDetection(self.pose, None)
+
+
+def webcam_frame(index: int) -> ColorDepth:
+    return ColorDepth(color=np.zeros((480, 640, 3), dtype=np.uint8), depth=None,
+                      timestamp_s=index / 30.0)
+
+
+def feed_webcam(pipeline: PosturePipeline, seconds: float, index: int) -> int:
+    for _ in range(int(seconds * 30)):
+        pipeline.process_once(webcam_frame(index))
+        index += 1
+    return index
+
+
+def test_webcam_frames_score_without_depth_and_nudge() -> None:
+    detector = WebcamDetector(make_pose())
+    pipeline, hub, audio = build_pipeline(detector)
+    index = feed_webcam(pipeline, 2.0, 0)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.state == "good"
+    assert snapshot.depth_m is None
+
+    detector.pose = _slouch()
+    feed_webcam(pipeline, 2.5, index)
+    assert hub.latest_metrics()[0].state == "bad_chime"
+    assert audio.enqueued == [Nudge.CHIME]
+
+
+def test_webcam_too_far_is_a_framing_warning() -> None:
+    far = make_pose(
+        {
+            LEFT_SHOULDER: SimpleLandmark(x=0.47, y=0.60),
+            RIGHT_SHOULDER: SimpleLandmark(x=0.53, y=0.60),
+            LEFT_EAR: SimpleLandmark(x=0.49, y=0.55),
+            RIGHT_EAR: SimpleLandmark(x=0.51, y=0.55),
+        }
+    )
+    pipeline, hub, _ = build_pipeline(WebcamDetector(far))
+    feed_webcam(pipeline, 0.5, 0)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.state == "unreliable"
+    assert any(w.startswith("person too far") for w in snapshot.warnings)
+    assert snapshot.root_cause["title"] == "person too far"
+
+
+def test_needle_is_published_and_tracks_posture() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    index = feed(pipeline, detector, 1.0, 0)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.needle == pytest.approx(-1.0, abs=0.01)
+    assert snapshot.needle_calibrated is False
+    assert snapshot.to_payload()["needle"]["value"] == pytest.approx(-1.0, abs=0.01)
+
+    detector.pose = _slouch()
+    feed(pipeline, detector, 3.0, index)
+    assert pipeline.needle > -0.6  # head-forward at its cap, others level
+
+
+def test_needle_holds_through_unscoreable_frames() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, _, _ = build_pipeline(detector)
+    index = feed(pipeline, detector, 1.0, 0)
+    before = pipeline.needle
+    detector.pose = None
+    feed(pipeline, detector, 1.0, index)
+    assert pipeline.needle == before
+
+
+def test_calibration_drives_needle_and_anchors_baseline() -> None:
+    from posture_guard.calibration import CalibrationKind
+
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    pipeline.calibration.start(CalibrationKind.GOOD)
+    index = feed(pipeline, detector, 3.5, 0)
+    assert pipeline._state_machine._baseline._anchor is not None  # good anchors baseline
+
+    detector.pose = _slouch()
+    pipeline.calibration.start(CalibrationKind.BAD)
+    index = feed(pipeline, detector, 3.5, index)
+    index = feed(pipeline, detector, 2.0, index)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.needle_calibrated is True
+    assert snapshot.calibration["calibrated"] is True
+    assert snapshot.needle == pytest.approx(1.0, abs=0.01)  # at the slouch centroid
+
+    detector.pose = make_pose()
+    feed(pipeline, detector, 3.0, index)
+    assert hub.latest_metrics()[0].needle == pytest.approx(-1.0, abs=0.01)
+
+
+def test_recovery_chime_enqueued_once_when_enabled() -> None:
+    from posture_guard.config import RecoveryChimeConfig
+
+    detector = MutableDetector(make_pose())
+    hub, audio = DashboardHub(), RecordingAudio()
+    config = AppConfig(feedback=FeedbackConfig(recovery_chime=RecoveryChimeConfig(enabled=True)))
+    pipeline = PosturePipeline(
+        SyntheticFrameSource(), config, hub=hub, audio=audio,
+        detector=detector, renderer=fake_jpeg,
+    )
+    index = feed(pipeline, detector, 2.0, 0)
+    detector.pose = _slouch()
+    index = feed(pipeline, detector, 2.5, index)
+    detector.pose = make_pose()
+    feed(pipeline, detector, 4.0, index)
+    assert audio.enqueued == [Nudge.CHIME, Nudge.RECOVERY]
+    assert hub.latest_metrics()[0].state == "good"
+
+
+def test_recovery_chime_off_by_default() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, _, audio = build_pipeline(detector)
+    index = feed(pipeline, detector, 2.0, 0)
+    detector.pose = _slouch()
+    index = feed(pipeline, detector, 2.5, index)
+    detector.pose = make_pose()
+    feed(pipeline, detector, 4.0, index)
+    assert Nudge.RECOVERY not in audio.enqueued
+
+
+def test_nan_glitch_frames_hold_state_and_warn() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    index = feed(pipeline, detector, 2.0, 0)
+    assert hub.latest_metrics()[0].state == "good"
+    detector.pose = make_pose({LEFT_EAR: SimpleLandmark(x=float("nan"), y=0.45)})
+    feed(pipeline, detector, 1.0, index)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.state == "good"
+    assert any("tracking glitch" in w for w in snapshot.warnings)

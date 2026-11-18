@@ -49,13 +49,15 @@ PoseDetector = Callable[["ColorDepth"], PoseDetection]
 
 
 def center_depth_m(
-    depth: npt.NDArray[np.uint16], box_fraction: float = 0.25
+    depth: npt.NDArray[np.uint16] | None, box_fraction: float = 0.25
 ) -> float | None:
     """Median depth (m) of a central neighborhood; invalid values rejected.
 
     The center box assumes a seated, centered subject — good enough to gate
-    scoring without a per-landmark depth lookup.
+    scoring without a per-landmark depth lookup. None for color-only frames.
     """
+    if depth is None:
+        return None
     import numpy as np
 
     height, width = depth.shape
@@ -79,14 +81,39 @@ def _good_pose() -> list[SimpleLandmark]:
     return pose
 
 
-class SyntheticPoseDetector:
-    """Fixed good pose at the frame's measured depth — the no-hardware path."""
+def _slouch_pose() -> list[SimpleLandmark]:
+    """Head pushed forward and dropped (~18 deg head-forward), trunk vertical."""
+    pose = _good_pose()
+    pose[LEFT_EAR] = SimpleLandmark(x=0.48, y=0.54)
+    pose[RIGHT_EAR] = SimpleLandmark(x=0.56, y=0.54)
+    return pose
 
-    def __init__(self, pose: Sequence[SimpleLandmark] | None = None):
+
+class SyntheticPoseDetector:
+    """Synthetic pose at the frame's measured depth — the no-hardware path.
+
+    By default a fixed good pose. With demo_cycle_s it alternates on the frame
+    clock: demo_cycle_s of good posture, then demo_cycle_s of slouch, so the
+    synthetic demo walks through GOOD -> chime -> voice -> recovery.
+    """
+
+    def __init__(
+        self,
+        pose: Sequence[SimpleLandmark] | None = None,
+        *,
+        demo_cycle_s: float | None = None,
+    ):
         self._pose = _good_pose() if pose is None else list(pose)
+        self._slouch = _slouch_pose()
+        self._cycle = demo_cycle_s if demo_cycle_s and demo_cycle_s > 0 else None
+
+    def pose_at(self, t: float) -> list[SimpleLandmark]:
+        if self._cycle is None:
+            return self._pose
+        return self._pose if int(t // self._cycle) % 2 == 0 else self._slouch
 
     def __call__(self, frame: ColorDepth) -> PoseDetection:
-        return PoseDetection(self._pose, center_depth_m(frame.depth))
+        return PoseDetection(self.pose_at(frame.timestamp_s), center_depth_m(frame.depth))
 
 
 class MediaPipePoseDetector:

@@ -320,3 +320,126 @@ def test_startup_pre_renders_positive_chime(tmp_path):
         assert status.ready
     finally:
         worker.close()
+
+
+# -- custom good / bad sounds, recovery cue, aplay fallback ---------------------------
+
+
+def _wav(path) -> str:  # noqa: ANN001 - tmp_path child
+    path.write_bytes(b"RIFF....WAVE")
+    return str(path)
+
+
+def test_custom_bad_sound_replaces_the_reminder_chime(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    bad = _wav(tmp_path / "bad.wav")
+    worker = make_worker(tmp_path, runner, config=AudioConfig(bad_sound=bad))
+    worker.start()
+    try:
+        worker.enqueue(Nudge.CHIME)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1] == bad
+        assert worker.status.warnings == ()
+    finally:
+        worker.close()
+
+
+def test_custom_good_sound_plays_for_positive_and_recovery(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    good = _wav(tmp_path / "good.wav")
+    worker = make_worker(tmp_path, runner, config=AudioConfig(good_sound=good))
+    worker.start()
+    try:
+        worker.enqueue(Nudge.RECOVERY)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        worker.enqueue(Nudge.POSITIVE_CHIME)
+        assert wait_until(lambda: len(runner.play_calls()) == 2)
+        assert [cmd[-1] for cmd in runner.play_calls()] == [good, good]
+    finally:
+        worker.close()
+
+
+def test_recovery_uses_builtin_positive_chime_by_default(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        worker.enqueue(Nudge.RECOVERY)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1].endswith("positive-chime.wav")
+    finally:
+        worker.close()
+
+
+def test_missing_custom_sounds_warn_and_keep_builtins(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    config = AudioConfig(
+        bad_sound=str(tmp_path / "nope-bad.wav"), good_sound=str(tmp_path / "nope-good.wav")
+    )
+    worker = make_worker(tmp_path, runner, config=config)
+    status = worker.start()
+    try:
+        assert len(status.warnings) == 2
+        assert all("not found" in w for w in status.warnings)
+        worker.enqueue(Nudge.CHIME)
+        assert wait_until(lambda: len(runner.play_calls()) == 1)
+        assert runner.play_calls()[0][-1].endswith("chime.wav")
+    finally:
+        worker.close()
+
+
+def test_test_sound_plays_and_reports_availability(tmp_path):
+    runner = FakeRunner()
+    runner.release_first_play.set()
+    worker = make_worker(tmp_path, runner)
+    worker.start()
+    try:
+        assert worker.test_sound("bad") is True
+        assert worker.test_sound("good") is True
+        assert worker.test_sound("loud") is False
+        assert wait_until(lambda: len(runner.play_calls()) == 2)
+    finally:
+        worker.close()
+
+
+class NoPaplayRunner(FakeRunner):
+    """paplay cannot be launched (headless box without PulseAudio/PipeWire)."""
+
+    def __call__(self, cmd: list[str]) -> CommandResult:
+        if cmd[0] == "paplay":
+            self.calls.append(list(cmd))
+            raise FileNotFoundError(2, "No such file or directory", "paplay")
+        return super().__call__(cmd)
+
+
+def test_aplay_fallback_when_paplay_is_missing(tmp_path):
+    runner = NoPaplayRunner()
+    worker = make_worker(tmp_path, runner, available={"pico2wave", "aplay"})
+    worker.start()
+    try:
+        worker.enqueue(Nudge.CHIME)
+        assert wait_until(lambda: any(cmd[0] == "aplay" for cmd in runner.calls))
+        assert wait_until(lambda: worker.status.player == "aplay")
+        aplay = [cmd for cmd in runner.calls if cmd[0] == "aplay"][0]
+        assert aplay[-1].endswith("chime.wav")
+        assert worker.status.error is None
+    finally:
+        worker.close()
+
+
+def test_no_player_at_all_is_status_not_exception(tmp_path):
+    runner = NoPaplayRunner()
+    worker = make_worker(tmp_path, runner)  # no aplay either
+    worker.start()
+    try:
+        worker.enqueue(Nudge.CHIME)
+        assert wait_until(lambda: worker.status.error is not None)
+        assert "unavailable" in worker.status.error
+        worker.enqueue(Nudge.VOICE)  # the playback loop is still alive
+        assert wait_until(lambda: len(runner.play_calls()) == 2)
+    finally:
+        worker.close()

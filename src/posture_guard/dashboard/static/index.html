@@ -178,6 +178,9 @@
   .session-note { color: var(--muted); font-size: 11.5px; margin-top: 10px; }
   #feedback-error { color: var(--bad); font-size: 12.5px; margin-top: 8px; }
   #feedback-error:empty { display: none; }
+  #calib-error { color: var(--bad); font-size: 12.5px; margin-top: 8px; }
+  #calib-error:empty { display: none; }
+  #calibration-panel .btn-row { margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -362,6 +365,20 @@
         <div id="feedback-error"></div>
         <div class="session-note">Settings apply immediately but are session-only &mdash; they reset on restart (config.yaml keeps its defaults).</div>
       </div>
+    </div>
+    <div class="panel" id="calibration-panel" style="margin-top: 16px">
+      <h2>Calibration &amp; sounds</h2>
+      <div class="btn-row">
+        <button id="calib-good" title="Sit the way you want to sit, then hold still for a few seconds">Record good posture</button>
+        <button id="calib-bad" title="Slouch the way you usually do, then hold for a few seconds">Record slouch posture</button>
+      </div>
+      <div class="btn-row">
+        <button id="calib-reset" class="secondary">Reset calibration</button>
+        <button id="sound-good" class="secondary">&#9654; Good sound</button>
+        <button id="sound-bad" class="secondary">&#9654; Bad sound</button>
+      </div>
+      <div id="calib-status" class="session-note"></div>
+      <div id="calib-error"></div>
     </div>
   </div>
 </main>
@@ -560,6 +577,8 @@ function reminderLabel(event) {
   // Plain language: every reminder names itself. Voice shows the spoken text.
   if (event.kind === "voice") return "Reminder: " + (event.text || "spoken prompt");
   if (event.kind === "chime") return "Reminder: chime";
+  if (event.kind === "positive_chime") return "Nice posture!";
+  if (event.kind === "recovery") return "Back to good posture";
   return "Reminder: " + (event.text || event.kind);
 }
 
@@ -595,7 +614,9 @@ function apply(payload) {
   const cam = payload.camera;
   // Never a bare dash: the active source and any error are always named.
   const camEl = document.getElementById("camera");
-  if (cam.source === "realsense") {
+  if (cam.source === "webcam") {
+    camEl.textContent = cam.connected ? "webcam" : "webcam unavailable";
+  } else if (cam.source === "realsense") {
     camEl.textContent = cam.connected
       ? (cam.usb_type ? "RealSense (USB " + cam.usb_type + ")" : "RealSense")
       : "RealSense unavailable";
@@ -621,6 +642,7 @@ function apply(payload) {
   drawSkeleton();
   applyFeedback(payload.feedback);
   applyNudgeEvent(payload.nudge_event);
+  applyCalibration(payload.calibration);
   // Trunk-lean-optional mode: the tile shows "-" with the reason instead of a
   // garbage angle (overwrites the healthy-band label for that tile).
   if (payload.trunk_note) {
@@ -677,6 +699,45 @@ document.querySelectorAll("input[name='feedback-mode']").forEach((input) => {
   });
 });
 
+// Relative calibration: recordings run on the server's frame clock; the WS
+// payload carries progress (applyCalibration). Sound previews bypass mode.
+function applyCalibration(c) {
+  const el = document.getElementById("calib-status");
+  if (!el || !c) return;
+  const needle = document.getElementById("needle-score");
+  if (c.active) {
+    el.textContent = "Recording " + (c.active === "bad" ? "slouch" : "good") +
+      " posture\u2026 hold still (" + (c.remaining_s ?? "") + " s)";
+  } else {
+    el.textContent = "good: " + (c.good ? c.good_samples + " frames" : "not recorded") +
+      " \u00B7 slouch: " + (c.bad ? c.bad_samples + " frames" : "not recorded") +
+      (c.calibrated ? " \u00B7 needle calibrated" : "");
+  }
+  document.getElementById("calib-error").textContent = c.error || "";
+  if (needle) needle.setAttribute("data-calibrated", c.calibrated ? "1" : "0");
+}
+
+[["calib-good", "/calibrate/good", "POST"], ["calib-bad", "/calibrate/bad", "POST"],
+ ["calib-reset", "/calibrate", "DELETE"], ["sound-good", "/sound/test/good", "POST"],
+ ["sound-bad", "/sound/test/bad", "POST"]].forEach(([id, url, method]) => {
+  document.getElementById(id).addEventListener("click", async (event) => {
+    const button = event.target;
+    const error = document.getElementById("calib-error");
+    error.textContent = "";
+    button.disabled = true;
+    try {
+      const response = await fetch(url, { method });
+      if (!response.ok) {
+        const detail = (await response.json().catch(() => ({}))).detail;
+        throw new Error(detail || response.status + " " + response.statusText);
+      }
+      const body = await response.json();
+      if (body && "calibrated" in body) applyCalibration(body);
+    } catch (exc) { error.textContent = String(exc.message || exc); }
+    finally { button.disabled = false; }
+  });
+});
+
 document.getElementById("apply-settings").addEventListener("click", async () => {
   const error = document.getElementById("feedback-error");
   error.textContent = "";
@@ -722,7 +783,13 @@ document.getElementById("apply-settings").addEventListener("click", async () => 
     const panel = document.getElementById("needle-panel");
     const rotor = document.getElementById("needle-rotor");
     const scoreEl = document.getElementById("needle-score");
-    const score = compositeScore(payload.metrics, payload.thresholds);
+    // Server-side needle (posture_needle.py, -1 upright .. +1 bad; calibrated
+    // when good/slouch are recorded) wins; the client composite is the
+    // fallback for payloads without it.
+    const server = payload.needle && payload.needle.value;
+    const score = (server !== null && server !== undefined)
+      ? (server + 1) * 50
+      : compositeScore(payload.metrics, payload.thresholds);
     if (score === null) {
       // No usable metrics (no person, thresholds not yet received).
       panel.style.opacity = "0.45";

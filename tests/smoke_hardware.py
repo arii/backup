@@ -58,6 +58,23 @@ elif not hasattr(mp.solutions, "pose"):
 elif not hasattr(mp.solutions.pose, "Pose"):
     failures.append("mp.solutions.pose has no 'Pose' class")
 
+# webcam.py usage (_open_capture) and pose.py's color conversion
+try:
+    import cv2
+except ImportError as err:
+    print(f"FAIL: cv2 import failed ({err}); is the [hardware] extra installed?")
+    sys.exit(1)
+for attr in (
+    "VideoCapture",
+    "CAP_PROP_FRAME_WIDTH",
+    "CAP_PROP_FRAME_HEIGHT",
+    "CAP_PROP_FPS",
+    "cvtColor",
+    "COLOR_BGR2RGB",
+):
+    if not hasattr(cv2, attr):
+        failures.append(f"cv2 has no attribute {attr!r}")
+
 if failures:
     print("FAIL: hardware-extra API smoke check:")
     for f in failures:

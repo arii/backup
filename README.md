@@ -1,49 +1,101 @@
 # Posture Guard
 
-Linux desktop posture corrector: watches you through an Intel RealSense D400-series
-camera, scores posture from head/shoulder geometry (gated by depth), and nudges you
-audibly — chime first, then voice — while a local web dashboard shows the live
-skeleton so you can verify tracking and tune camera placement.
+Linux desktop posture corrector. It watches you through **your normal webcam**
+(or, optionally, an Intel RealSense D400 depth camera), scores posture from
+head and shoulder geometry with MediaPipe Pose, and reminds you audibly: a chime
+first, then a spoken prompt. A local web dashboard shows the live skeleton, a
+posture needle, and the calibration and sound controls.
 
-Single person at a desk, front-facing camera, real-time feedback. All thresholds,
-durations, and the audio sink live in [`config.yaml`](config.yaml).
+Single person at a desk, front-facing camera, real-time feedback, everything on
+your machine (no frame or landmark leaves it). All thresholds, timings, smoothing
+constants and sound paths live in [`config.yaml`](config.yaml).
+
+## In your browser (no install)
+
+**<https://arii.github.io/posture-guard/app/>**: press *Start with webcam*, leave
+the tab open, and it chimes when you slouch. *Try the demo* runs without a camera.
+
+The page runs MediaPipe Pose Landmarker and a JavaScript port of this repo's
+scoring, state machine, needle and calibration (`docs/app/posture-core.js`) in the
+tab. Video and landmarks never leave your computer; only the model and its WASM
+runtime are downloaded (from jsDelivr and Google's model bucket). It keeps tracking at
+about 5 fps when the tab is in the background, plays the chimes with Web Audio and
+speaks the prompt with the browser's speech synthesis. Calibration, settings, custom
+sounds (under 1.5 MB) and daily good/slouch totals persist in `localStorage`. The
+port is checked frame-by-frame against the Python pipeline (see *Development*).
+GitHub Pages serves `docs/` from `main`, so the app updates when this branch merges.
 
 ## Quick start
 
 ```bash
-./setup.sh    # system packages + venv + pip install + hardware preflight report
-make run      # serves the dashboard at http://127.0.0.1:8000
+./setup.sh    # system packages + venv + pip install + preflight report
+make run      # webcam -> dashboard at http://127.0.0.1:8000
+make demo     # no camera: scripted good/slouch demo
 ```
 
-`setup.sh` is idempotent — re-run it any time. It ends with a **hardware preflight
-report** (camera detected? USB connection type? depth stream readable? audio sinks
-found? TTS renderable?). Every line should read PASS before your first run; a WARN
-on USB type means the camera is on a USB 2 port and depth may drop frames (RS-4:
-recurring dropped-frame/stream-start failures on USB 2 — plug into USB 3).
+`setup.sh` is idempotent; re-run it any time. It ends with a **preflight report**:
+webcam readable, then the optional RealSense checks (camera, USB type, depth stream),
+audio sinks and TTS. Without a RealSense the RealSense lines read FAIL; that is
+expected in webcam mode.
 
-Without a RealSense attached, the pipeline falls back to a synthetic frame source,
-so the dashboard is fully verifiable before the camera is ever plugged in.
+### Choosing the input
+
+| Mode | Command | Hardware | Distance check |
+|---|---|---|---|
+| **webcam** (default) | `make run` or `--camera webcam [--device N]` | any USB/laptop camera | shoulder width in the frame |
+| realsense | `make run-realsense` or `--camera realsense` | Intel RealSense D400 | depth band in metres |
+| synthetic | `make demo` or `--camera synthetic` | none | n/a (scripted poses) |
+
+```bash
+python -m posture_guard.dashboard.serve [--config config.yaml] [--host 127.0.0.1]
+    [--port 8000] [--camera webcam|realsense|synthetic] [--device N]
+```
+
+`--camera` and `--device` override `camera.source` and `camera.device` in
+`config.yaml`. If the chosen camera does not open, Posture Guard falls back to the
+synthetic demo and shows the reason in the log and on the dashboard's camera line.
+The synthetic demo alternates `camera.demo_cycle_s` (20 s) of good posture with the
+same of slouching, so the full GOOD -> chime -> voice -> recovery cycle plays with
+no camera at all.
+
+Install only what you need: `pip install -e '.[webcam]'` (OpenCV + MediaPipe),
+`'.[realsense]'` (pyrealsense2), or `'.[hardware]'` (both, what `setup.sh` uses).
 
 ## Layout
 
 ```
 src/posture_guard/
-    config.py    # config.yaml -> typed dataclasses (single source of truth)
-    camera.py    # FrameSource interface + synthetic + RealSense sources
-    scoring.py   # pure posture metrics, depth gate, visibility floor
-    state.py     # nudge state machine (injected timestamps, no sleeps)
-    audio.py     # chime + TTS prompts on a serialized paplay queue
-    pipeline.py  # capture -> pose -> score -> state -> dashboard/audio wiring
-    dashboard/   # FastAPI app: MJPEG video, WS metrics, test-nudge endpoint
-tests/           # pytest: pose fixtures + deterministic timeline tests
-config.yaml      # thresholds, durations, distance band, camera settings
-setup.sh         # system packages, venv, install, hardware preflight report
+    config.py          # config.yaml -> typed dataclasses; rejects unknown keys
+    webcam.py          # WebcamFrameSource (cv2.VideoCapture), the default input
+    camera.py          # FrameSource interface + synthetic + RealSense sources
+    pose.py            # MediaPipe Pose bridge + scripted synthetic poses
+    scoring.py         # pure posture metrics, depth/framing gates, NaN hardening
+    state.py           # reminder state machine (injected timestamps, no sleeps)
+    posture_needle.py  # posture needle: -1 upright .. +1 bad, time-aware EMA
+    calibration.py     # "Record good / slouch posture" centroids
+    audio.py           # chimes, custom sounds, TTS on a serialized paplay queue
+    feedback.py        # runtime feedback mode / voice timing settings
+    pipeline.py        # capture -> pose -> score -> state -> dashboard/audio
+    dashboard/         # FastAPI app: MJPEG video, WS metrics, control endpoints
+tests/                 # pytest + hypothesis: no camera, SDK or audio hardware needed
+config.yaml            # thresholds, timings, smoothing, camera, sounds
+setup.sh               # system packages, venv, install, preflight report
+.kiro/                 # Kiro spec, steering and hooks (see "Built with Kiro")
 ```
 
 ## Hardware runbook
 
-Run this on the Linux box after `./setup.sh` — the camera and speakers cannot be
-exercised from a cloud sandbox.
+Run this on the Linux box after `./setup.sh`; the camera and speakers cannot be
+exercised from a cloud sandbox. Webcam users can skip the RealSense items.
+
+### Webcam placement
+
+Put the laptop or webcam roughly at eye height, 0.6-1.2 m away, facing you, with
+your head and both shoulders in frame (hips help but are optional). The framing
+gate expects your shoulders to span 12-65% of the frame width
+(`scoring.shoulder_width_min` / `shoulder_width_max`); outside that the badge reads
+**PERSON TOO FAR** or **PERSON TOO CLOSE**. A webcam has no depth, so every angle
+comes from the 2D landmarks only.
 
 ### 1. Preflight
 
@@ -53,7 +105,8 @@ exercised from a cloud sandbox.
 
 Confirm the report shows:
 
-- **camera detected — PASS** with the D415/D435 listed
+- **webcam (default input) — PASS** with the frame size (webcam mode)
+- RealSense mode only: **camera detected — PASS** with the D415/D435 listed
 - **USB connection type — PASS (3.x)** — if WARN, move the camera to a USB 3 port
 - **depth stream readable — PASS**
 - **audio sinks — PASS** with your USB sound card sink listed
@@ -69,8 +122,10 @@ make run
 ```
 
 Open <http://127.0.0.1:8000>. You should see the live camera view with the skeleton
-overlay locked onto you, the state banner, the depth readout (should read a sane
-distance — roughly the range 0.6–2.5 m), and the metric tiles.
+overlay locked onto you, the state banner, the camera line naming the active source
+(`webcam`, `RealSense (USB 3.x)` or `synthetic`), and the metric tiles. In
+RealSense mode the depth readout should read a sane distance (roughly 0.6–2.5 m);
+in webcam mode it reads `-`.
 
 **Skeleton check:** sit down facing the camera and confirm the skeleton overlay
 tracks you — head, shoulders and torso lines on your body, not drifting or snapping
@@ -100,10 +155,50 @@ state machine. (From the CLI: `curl -X POST http://127.0.0.1:8000/nudge/test`.)
 4. Sit up straight. After ~3 s of good posture the state returns to **GOOD** and
    everything goes quiet — no pending escalations fire.
 
-Leave the desk entirely: after ~2 s with no person in the depth band the state
-becomes **NO PERSON** (silent, distinct dashboard badge). Nudges never fire on bad
-data — if landmark confidence or depth drops, the badge reads **UNRELIABLE** and
-the system stays silent.
+With `feedback.recovery_chime.enabled: true` (the shipped config) the good sound
+plays once when you recover.
+
+Leave the desk entirely: after ~2 s with no pose the state becomes **NO PERSON**
+(silent, distinct dashboard badge). Reminders never fire on bad data: if landmark
+confidence or depth drops, the badge reads **UNRELIABLE** and the system stays
+silent. A garbled frame (NaN/inf landmarks) is ignored outright: the state holds
+and no streak or timer resets.
+
+### 5. Calibrate to your desk
+
+The **Posture needle** reads -1 when upright and +1 at your bad-posture thresholds.
+To fit it to your chair and camera, use the **Calibration & sounds** panel:
+
+1. Sit the way you want to sit, press **Record good posture**, hold still for 3 s
+   (`calibration.window_s`).
+2. Slouch the way you usually do, press **Record slouch posture**, hold for 3 s.
+
+Your good posture now reads -1 and your slouch +1. The good recording also anchors
+the slow deviation baseline (`scoring.baseline_deviation`), so it measures drift from
+*your* upright posture and keeps that reference when you leave the desk. Reminders
+still use the `scoring` thresholds. **Reset calibration** returns to the defaults.
+Calibration is in memory only and resets on restart.
+
+Without a recording, the baseline learns from the first frames it sees. If you sit
+down slouched, it learns the slouch as normal and sitting up straight can read as a
+deviation. Record good posture once per session to avoid that.
+
+CLI: `curl -X POST localhost:8000/calibrate/good`, `.../calibrate/bad`,
+`curl -X DELETE localhost:8000/calibrate`, `curl localhost:8000/calibrate/status`.
+
+### 6. Good and bad sounds
+
+```yaml
+audio:
+  bad_sound: ~/sounds/uh-oh.wav    # replaces the reminder chime
+  good_sound: ~/sounds/nice.wav    # replaces the positive and recovery chime
+```
+
+A missing file logs a warning and keeps the built-in sound. Preview with **▶ Good
+sound** / **▶ Bad sound** (`POST /sound/test/good`, `POST /sound/test/bad`).
+Playback uses `paplay`; when it cannot be launched (no PulseAudio/PipeWire), ALSA's
+`aplay` is used instead, and with neither the dashboard shows the audio error while
+everything else keeps running.
 
 ## Tuning (`config.yaml`)
 
@@ -114,20 +209,97 @@ the system stays silent.
 | Nudges before you even settle into the chair | `state.bad_sustain_s` (chime delay), `state.good_confirm_s` |
 | Voice prompts too aggressive | `state.voice_delay_s` (after chime), `state.voice_repeat_cooldown_s` |
 | Positive chime (rewards sustained good posture) | `feedback.positive_chime.enabled` / `feedback.positive_chime.every_seconds` |
-| Person scored too far / too close | `scoring.depth_min_m` / `scoring.depth_max_m` |
-| Video resolution or fps | `camera.*` |
+| Person scored too far / too close (RealSense) | `scoring.depth_min_m` / `scoring.depth_max_m` |
+| Person scored too far / too close (webcam) | `scoring.shoulder_width_min` / `scoring.shoulder_width_max` |
+| Wrong webcam | `camera.device` or `--device N` |
+| Video resolution or fps | `camera.width` / `camera.height` / `camera.fps` |
+| Needle too jumpy / too sluggish | `needle.tau_s` (EMA time constant) |
+| Calibration fails ("N scored frames") | sit fully in frame; `calibration.window_s`, `calibration.min_samples` |
+| Sound on recovery | `feedback.recovery_chime.enabled` |
+| Custom sounds | `audio.bad_sound`, `audio.good_sound` |
 | Wrong speakers | `audio.sink` (set your sink name from the preflight report) |
 
-All durations are seconds, all angles degrees.
+All durations are seconds, all angles degrees. Unknown keys or wrong-typed values
+stop startup with a `ConfigError` naming the key (for example
+`unknown config key(s): state.bad_sustain`), so a typo never silently falls back to
+a default.
 
 ## Development
 
 ```bash
 . .venv/bin/activate
 ruff check .
-pytest
+pytest                              # Python: unit, timeline, hypothesis properties
+node --test "tests/js/*.test.mjs"   # browser core: golden parity + properties
+python tests/browser_golden.py      # regenerate the golden timeline after a Python change
 ```
 
-The full test suite (scoring, state machine timelines, audio queueing, camera
-abstraction, dashboard API) runs against a synthetic frame source with no hardware
-attached, and CI runs the same suite on every push.
+The browser port is held to the Python behavior by a golden timeline:
+`tests/browser_golden.py` drives the real `PosturePipeline` through a scripted
+session (slouch to chime and voice, recovery, tilt, neutral wobble, hidden hips,
+NaN glitches, leaving, sitting too far, calibration, mirrored framing) and
+records every frame. `tests/js/` replays it through `posture-core.js` and requires
+identical states, reminders and reasons, and metrics and needle within 1e-9.
+`tests/test_browser_golden.py` fails when the committed fixture no longer matches
+the Python code.
+
+The full test suite (scoring, state machine timelines, webcam/RealSense/synthetic
+sources, audio queueing, calibration, dashboard API) runs with no camera, SDK or
+audio hardware, and CI runs lint plus the suite on every push to every branch.
+
+`tests/test_properties.py` uses [hypothesis](https://hypothesis.readthedocs.io/) to
+check the correctness properties in `.kiro/specs/posture-guard/design.md`:
+
+| Property | Checked over generated input |
+|---|---|
+| P1 bounded needle | any landmarks incl. NaN/inf, any depth, both camera modes, any calibration: finite, in [-1, 1], never raises |
+| P2 scale invariance | scaling every landmark by k in [1e-3, 1e3] leaves all angles within 1e-5 |
+| P3 anti-chatter | neutral-band noise and bad runs shorter than `bad_sustain_s` never remind, at 2-100 fps |
+| P4 idempotent reminders | one chime per bad episode, voice delay and cooldown respected, one recovery sound per recovery (also end to end through the pipeline) |
+| P5 glitch transparency | inserting NaN frames anywhere changes nothing on the other frames |
+| P6 time safety | `update()` never raises for non-decreasing time |
+
+## Built with Kiro
+
+This project was built spec-first with [Kiro](https://kiro.dev); the `.kiro/`
+directory is committed so judges can read it:
+
+- `.kiro/specs/posture-guard/requirements.md`: EARS acceptance criteria for the
+  camera modes, frame hardening, smoothing, needle, calibration, sounds and config.
+- `.kiro/specs/posture-guard/design.md`: module design, the smoothing-window fix,
+  and the six correctness properties the hypothesis suite checks.
+- `.kiro/specs/posture-guard/tasks.md`: the implementation plan, checked off.
+- `.kiro/steering/architecture.md`: standing rules for the agent (config.yaml as the
+  single source of truth, injected timestamps, frame-rate-independent EMAs, lazy
+  hardware imports, headers on new files).
+- `.kiro/hooks/pytest-on-change.json`: runs `pytest` whenever a file under
+  `src/posture_guard/` or `tests/` is saved.
+- `.kiro/hooks/browser-parity-on-change.json`: runs the browser parity tests when
+  `docs/app/posture-core.js` or the golden fixture changes.
+
+The property tests found two real problems: the original smoothing window never
+confirmed at low frame rates or with jittered webcam timestamps (fixed), and a
+session that starts slouched teaches the deviation baseline the wrong neutral
+(mitigated by the good-posture anchor, documented above).
+
+## Kiroween 2026
+
+Posture Guard is prepared as a [Kiroween 2026](https://kiroween.devpost.com/)
+entry. Per the Devpost page, projects must be new and built during the submission
+period, October 30 to December 4, 2026; this repository's first commit is
+2026-11-13. Check the Devpost page for the current category list, judging criteria
+and submission checklist before submitting.
+
+Fastest path: open <https://arii.github.io/posture-guard/app/> and press
+*Try the demo*, or *Start with webcam*.
+
+Local path, no hardware needed:
+
+```bash
+pip install -e '.[dev]'
+pytest                                   # unit, timeline and property tests
+make demo                                # or, without make:
+python -m posture_guard.dashboard.serve --camera synthetic
+```
+
+With a laptop camera: `pip install -e '.[webcam]'`, then `make run`.

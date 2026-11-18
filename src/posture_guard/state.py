@@ -45,6 +45,10 @@ class Nudge(Enum):
     CHIME = "chime"
     VOICE = "voice"
     POSITIVE_CHIME = "positive_chime"
+    # Good sound on recovery to GOOD after a reminder. Never emitted as
+    # Transition.nudge; the pipeline enqueues it on Transition.recovered when
+    # feedback.recovery_chime is enabled.
+    RECOVERY = "recovery"
 
 
 _ABSENT_REASONS = (UnreliableReason.NO_POSE,)
@@ -69,6 +73,7 @@ class Transition:
     state: PostureState
     nudge: Nudge
     seconds_bad: float | None = None  # bad-posture streak length at nudge time
+    recovered: bool = False  # True only on the update that leaves BAD_* for GOOD
 
 
 class PostureStateMachine:
@@ -113,6 +118,12 @@ class PostureStateMachine:
     @property
     def state(self) -> PostureState:
         return self._state
+
+    def set_baseline_anchor(self, metrics: ScoredPosture | None) -> None:
+        """Anchor the deviation baseline to a recorded good posture. The anchor
+        survives NO_PERSON resets; None returns to the free-running baseline."""
+        if self._baseline is not None:
+            self._baseline.set_anchor(metrics)
 
     def update(self, result: ScoringResult, now: float) -> Transition:
         if isinstance(result, Unreliable):
@@ -176,6 +187,11 @@ class PostureStateMachine:
     # -- unreliable / absent paths -------------------------------------------------
 
     def _on_unreliable(self, result: Unreliable, now: float) -> Transition:
+        if result.reason is UnreliableReason.NON_FINITE:
+            # Tracking glitch (NaN/inf landmarks): hold the previous state.
+            # Streaks, timers, history and the baseline are left untouched so
+            # a single corrupt frame can neither escalate nor reset anything.
+            return Transition(self._state, Nudge.NONE)
         if result.reason in _ABSENT_REASONS:
             if self._absent_since is None:
                 self._absent_since = now
@@ -253,7 +269,7 @@ class PostureStateMachine:
             self._bad_since = None
             self._chime_at = None
             self._voice_at = None
-            return Transition(PostureState.GOOD, Nudge.NONE)
+            return Transition(PostureState.GOOD, Nudge.NONE, recovered=True)
         delay_s, repeat_s = self._voice_timings()
         if self._state is PostureState.BAD_CHIME and self._chime_at is not None:
             if now - self._chime_at >= delay_s - _EPS:
@@ -284,5 +300,17 @@ class PostureStateMachine:
         return Transition(PostureState.GOOD, Nudge.NONE)
 
     def _prune_history(self, now: float) -> None:
-        cutoff = now - self._t.smoothing_window_s - _EPS
-        self._history = [(t, z) for t, z in self._history if t >= cutoff]
+        """Keep the samples inside the smoothing window plus the newest sample
+        at or before its start, so the window is covered whenever the history
+        reaches back that far. Without that boundary sample the span only
+        reached smoothing_window_s when a frame landed exactly on the cutoff:
+        jittery webcam timestamps rarely did, and below ~1 / (window / 2) fps
+        (6.7 fps for 0.3 s) it never happened, so GOOD and the smoothed
+        streaks could never confirm."""
+        cutoff = now - self._t.smoothing_window_s + _EPS
+        history = self._history
+        drop = 0
+        while drop + 1 < len(history) and history[drop + 1][0] <= cutoff:
+            drop += 1
+        if drop:
+            self._history = history[drop:]

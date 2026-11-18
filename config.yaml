@@ -1,6 +1,13 @@
 # Posture Guard configuration. All durations in seconds, all angles in degrees.
+# Unknown keys and wrong-typed values are rejected at startup (ConfigError).
 
 camera:
+  # webcam (default): any USB/laptop camera via OpenCV + MediaPipe Pose.
+  # realsense: Intel RealSense D400 color + depth. synthetic: no camera,
+  # scripted good/slouch demo. The --camera CLI flag overrides this.
+  source: webcam
+  device: 0             # webcam index (cv2.VideoCapture); --device overrides
+  demo_cycle_s: 20.0    # synthetic demo: 20 s good, 20 s slouch, repeating
   width: 640
   height: 480
   fps: 30
@@ -34,9 +41,13 @@ scoring:
   # unavailable and drops out of the BAD decision) instead of gating all
   # feedback. Ears or shoulders below the floor always gate.
   degraded_feedback: true
-  # Depth gate: person must sit inside this band (meters) to be scored.
+  # Depth gate (RealSense): person must sit inside this band (meters).
   depth_min_m: 0.6
   depth_max_m: 2.5
+  # Framing gate (webcam, no depth): shoulder width as a fraction of the frame
+  # width stands in for distance. Below min = too far, above max = too close.
+  shoulder_width_min: 0.12
+  shoulder_width_max: 0.65
 
 state:
   smoothing_window_s: 0.3     # temporal smoothing over the last 0.3 s of samples
@@ -52,9 +63,25 @@ audio:
   sink: null
   # Spoken prompt wording (rendered by TTS; editable at runtime on the dashboard).
   voice_text: "Please fix your posture"
+  # Optional custom WAV files (absolute, ~/..., or relative to the working
+  # directory). bad_sound replaces the reminder chime; good_sound replaces the
+  # positive / recovery chime. null or a missing file = built-in sound.
+  bad_sound: null
+  good_sound: null
 
 feedback:
   positive_chime:
     enabled: true        # reward sustained good posture with an upbeat chime
     every_seconds: 120   # fire at most this often while posture stays GOOD
+  recovery_chime:
+    enabled: true        # play the good sound once when you recover after a reminder
+
+needle:
+  # Posture needle on the dashboard: -1 upright, +1 at the bad thresholds (or
+  # at your recorded slouch once calibrated). Display only.
+  tau_s: 0.5             # EMA time constant; alpha = 1 - exp(-dt / tau_s)
+
+calibration:
+  window_s: 3.0          # seconds recorded by "Record good / slouch posture"
+  min_samples: 5         # scored frames needed for a valid recording
 

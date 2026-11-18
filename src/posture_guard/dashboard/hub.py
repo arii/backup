@@ -67,6 +67,9 @@ class MetricsSnapshot:
     trunk_note: str | None = None  # set when trunk lean is measured as unavailable
     feedback: dict[str, object] | None = None  # RuntimeFeedback.to_payload()
     nudge_event: dict[str, object] | None = None  # {"kind": "chime"|"voice", "seq": n}
+    needle: float | None = None  # smoothed posture needle, -1 upright .. +1 bad
+    needle_calibrated: bool = False  # True when driven by good/slouch calibration
+    calibration: dict[str, object] | None = None  # CalibrationStatus.to_payload()
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -100,6 +103,11 @@ class MetricsSnapshot:
             "trunk_note": self.trunk_note,
             "feedback": self.feedback,
             "nudge_event": self.nudge_event,
+            "needle": {
+                "value": _round_or_none(self.needle, 3),
+                "calibrated": self.needle_calibrated,
+            },
+            "calibration": self.calibration,
         }
 
 

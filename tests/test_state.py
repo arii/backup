@@ -506,11 +506,11 @@ class TestSustainHysteresis:
 
         samples = grid(10.0, 12.5, 0.1, _scored(12.3))
         transitions = run(machine, samples)
-        # First bad frame at 10.0; the good frames before it age out of the
-        # 0.3 s smoothing window by ~10.1, so the streak counts from 10.1 and
-        # the chime lands at 12.1 — the same start-delay the pre-hysteresis
-        # streak had (it also counted only once the window was breach-free).
-        assert self._chime_times(samples, transitions) == [pytest.approx(12.1)]
+        # First bad frame at 10.0; once the good frames age out of the 0.3 s
+        # smoothing window (the window keeps its boundary sample, so 10.0 is
+        # still in it at 10.3) the streak counts from 10.0 and the chime lands
+        # at 12.0: bad_sustain_s after the first bad frame, on the dot.
+        assert self._chime_times(samples, transitions) == [pytest.approx(12.0)]
 
 
 class TestNoPersonFlap:
@@ -607,3 +607,96 @@ class TestDegradedFeedbackFiring:
         transitions = run(machine, grid(0.0, 4.0, 0.1, gated))
         assert all(t.nudge is Nudge.NONE for t in transitions)
         assert machine.state is PostureState.UNRELIABLE
+
+
+NON_FINITE = Unreliable(UnreliableReason.NON_FINITE)
+FRAMING = Unreliable(UnreliableReason.FRAMING_OUT_OF_BAND, "too far: shoulder width 0.05")
+
+
+class TestGlitchHold:
+    """NaN/inf frames hold the previous state: no reset, no escalation."""
+
+    def test_glitch_frames_hold_good(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        run(machine, grid(0.0, 2.0, 0.1, GOOD))
+        assert machine.state is PostureState.GOOD
+        transitions = run(machine, grid(2.1, 6.0, 0.1, NON_FINITE))
+        assert all(t.state is PostureState.GOOD and t.nudge is Nudge.NONE for t in transitions)
+
+    def test_glitch_frames_do_not_reset_a_bad_streak(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        run(machine, grid(0.0, 2.0, 0.1, GOOD))
+        samples = grid(2.1, 3.0, 0.1, _bad_pose_score())
+        samples += grid(3.1, 3.3, 0.1, NON_FINITE)
+        samples += grid(3.4, 5.0, 0.1, _bad_pose_score())
+        transitions = run(machine, samples)
+        chimes = [now for (now, _), t in zip(samples, transitions, strict=True)
+                  if t.nudge is Nudge.CHIME]
+        # Streak from the first bad frame (2.1) survives the glitch: chime at 4.1.
+        assert chimes == [pytest.approx(4.1)]
+
+    def test_glitch_frames_do_not_reset_the_baseline(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        run(machine, grid(0.0, 2.0, 0.1, GOOD))
+        before = machine._baseline.metrics
+        run(machine, grid(2.1, 8.0, 0.1, NON_FINITE))
+        assert machine._baseline.metrics == before
+
+
+class TestFramingGate:
+    def test_framing_out_of_band_is_unreliable(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        run(machine, grid(0.0, 2.0, 0.1, GOOD))
+        assert machine.update(FRAMING, 2.1).state is PostureState.UNRELIABLE
+
+
+class TestLowFrameRateSmoothing:
+    """The smoothing window keeps its boundary sample, so GOOD and reminders
+    confirm at any frame rate and with jittery timestamps."""
+
+    @pytest.mark.parametrize("fps", [2.0, 3.0, 5.0, 30.0])
+    def test_good_confirms_and_slouch_chimes_at_low_fps(self, fps):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        step = 1.0 / fps
+        transitions = run(machine, grid(0.0, 3.0, step, GOOD))
+        assert transitions[-1].state is PostureState.GOOD
+        samples = grid(3.0 + step, 8.0, step, _bad_pose_score())
+        transitions = run(machine, samples)
+        chimes = [now for (now, _), t in zip(samples, transitions, strict=True)
+                  if t.nudge is Nudge.CHIME]
+        assert len(chimes) == 1
+        # Chime within one frame of bad_sustain_s after the window filled.
+        first_bad = samples[0][0]
+        assert TIMINGS.bad_sustain_s - 1e-6 <= chimes[0] - first_bad
+        assert chimes[0] - first_bad <= TIMINGS.bad_sustain_s + TIMINGS.smoothing_window_s + step
+
+    def test_jittered_timestamps_still_confirm_good(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        now, jitter = 0.0, [0.031, 0.036, 0.029, 0.041, 0.033]
+        state = None
+        for i in range(120):
+            now += jitter[i % len(jitter)]
+            state = machine.update(GOOD, now).state
+        assert state is PostureState.GOOD
+
+
+class TestRecoveryAndAnchor:
+    def test_recovered_flag_only_on_the_recovery_frame(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        samples = grid(0.0, 2.0, 0.1, GOOD)
+        samples += grid(2.1, 5.0, 0.1, _bad_pose_score())
+        samples += grid(5.1, 10.0, 0.1, GOOD)
+        transitions = run(machine, samples)
+        recovered = [t for t in transitions if t.recovered]
+        assert len(recovered) == 1
+        assert recovered[0].state is PostureState.GOOD
+        assert recovered[0].nudge is Nudge.NONE
+
+    def test_baseline_anchor_survives_no_person(self):
+        machine = PostureStateMachine(TIMINGS, CFG)
+        anchor = ScoredPosture(1.0, 0.0, 0.0, 0.0, depth_m=None)
+        machine.set_baseline_anchor(anchor)
+        run(machine, grid(0.0, 2.0, 0.1, GOOD))
+        run(machine, grid(2.1, 6.0, 0.1, NO_POSE))
+        assert machine.state is PostureState.NO_PERSON
+        assert machine._baseline.metrics == anchor
