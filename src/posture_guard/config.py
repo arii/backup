@@ -7,18 +7,34 @@ edit needed to retune the system.
 
 from __future__ import annotations
 
+import types
+import typing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import get_type_hints
 
 import yaml
 
+CAMERA_SOURCES = ("webcam", "realsense", "synthetic")
+
+
+class ConfigError(ValueError):
+    """config.yaml has an unknown key, a wrong-typed value or an invalid value.
+    Raised at startup so a typo never silently falls back to a default."""
+
 
 @dataclass(frozen=True)
 class CameraConfig:
+    # webcam: cv2.VideoCapture + MediaPipe (default, no special hardware).
+    # realsense: Intel RealSense D400 color + depth. synthetic: no camera,
+    # scripted good/slouch demo poses (headless demos and tests).
+    source: str = "webcam"
+    device: int = 0  # webcam index for cv2.VideoCapture
     width: int = 640
     height: int = 480
     fps: int = 30
+    # Synthetic demo: seconds of good posture, then the same of slouch, repeating.
+    demo_cycle_s: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -54,6 +70,11 @@ class ScoringConfig:
     visibility_floor: float = 0.5
     depth_min_m: float = 0.6
     depth_max_m: float = 2.5
+    # Webcam framing gate (no depth sensor): shoulder width as a fraction of
+    # the frame width stands in for distance. Below min = too far, above
+    # max = too close.
+    shoulder_width_min: float = 0.12
+    shoulder_width_max: float = 0.65
     baseline_deviation: BaselineDeviationConfig = field(
         default_factory=BaselineDeviationConfig
     )
@@ -90,6 +111,24 @@ class AudioConfig:
     # Spoken-prompt wording rendered by TTS (the chime is a synthesized tone;
     # "chime_text" elsewhere in the UI/API means this spoken wording).
     voice_text: str = "Please fix your posture"
+    # Optional custom WAV files. bad_sound replaces the reminder chime;
+    # good_sound replaces the positive/recovery chime. A missing file logs a
+    # warning and keeps the built-in sound.
+    bad_sound: str | None = None
+    good_sound: str | None = None
+
+
+@dataclass(frozen=True)
+class NeedleConfig:
+    """Posture needle (display only; nudges use the scoring thresholds)."""
+
+    tau_s: float = 0.5  # EMA time constant: alpha = 1 - exp(-dt / tau_s)
+
+
+@dataclass(frozen=True)
+class CalibrationConfig:
+    window_s: float = 3.0  # seconds recorded per "Record good/slouch posture"
+    min_samples: int = 5  # fewer scored frames than this fails the recording
 
 
 @dataclass(frozen=True)
@@ -102,8 +141,16 @@ class PositiveChimeConfig:
 
 
 @dataclass(frozen=True)
+class RecoveryChimeConfig:
+    """Play the good sound once when posture recovers to GOOD after a reminder."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class FeedbackConfig:
     positive_chime: PositiveChimeConfig = field(default_factory=PositiveChimeConfig)
+    recovery_chime: RecoveryChimeConfig = field(default_factory=RecoveryChimeConfig)
 
 
 @dataclass(frozen=True)
@@ -113,53 +160,92 @@ class AppConfig:
     state: StateConfig = field(default_factory=StateConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     feedback: FeedbackConfig = field(default_factory=FeedbackConfig)
+    needle: NeedleConfig = field(default_factory=NeedleConfig)
+    calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
 
 
-def _build(cls, data: dict | None):  # noqa: ANN201 - factory helper
-    """Construct a frozen config dataclass, ignoring keys it does not define
-    and building nested dataclass-typed fields (e.g. ScoringConfig.
-    baseline_deviation) from their mappings instead of passing the raw dict
-    through — a raw dict leaks past the dataclass and crashes attribute
-    access at startup."""
-    data = data or {}
+def _type_ok(value: object, hint: object) -> bool:
+    """Shallow type check for config scalars: int is accepted for float, bool
+    is never accepted as a number, X | None accepts None."""
+    origin = typing.get_origin(hint)
+    if origin in (typing.Union, types.UnionType):
+        return any(_type_ok(value, arg) for arg in typing.get_args(hint))
+    if hint is type(None):
+        return value is None
+    if hint is bool:
+        return isinstance(value, bool)
+    if hint is int:
+        return isinstance(value, int) and not isinstance(value, bool)
+    if hint is float:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if hint is str:
+        return isinstance(value, str)
+    return True
+
+
+def _build(cls, data: object, path: str):  # noqa: ANN201 - factory helper
+    """Construct a frozen config dataclass from a YAML mapping.
+
+    Unknown keys and wrong-typed values raise ConfigError naming the full key
+    path (e.g. state.bad_sustain), so a typo can never silently fall back to
+    a default. Nested dataclass-typed fields (scoring.baseline_deviation,
+    feedback.positive_chime) are built recursively."""
+    prefix = f"{path}." if path else ""
+    where = path or "top level"
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ConfigError(f"{where}: expected a mapping, got {type(data).__name__}")
     hints = get_type_hints(cls)
+    fields = cls.__dataclass_fields__  # type: ignore[attr-defined]
+    unknown = sorted(str(k) for k in data if k not in fields)
+    if unknown:
+        valid = ", ".join(sorted(fields))
+        names = ", ".join(f"{prefix}{k}" for k in unknown)
+        raise ConfigError(f"unknown config key(s): {names} (valid in {where}: {valid})")
     kwargs: dict[str, object] = {}
     for key, value in data.items():
-        if key not in cls.__dataclass_fields__:  # type: ignore[attr-defined]
-            continue
-        nested = hints.get(key)
-        nested_dataclass = (
-            isinstance(value, dict)
-            and nested is not None
-            and hasattr(nested, "__dataclass_fields__")
-        )
-        if nested_dataclass:
-            value = _build(nested, value)
+        hint = hints[key]
+        if hasattr(hint, "__dataclass_fields__"):
+            value = _build(hint, value, f"{prefix}{key}")
+        elif not _type_ok(value, hint):
+            raise ConfigError(
+                f"{prefix}{key}: expected {getattr(hint, '__name__', hint)}, got {value!r}"
+            )
         kwargs[key] = value
     return cls(**kwargs)
+
+
+def validate(config: AppConfig) -> AppConfig:
+    """Value checks the type system cannot express. Returns config unchanged."""
+    if config.camera.source not in CAMERA_SOURCES:
+        raise ConfigError(
+            f"camera.source: {config.camera.source!r} is not one of {', '.join(CAMERA_SOURCES)}"
+        )
+    sw = config.scoring
+    if not 0 < sw.shoulder_width_min < sw.shoulder_width_max:
+        raise ConfigError("scoring: need 0 < shoulder_width_min < shoulder_width_max")
+    if not 0 < sw.depth_min_m < sw.depth_max_m:
+        raise ConfigError("scoring: need 0 < depth_min_m < depth_max_m")
+    if config.needle.tau_s < 0:
+        raise ConfigError("needle.tau_s: must be >= 0")
+    if config.calibration.window_s <= 0:
+        raise ConfigError("calibration.window_s: must be > 0")
+    if config.state.smoothing_window_s < 0:
+        raise ConfigError("state.smoothing_window_s: must be >= 0")
+    return config
 
 
 def load_config(path: str | Path) -> AppConfig:
     """Load and validate config from a YAML file.
 
-    Raises FileNotFoundError if the file is missing and yaml.YAMLError if it
-    is malformed — both are surface-loud by design.
+    Raises FileNotFoundError if the file is missing, yaml.YAMLError if it is
+    malformed, and ConfigError for unknown keys or invalid values — all
+    surface-loud by design.
     """
     raw = yaml.safe_load(Path(path).read_text())
+    if raw is None:
+        raw = {}
     if not isinstance(raw, dict):
         raise yaml.YAMLError(f"{path}: expected a mapping at the top level")
-    return AppConfig(
-        camera=_build(CameraConfig, raw.get("camera")),
-        scoring=_build(ScoringConfig, raw.get("scoring")),
-        state=_build(StateConfig, raw.get("state")),
-        audio=_build(AudioConfig, raw.get("audio")),
-        feedback=_build_feedback(raw.get("feedback")),
-    )
-
-
-def _build_feedback(data: dict | None) -> FeedbackConfig:  # noqa: ANN201 - factory helper
-    """Build FeedbackConfig; positive_chime is a nested mapping."""
-    data = data or {}
-    return FeedbackConfig(
-        positive_chime=_build(PositiveChimeConfig, data.get("positive_chime")),
-    )
+    return validate(_build(AppConfig, raw, ""))
