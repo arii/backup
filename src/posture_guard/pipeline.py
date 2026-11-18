@@ -18,7 +18,7 @@ from typing import Protocol
 from numpy.typing import NDArray
 
 from posture_guard.calibration import CalibrationRecorder
-from posture_guard.camera import ColorDepth, FrameSource, SourceStatus, usb_bandwidth_warning
+from posture_guard.camera import Frame, FrameSource, SourceStatus
 from posture_guard.config import AppConfig, ScoringConfig
 from posture_guard.dashboard.hub import DashboardHub, MetricsSnapshot, ScoringThresholds
 from posture_guard.feedback import RuntimeFeedback
@@ -61,7 +61,7 @@ def default_frame_renderer(
     color: NDArray,
     landmarks: Sequence[Landmark] | None,
     state_text: str,
-    depth_text: str,
+    info_text: str,
     reason_text: str = "",
     *,
     wire_color: str = "",
@@ -70,7 +70,7 @@ def default_frame_renderer(
     from posture_guard.dashboard.annotate import draw_overlay, encode_jpeg
 
     return encode_jpeg(
-        draw_overlay(color, landmarks, state_text, depth_text, reason_text, wire_color)
+        draw_overlay(color, landmarks, state_text, info_text, reason_text, wire_color)
     )
 
 
@@ -107,8 +107,6 @@ def wire_color_for(state: str, result: ScoringResult, cfg: ScoringConfig) -> str
 
 def root_cause(
     result: ScoringResult,
-    depth_m: float | None,
-    cfg: ScoringConfig,
     landmarks: Sequence[Landmark] | None,
 ) -> dict[str, object] | None:
     """The one actionable cause for the status-badge pill: what is wrong and
@@ -123,17 +121,11 @@ def root_cause(
             return {"title": "no person seen", "action": "sit fully in frame", "edge": None}
         if result.reason is UnreliableReason.LOW_VISIBILITY:
             return {"title": "low confidence", "action": "sit facing the camera", "edge": None}
-        if result.reason is UnreliableReason.DEPTH_OUT_OF_BAND:
-            if depth_m is not None and depth_m < cfg.depth_min_m:
-                return {"title": "person too close", "action": "step back", "edge": None}
-            return {"title": "person too far", "action": "step closer", "edge": None}
         if result.reason is UnreliableReason.FRAMING_OUT_OF_BAND:
             if result.detail.startswith("too close"):
                 return {"title": "person too close", "action": "move back", "edge": None}
             return {"title": "person too far", "action": "move closer", "edge": None}
-        if result.reason is UnreliableReason.NON_FINITE:
-            return {"title": "tracking glitch", "action": "hold still", "edge": None}
-        return {"title": "depth unreadable", "action": "check the camera view", "edge": None}
+        return {"title": "tracking glitch", "action": "hold still", "edge": None}
     return None
 
 
@@ -141,11 +133,10 @@ def low_visibility_warning(
     landmarks: Sequence[Landmark] | None, cfg: ScoringConfig
 ) -> str:
     """Name the landmark groups below the visibility floor, with the geometry
-    fix. At close range (e.g. 0.7 m) the D435i vertical FOV covers ~0.5 m, so
-    seated hips can never be in frame — trunk lean is then unavailable and the
-    fix is to move back, not to zoom or tilt."""
+    fix. Close to a laptop webcam the hips fall out of frame — trunk lean is
+    then unavailable and the fix is to move back, not to zoom or tilt."""
     if landmarks is None:
-        return "person not fully in frame - sit facing the camera, 1.0-1.5 m away"
+        return "person not fully in frame - sit facing the camera, 0.6-1.2 m away"
     floor = cfg.visibility_floor
 
     def group_missing(indices: tuple[int, int]) -> bool:
@@ -161,16 +152,15 @@ def low_visibility_warning(
     if group_missing((LEFT_HIP, RIGHT_HIP)):
         missing.append("hips")
     if not missing:
-        return "person not fully in frame - sit facing the camera, 1.0-1.5 m away"
+        return "person not fully in frame - sit facing the camera, 0.6-1.2 m away"
     named = " and ".join(missing)
     if "hips" in missing:
-        return f"{named} not visible - trunk lean unavailable, move back to 1.0-1.5 m"
-    return f"{named} not visible - sit facing the camera, 1.0-1.5 m away"
+        return f"{named} not visible - trunk lean unavailable, move back to 0.6-1.2 m"
+    return f"{named} not visible - sit facing the camera, 0.6-1.2 m away"
 
 
 def placement_warnings(
     result: ScoringResult,
-    depth_m: float | None,
     camera: SourceStatus,
     cfg: ScoringConfig,
     landmarks: Sequence[Landmark] | None = None,
@@ -180,21 +170,9 @@ def placement_warnings(
     warnings: list[str] = []
     if not camera.connected:
         warnings.append(f"camera unavailable: {camera.error or 'not started'}")
-    else:
-        usb = usb_bandwidth_warning(camera.usb_type)
-        if usb:
-            warnings.append(usb)
     if isinstance(result, Unreliable):
-        if result.reason is UnreliableReason.DEPTH_OUT_OF_BAND and depth_m is not None:
-            band = f"{cfg.depth_min_m}-{cfg.depth_max_m} m"
-            if depth_m > cfg.depth_max_m:
-                warnings.append(f"person too far - {depth_m:.1f} m (band {band})")
-            else:
-                warnings.append(f"person too close - {depth_m:.1f} m (band {band})")
-        elif result.reason is UnreliableReason.LOW_VISIBILITY:
+        if result.reason is UnreliableReason.LOW_VISIBILITY:
             warnings.append(low_visibility_warning(landmarks, cfg))
-        elif result.reason is UnreliableReason.DEPTH_UNREADABLE:
-            warnings.append("depth unreadable - check the camera view")
         elif result.reason is UnreliableReason.FRAMING_OUT_OF_BAND:
             warnings.append(f"person {result.detail}")
         elif result.reason is UnreliableReason.NON_FINITE:
@@ -272,17 +250,11 @@ class PosturePipeline:
     def state(self) -> PostureState:
         return self._state_machine.state
 
-    def process_once(self, frame: ColorDepth) -> Transition:
+    def process_once(self, frame: Frame) -> Transition:
         """Run the full frame path once. Clock is the frame timestamp, keeping
         state-machine timelines reproducible in tests."""
         detection = self._detector(frame)
-        # A color-only source (webcam) has no depth: score with the framing
-        # gate instead of the depth band.
-        depth_sensor = frame.depth is not None
-        result = score_pose(
-            detection.landmarks, detection.depth_m, self._config.scoring,
-            depth_sensor=depth_sensor,
-        )
+        result = score_pose(detection.landmarks, self._config.scoring)
         self.calibration.feed(result, frame.timestamp_s)
         self._sync_calibration()
         transition = self._state_machine.update(result, frame.timestamp_s)
@@ -357,7 +329,7 @@ class PosturePipeline:
         detection: PoseDetection,
         result: ScoringResult,
         state: PostureState,
-        frame: ColorDepth,
+        frame: Frame,
     ) -> None:
         angles: ScoredPosture | None = result if isinstance(result, ScoredPosture) else None
         trunk_deg = angles.trunk_lean_deg if angles else None
@@ -369,21 +341,18 @@ class PosturePipeline:
             trunk_deg = None
             trunk_note = "\u2014 trunk lean unavailable (hips not visible)"
         camera = self._source.status
-        depth_m = detection.depth_m
         snapshot = MetricsSnapshot(
             state=state.value,
             fps=self._fps,
-            depth_m=depth_m,
             head_forward_deg=angles.head_forward_deg if angles else None,
             trunk_lean_deg=trunk_deg,
             head_tilt_deg=angles.head_tilt_deg if angles else None,
             shoulder_level_deg=angles.shoulder_level_deg if angles else None,
             camera_connected=camera.connected,
-            camera_usb_type=camera.usb_type,
             camera_error=camera.error,
             camera_source=camera.kind,
             warnings=placement_warnings(
-                result, depth_m, camera, self._config.scoring, detection.landmarks
+                result, camera, self._config.scoring, detection.landmarks
             ),
             landmarks=(
                 tracked_landmarks(detection.landmarks)
@@ -396,9 +365,7 @@ class PosturePipeline:
                 result.detail if isinstance(result, Unreliable) and result.detail else None
             ),
             trunk_note=trunk_note,
-            root_cause=root_cause(
-                result, depth_m, self._config.scoring, detection.landmarks
-            ),
+            root_cause=root_cause(result, detection.landmarks),
             feedback=(
                 self._feedback.to_payload()
                 if self._feedback is not None
@@ -411,17 +378,14 @@ class PosturePipeline:
         )
         self._hub.publish_metrics(snapshot)
         state_text = state.value.replace("_", " ")
-        if depth_m is not None:
-            depth_text = f"depth {depth_m:.1f} m"
-        else:
-            depth_text = "no depth sensor" if frame.depth is None else "depth -"
+        info_text = f"{camera.kind or 'camera'} - {self._fps:.0f} fps"
         reason_text = result.detail if isinstance(result, Unreliable) else ""
         self._hub.publish_video(
             self._renderer(
                 frame.color,
                 detection.landmarks,
                 state_text,
-                depth_text,
+                info_text,
                 reason_text,
                 wire_color=wire_color_for(state.value, result, self._config.scoring),
             )

@@ -34,14 +34,14 @@
 
   <h2>1. The pipeline, end to end</h2>
   <ol class="pipeline">
-    <li><b>Camera: Intel RealSense D400-series depth + RGB</b>
-      A worker thread pulls frames continuously into a latest-frame buffer (so the dashboard always shows the newest image, never a stale queue), with bounded startup retries and stalled-stream recovery. The depth stream doubles as a distance gate: you are only scored inside 0.6&ndash;2.5&nbsp;m of the camera.
+    <li><b>Camera: any webcam</b>
+      A worker thread pulls frames from the webcam (OpenCV) continuously into a latest-frame buffer (so the dashboard always shows the newest image, never a stale queue), with bounded startup retries and reopening a camera that stops delivering frames. Your shoulder width in the frame doubles as a distance gate: sit too far or too close and you are told so instead of scored.
       <span class="on-screen">This is the live video panel &mdash; the color image with the pose skeleton drawn over it.</span></li>
     <li><b>Pose landmarks: MediaPipe Pose</b>
       Each color frame goes through MediaPipe's Pose model, fully on this machine's CPU. It returns 33 2D landmarks with per-landmark visibility scores.
       <span class="on-screen">The skeleton overlay on the video.</span></li>
     <li><b>Four posture metrics</b>
-      From those landmarks we compute head forward (ear ahead of shoulder), trunk lean (shoulder-to-hip line from vertical), head tilt, and shoulder level &mdash; all angles, so they work for any body at any distance in the band. A metric is &ldquo;bad&rdquo; when it crosses its threshold; hysteresis (3&deg;) stops it flickering at the boundary, and landmark visibility must clear 0.5 before a reading is trusted. Thresholds: head forward &plusmn;12&deg;, trunk lean &plusmn;10&deg;, head tilt &plusmn;12&deg;, shoulder level &plusmn;6&deg;.
+      From those landmarks we compute head forward (ear ahead of shoulder), trunk lean (shoulder-to-hip line from vertical), head tilt, and shoulder level &mdash; all angles, so they work for any body at any distance in the band. A metric is &ldquo;bad&rdquo; when it crosses its threshold; hysteresis (3&deg;) stops it flickering at the boundary, and landmark visibility must clear 0.5 before a reading is trusted. Default thresholds (<code>config.yaml</code>): head forward &plusmn;8&deg;, trunk lean &plusmn;7&deg;, head tilt &plusmn;8&deg;, shoulder level &plusmn;4&deg;.
       <span class="on-screen">The four metric cards, each with its own target band.</span></li>
     <li><b>State machine</b>
       Readings are smoothed over 0.3&nbsp;s, then a small state machine decides: bad posture must hold for 2&nbsp;s before a chime fires; a spoken prompt follows 10&nbsp;s later if posture is still bad, repeating at most every 30&nbsp;s; sitting well for a moment returns you to GOOD.
@@ -67,8 +67,8 @@
   </ul>
   <p>You can also run it without a camera: a synthetic frame source keeps the dashboard alive with a live status line explaining why.</p>
 
-  <h2>4. Where it came from</h2>
-  <p>I built this end to end in a single day at the Obvious hackathon in San Francisco, November 13, 2026 &mdash; you're reading the write-up on the same day it shipped. The setup is the one real-world arrangement I sit at every day: a RealSense D435i on a shelf above my monitor, pointed down at my torso. Every part &mdash; camera thread, scoring, the reminder state machine, the audio queue, this dashboard &mdash; was written for this hackathon, driven by one goal: reminders that are calm, explainable, and quick to arrive when you slouch and quicker to stop when you don't.</p>
+  <h2>4. The browser version</h2>
+  <p>The same scoring and reminder logic also runs entirely in a browser tab, with nothing to install: <a href="https://arii.github.io/posture-guard/app/">arii.github.io/posture-guard/app</a>. The browser port is tested frame by frame against this Python code, so both versions remind you at the same moments.</p>
 
   <h2>5. Roadmap: embedded Linux</h2>
   <p>The long-term goal is to run Posture Guard on small embedded Linux hardware (a Pi-class board beside the desk) rather than a full desktop. This is intent, not something we've tested on target hardware yet. What already helps: the whole stack is CPU-only with no GPU dependency, the footprint is a handful of lightweight Python processes, and the system degrades gracefully (trusted metrics only, honest UNRELIABLE status) instead of failing hard. What needs work: packaging for a minimal OS image, headless operation without a desktop audio session, and a compute assessment to confirm the pose model's frame rate fits the board's budget.</p>

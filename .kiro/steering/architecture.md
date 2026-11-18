@@ -10,13 +10,16 @@
 - Type hints on all new and modified code. `requires-python >= 3.10`: use `X | None`.
 - `ruff check .` must pass (line length 100, rules E, F, W, I, UP, B, SIM).
 
-## Inputs and hardware
-- **Webcam is the default input** (`camera.source: webcam`): `cv2.VideoCapture` +
-  MediaPipe Pose (`mp.solutions.pose`, pinned `mediapipe>=0.10.14,<0.10.30`).
-- **RealSense D400 is optional** (`--camera realsense`), color + aligned depth.
-- **Synthetic is the no-camera mode** (`--camera synthetic`, and the fallback when a
-  camera fails to open): scripted good/slouch poses for demos, CI and tests.
-- Heavy imports (`cv2`, `mediapipe`, `pyrealsense2`) stay lazy, inside functions.
+## Inputs
+- **The browser version is the primary product** (`docs/app/`, GitHub Pages). The
+  Linux desktop app has the same behavior and serves offline use.
+- **Webcam is the only camera** (`camera.source: webcam`): `cv2.VideoCapture` +
+  MediaPipe Pose (`mp.solutions.pose`, pinned `mediapipe>=0.10.14,<0.10.30`) on the
+  desktop, tasks-vision PoseLandmarker in the browser. Depth cameras were removed;
+  distance comes from the shoulder-width framing gate.
+- **Synthetic is the no-camera mode** (`--camera synthetic`, and the fallback when the
+  webcam fails to open): scripted good/slouch poses for demos, CI and tests.
+- Heavy imports (`cv2`, `mediapipe`) stay lazy, inside functions.
   Tests stub them; nothing in `tests/test_*.py` needs a camera or the SDKs.
 - Frame sources never raise from `read()`: failures are `SourceStatus` states.
 

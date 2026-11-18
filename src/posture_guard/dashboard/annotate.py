@@ -1,5 +1,5 @@
 """Frame annotation for the MJPEG stream (spec §dashboard): skeleton overlay,
-depth distance and state banner drawn on the color frame.
+an info line (source and fps) and the state banner drawn on the color frame.
 
 OpenCV is imported lazily so this module imports on CI machines without the
 hardware extras; the pipeline injects its own renderer in tests that must run
@@ -86,12 +86,12 @@ def draw_overlay(
     color: NDArray[np.uint8],
     landmarks: Sequence[Landmark] | None,
     state_text: str,
-    depth_text: str,
+    info_text: str,
     reason_text: str = "",
     wire_color: str = "",
 ) -> NDArray[np.uint8]:
     """Annotate a BGR frame in place-free copy: joints + skeleton lines, the
-    state banner, the depth readout and — when a frame is unscoreable — the
+    state banner, the info line and — when a frame is unscoreable — the
     human-readable reason (e.g. which landmarks are not visible).
     Landmarks are normalized (0..1). wire_color (hex, from pipeline.wire_color_for)
     binds the skeleton stroke to the tracking state; empty keeps the legacy
@@ -139,7 +139,7 @@ def draw_overlay(
         out, state_text.upper(), (12, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, banner, 2
     )
     cv2.putText(
-        out, depth_text, (12, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1
+        out, info_text, (12, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 240, 240), 1
     )
     if reason_text:
         cv2.putText(

@@ -4,7 +4,11 @@ name: live-site
 # webcam mode with Chromium's fake camera playing a photo of a person, so the
 # real MediaPipe bundle, WASM and model are loaded from the CDN and run.
 on:
-  page_build:            # after every Pages deploy
+  # After every Pages deploy. (Actions-based Pages builds do not emit the
+  # page_build event, so trigger on the deploy workflow finishing instead.)
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
   workflow_dispatch:
   schedule:
     - cron: "17 6 * * 1"  # weekly: catches CDN / model URL drift

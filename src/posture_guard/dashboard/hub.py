@@ -46,13 +46,11 @@ class MetricsSnapshot:
 
     state: str = "no_person"
     fps: float = 0.0
-    depth_m: float | None = None
     head_forward_deg: float | None = None
     trunk_lean_deg: float | None = None
     head_tilt_deg: float | None = None
     shoulder_level_deg: float | None = None
     camera_connected: bool = False
-    camera_usb_type: str | None = None
     camera_error: str | None = None
     camera_source: str | None = None
     audio_ready: bool = False
@@ -76,7 +74,6 @@ class MetricsSnapshot:
             "type": "metrics",
             "state": self.state,
             "fps": round(self.fps, 1),
-            "depth_m": _round_or_none(self.depth_m, 3),
             "metrics": {
                 "head_forward_deg": _round_or_none(self.head_forward_deg),
                 "trunk_lean_deg": _round_or_none(self.trunk_lean_deg),
@@ -85,7 +82,6 @@ class MetricsSnapshot:
             },
             "camera": {
                 "connected": self.camera_connected,
-                "usb_type": self.camera_usb_type,
                 "error": self.camera_error,
                 "source": self.camera_source,
             },

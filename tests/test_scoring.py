@@ -31,7 +31,6 @@ from posture_guard.scoring import (
     measure_shoulder_level,
     measure_trunk_lean,
     score_pose,
-    valid_depth_median,
     visibility_ok,
     zone_of,
 )
@@ -53,7 +52,7 @@ class TestTrunkLeanOptional:
             }
         )
         cfg = ScoringConfig(trunk_lean_required=False)
-        result = score_pose(pose, 1.4, cfg)
+        result = score_pose(pose, cfg)
         assert isinstance(result, ScoredPosture)  # not UNRELIABLE low_visibility
 
     def test_hidden_hips_score_in_degraded_mode_by_default(self):
@@ -66,7 +65,7 @@ class TestTrunkLeanOptional:
                 RIGHT_HIP: SimpleLandmark(x=0.56, y=0.90, visibility=0.3),
             }
         )
-        result = score_pose(pose, 1.4, ScoringConfig())
+        result = score_pose(pose, ScoringConfig())
         assert isinstance(result, ScoredPosture)
         assert result.trunk_lean_available is False
 
@@ -79,7 +78,7 @@ class TestTrunkLeanOptional:
             }
         )
         cfg = ScoringConfig(degraded_feedback=False)
-        result = score_pose(pose, 1.4, cfg)
+        result = score_pose(pose, cfg)
         assert result == Unreliable(
             UnreliableReason.LOW_VISIBILITY,
             "hips not visible (left 0.30, right 0.30) - trunk lean unavailable",
@@ -95,7 +94,7 @@ class TestTrunkLeanOptional:
             }
         )
         cfg = ScoringConfig(trunk_lean_required=False)
-        scored = score_pose(pose, 1.4, cfg)
+        scored = score_pose(pose, cfg)
         assert isinstance(scored, ScoredPosture)
         assert zone_of(scored, cfg) == "good"  # trunk lean ignored entirely
 
@@ -149,7 +148,7 @@ class TestMirroredFramings:
 
     def test_mirrored_good_pose_scores_good_zone(self):
         # End-to-end: a mirrored good pose must score good, not bad/unreliable.
-        result = score_pose(mirror_x(make_pose()), depth_m=1.4, cfg=CFG)
+        result = score_pose(mirror_x(make_pose()), CFG)
         assert_matches(result, GOOD_ANGLES)
         assert zone_of(result, CFG) == "good"
 
@@ -221,49 +220,27 @@ class TestMirroredFramings:
 
 class TestScorePoseGates:
     def test_good_pose_scores(self, good_pose):
-        result = score_pose(good_pose, depth_m=1.4, cfg=CFG)
+        result = score_pose(good_pose, CFG)
         assert_matches(result, GOOD_ANGLES)
-        assert result.depth_m == 1.4
 
     def test_slouched_pose_scores_bad(self, slouched_pose):
-        result = score_pose(slouched_pose, depth_m=1.4, cfg=CFG)
+        result = score_pose(slouched_pose, CFG)
         assert_matches(result, SLOUCHED_ANGLES)
 
     def test_no_pose_is_unreliable_no_pose(self):
-        result = score_pose(None, depth_m=1.4, cfg=CFG)
+        result = score_pose(None, CFG)
         assert result == Unreliable(UnreliableReason.NO_POSE)
 
-    def test_missing_depth_is_unreliable(self, good_pose):
-        result = score_pose(good_pose, depth_m=None, cfg=CFG)
-        assert result.reason == UnreliableReason.DEPTH_UNREADABLE
-
-    def test_invalid_depth_is_unreliable(self, good_pose):
-        result = score_pose(good_pose, depth_m=0.0, cfg=CFG)
-        assert result.reason == UnreliableReason.DEPTH_UNREADABLE
-
-    def test_person_too_far_is_out_of_band(self, good_pose):
-        result = score_pose(good_pose, depth_m=2.9, cfg=CFG)
-        assert result.reason == UnreliableReason.DEPTH_OUT_OF_BAND
-        assert "2.9" in result.detail
-
-    def test_person_too_close_is_out_of_band(self, good_pose):
-        result = score_pose(good_pose, depth_m=0.4, cfg=CFG)
-        assert result.reason == UnreliableReason.DEPTH_OUT_OF_BAND
-
-    def test_band_edges_score(self, good_pose):
-        assert isinstance(score_pose(good_pose, depth_m=CFG.depth_min_m, cfg=CFG), ScoredPosture)
-        assert isinstance(score_pose(good_pose, depth_m=CFG.depth_max_m, cfg=CFG), ScoredPosture)
-
     def test_cropped_pose_is_unreliable_low_visibility(self, cropped_pose):
-        result = score_pose(cropped_pose, depth_m=1.4, cfg=CFG)
+        result = score_pose(cropped_pose, CFG)
         assert result.reason == UnreliableReason.LOW_VISIBILITY
 
     def test_low_visibility_never_returns_a_score(self, cropped_pose):
-        assert not isinstance(score_pose(cropped_pose, depth_m=1.4, cfg=CFG), ScoredPosture)
+        assert not isinstance(score_pose(cropped_pose, CFG), ScoredPosture)
 
     def test_low_visibility_detail_names_failing_landmarks(self, cropped_pose):
         # Only the right shoulder is below the floor: name it with its value.
-        result = score_pose(cropped_pose, depth_m=1.4, cfg=CFG)
+        result = score_pose(cropped_pose, CFG)
         assert result.detail == "shoulders not visible (right 0.10)"
 
     def test_low_visibility_hips_detail_names_trunk_lean(self, good_pose):
@@ -273,7 +250,7 @@ class TestScorePoseGates:
                 RIGHT_HIP: SimpleLandmark(x=0.56, y=0.90, visibility=0.28),
             }
         )
-        result = score_pose(pose, depth_m=1.4, cfg=ScoringConfig(degraded_feedback=False))
+        result = score_pose(pose, ScoringConfig(degraded_feedback=False))
         assert result.reason == UnreliableReason.LOW_VISIBILITY
         assert result.detail == (
             "hips not visible (left 0.31, right 0.28) - trunk lean unavailable"
@@ -287,7 +264,7 @@ class TestScorePoseGates:
                 RIGHT_HIP: SimpleLandmark(x=0.56, y=0.90, visibility=0.28),
             }
         )
-        result = score_pose(pose, depth_m=1.4, cfg=CFG)
+        result = score_pose(pose, CFG)
         assert "ears not visible (left 0.20)" in result.detail
         assert "hips not visible (left 0.31, right 0.28)" in result.detail
 
@@ -306,30 +283,18 @@ class TestVisibility:
         assert not visibility_ok(good_pose, strict)
 
 
-class TestDepthMedian:
-    def test_rejects_invalid_and_takes_median(self):
-        samples = [0.0, 1.5, 1.4, float("nan"), 0.5]
-        assert valid_depth_median(samples) == 1.4
-
-    def test_even_count_interpolates(self):
-        assert valid_depth_median([1.0, 2.0]) == 1.5
-
-    def test_all_invalid_returns_none(self):
-        assert valid_depth_median([0.0, -1.0, float("inf")]) is None
-
-
 class TestZoneOf:
     def test_good_pose_is_good_zone(self, good_pose):
-        assert zone_of(score_pose(good_pose, 1.4, CFG), CFG) == "good"
+        assert zone_of(score_pose(good_pose, CFG), CFG) == "good"
 
     def test_slouched_is_bad_zone(self, slouched_pose):
-        assert zone_of(score_pose(slouched_pose, 1.4, CFG), CFG) == "bad"
+        assert zone_of(score_pose(slouched_pose, CFG), CFG) == "bad"
 
     def test_hysteresis_band_is_neutral(self, uneven_shoulders_pose):
         # Shoulder level ~5.71 deg: past the exit threshold (8 - 3 = 5) but
         # below the enter threshold (8) — exactly the hysteresis band.
         cfg = ScoringConfig(shoulder_level_deg=8.0)
-        assert zone_of(score_pose(uneven_shoulders_pose, 1.4, cfg), cfg) == "neutral"
+        assert zone_of(score_pose(uneven_shoulders_pose, cfg), cfg) == "neutral"
 
     def test_identical_metric_values_all_checked(self):
         # Regression: value/threshold pairs must not collapse on dict keys.
@@ -338,7 +303,6 @@ class TestZoneOf:
             trunk_lean_deg=0.0,
             head_tilt_deg=0.0,
             shoulder_level_deg=10.0,
-            depth_m=1.4,
         )
         assert zone_of(metrics, CFG) == "bad"
 
@@ -355,7 +319,6 @@ class TestBaselineDeviation:
             trunk_lean_deg=trunk,
             head_tilt_deg=tilt,
             shoulder_level_deg=shoulder,
-            depth_m=1.4,
         )
 
     def test_baseline_anchors_to_first_frame(self):
@@ -456,7 +419,7 @@ class TestDegradedFeedback:
                 RIGHT_EAR: SimpleLandmark(x=0.56, y=0.54),
             }
         )
-        scored = score_pose(pose, 1.4, cfg)
+        scored = score_pose(pose, cfg)
         assert isinstance(scored, ScoredPosture)
         assert scored.trunk_lean_available is False
         assert zone_of(scored, cfg) == "bad"
@@ -472,7 +435,7 @@ class TestDegradedFeedback:
                 RIGHT_HIP: SimpleLandmark(x=0.95, y=0.05, visibility=0.2),
             }
         )
-        scored = score_pose(pose, 1.4, cfg)
+        scored = score_pose(pose, cfg)
         assert isinstance(scored, ScoredPosture)
         assert zone_of(scored, cfg) == "good"
 
@@ -486,7 +449,7 @@ class TestDegradedFeedback:
                 LEFT_EAR: SimpleLandmark(x=0.46, y=0.45, visibility=0.2),
             }
         )
-        result = score_pose(pose, 1.4, cfg)
+        result = score_pose(pose, cfg)
         assert result == Unreliable(
             UnreliableReason.LOW_VISIBILITY,
             "ears not visible (left 0.20); hips not visible (left 0.20, right 0.20)"
@@ -500,7 +463,7 @@ class TestDegradedFeedback:
                 LEFT_SHOULDER: SimpleLandmark(x=0.40, y=0.60, visibility=0.3),
             }
         )
-        result = score_pose(pose, 1.4, cfg)
+        result = score_pose(pose, cfg)
         assert isinstance(result, Unreliable)
         assert result.reason is UnreliableReason.LOW_VISIBILITY
 
@@ -529,17 +492,13 @@ class TestNonFiniteInput:
     def test_non_finite_ear_or_shoulder_is_non_finite(self, bad):
         for index in (LEFT_EAR, RIGHT_SHOULDER):
             pose = make_pose({index: SimpleLandmark(x=bad, y=0.5)})
-            result = score_pose(pose, depth_m=1.4, cfg=CFG)
+            result = score_pose(pose, CFG)
             assert isinstance(result, Unreliable)
             assert result.reason is UnreliableReason.NON_FINITE
 
-    @pytest.mark.parametrize("bad", [math.nan, math.inf])
-    def test_non_finite_depth_is_unreadable(self, good_pose, bad):
-        assert score_pose(good_pose, bad, CFG).reason is UnreliableReason.DEPTH_UNREADABLE
-
     def test_non_finite_hips_degrade_to_trunk_unavailable(self):
         pose = make_pose({LEFT_HIP: SimpleLandmark(x=math.nan, y=0.9)})
-        result = score_pose(pose, 1.4, CFG)
+        result = score_pose(pose, CFG)
         assert isinstance(result, ScoredPosture)
         assert result.trunk_lean_available is False
         assert math.isfinite(result.trunk_lean_deg)
@@ -547,25 +506,24 @@ class TestNonFiniteInput:
     def test_non_finite_hips_gate_when_degraded_feedback_off(self):
         cfg = ScoringConfig(degraded_feedback=False)
         pose = make_pose({RIGHT_HIP: SimpleLandmark(x=0.56, y=math.inf)})
-        assert score_pose(pose, 1.4, cfg).reason is UnreliableReason.NON_FINITE
+        assert score_pose(pose, cfg).reason is UnreliableReason.NON_FINITE
 
     def test_nan_visibility_is_low_visibility(self):
         pose = make_pose({LEFT_EAR: SimpleLandmark(x=0.46, y=0.45, visibility=math.nan)})
-        assert score_pose(pose, 1.4, CFG).reason is UnreliableReason.LOW_VISIBILITY
+        assert score_pose(pose, CFG).reason is UnreliableReason.LOW_VISIBILITY
 
-    def test_midpoint_overflow_inf_minus_inf_is_non_finite(self):
-        # Ears and shoulders all near float max: both midpoints overflow to
-        # inf, so ear_mid - shoulder_mid is inf - inf = NaN.
+    def test_metric_overflow_is_non_finite(self):
+        # Finite ears at -/+ float max with normal shoulders (so the framing
+        # gate passes): the inter-ear vector overflows to inf, and the head
+        # tilt cross product becomes inf * 0 = NaN.
         big = 1.7e308
         pose = make_pose(
             {
-                LEFT_EAR: SimpleLandmark(x=big, y=0.45),
+                LEFT_EAR: SimpleLandmark(x=-big, y=0.45),
                 RIGHT_EAR: SimpleLandmark(x=big, y=0.45),
-                LEFT_SHOULDER: SimpleLandmark(x=big, y=0.60),
-                RIGHT_SHOULDER: SimpleLandmark(x=big, y=0.60),
             }
         )
-        result = score_pose(pose, 1.4, CFG)
+        result = score_pose(pose, CFG)
         assert isinstance(result, Unreliable)
         assert result.reason is UnreliableReason.NON_FINITE
 
@@ -576,20 +534,19 @@ class TestNonFiniteInput:
                 RIGHT_EAR: SimpleLandmark(x=1.7e308, y=0.45),
             }
         )
-        result = score_pose(pose, 1.4, CFG)
+        result = score_pose(pose, CFG)
         if isinstance(result, ScoredPosture):
             assert math.isfinite(result.head_forward_deg)
         else:
             assert result.reason is UnreliableReason.NON_FINITE
 
 
-class TestWebcamFraming:
-    """depth_sensor=False: shoulder width in the frame replaces the depth band."""
+class TestFraming:
+    """Shoulder width in the frame stands in for distance."""
 
-    def test_good_pose_scores_without_depth(self, good_pose):
-        result = score_pose(good_pose, None, CFG, depth_sensor=False)
+    def test_good_pose_scores(self, good_pose):
+        result = score_pose(good_pose, CFG)
         assert isinstance(result, ScoredPosture)
-        assert result.depth_m is None
         assert abs(result.head_forward_deg) < ANGLE_TOLERANCE_DEG
 
     def test_narrow_shoulders_read_too_far(self):
@@ -601,7 +558,7 @@ class TestWebcamFraming:
                 RIGHT_EAR: SimpleLandmark(x=0.51, y=0.55),
             }
         )
-        result = score_pose(pose, None, CFG, depth_sensor=False)
+        result = score_pose(pose, CFG)
         assert result.reason is UnreliableReason.FRAMING_OUT_OF_BAND
         assert result.detail.startswith("too far")
 
@@ -612,19 +569,13 @@ class TestWebcamFraming:
                 RIGHT_SHOULDER: SimpleLandmark(x=0.90, y=0.60),
             }
         )
-        result = score_pose(pose, None, CFG, depth_sensor=False)
+        result = score_pose(pose, CFG)
         assert result.reason is UnreliableReason.FRAMING_OUT_OF_BAND
         assert result.detail.startswith("too close")
 
-    def test_depth_gates_are_skipped(self, good_pose):
-        # A depth reading far outside the band does not gate a webcam frame.
-        result = score_pose(good_pose, 9.0, CFG, depth_sensor=False)
-        assert isinstance(result, ScoredPosture)
-
-
 class TestBaselineAnchorAndDecay:
     def _m(self, head: float) -> ScoredPosture:
-        return ScoredPosture(head, 0.0, 0.0, 0.0, depth_m=None)
+        return ScoredPosture(head, 0.0, 0.0, 0.0)
 
     def test_decay_uses_exact_exponential(self):
         baseline = PostureBaseline(BaselineDeviationConfig(window_s=10.0))
@@ -657,12 +608,6 @@ class TestBaselineAnchorAndDecay:
 
     def test_unavailable_trunk_does_not_drift_the_trunk_baseline(self):
         baseline = PostureBaseline(BaselineDeviationConfig(window_s=1.0))
-        baseline.update(ScoredPosture(0.0, 2.0, 0.0, 0.0, None), 0.0)
-        baseline.update(ScoredPosture(0.0, 80.0, 0.0, 0.0, None, trunk_lean_available=False), 5.0)
+        baseline.update(ScoredPosture(0.0, 2.0, 0.0, 0.0), 0.0)
+        baseline.update(ScoredPosture(0.0, 80.0, 0.0, 0.0, trunk_lean_available=False), 5.0)
         assert baseline.metrics.trunk_lean_deg == pytest.approx(2.0)
-
-    def test_none_depth_is_tolerated(self):
-        baseline = PostureBaseline(BaselineDeviationConfig())
-        baseline.update(ScoredPosture(0.0, 0.0, 0.0, 0.0, None), 0.0)
-        baseline.update(ScoredPosture(1.0, 0.0, 0.0, 0.0, 1.4), 1.0)
-        assert baseline.metrics.depth_m == 1.4

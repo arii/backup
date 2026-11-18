@@ -105,7 +105,7 @@ test("P1: needle bounded for arbitrary landmarks and calibrations", () => {
   for (let n = 0; n < 3000; n += 1) {
     const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
     for (const i of TRACKED) lm[i] = { x: anyFloat(r), y: anyFloat(r), visibility: r() < 0.1 ? NaN : r() };
-    const res = scorePose(lm, anyFloat(r), DEFAULTS.scoring, { depthSensor: r() < 0.5 });
+    const res = scorePose(lm, DEFAULTS.scoring);
     if (res.kind !== "scored") continue;
     for (const k of ["head_forward_deg", "trunk_lean_deg", "head_tilt_deg", "shoulder_level_deg"]) {
       assert.ok(Number.isFinite(res[k]), k);
@@ -125,6 +125,10 @@ test("P1: needle bounded for arbitrary landmarks and calibrations", () => {
   }
 });
 
+// The framing gate measures distance, so it is deliberately not scale
+// invariant; open it all the way to test the angles (as test_properties.py does).
+const OPEN_FRAMING = { ...DEFAULTS.scoring, shoulder_width_min: 1e-9, shoulder_width_max: 1e9 };
+
 test("P2: angles are scale invariant", () => {
   const r = rng(2);
   const base = { 7: [0.46, 0.45], 8: [0.54, 0.45], 11: [0.40, 0.60], 12: [0.60, 0.60], 23: [0.44, 0.90], 24: [0.56, 0.90] };
@@ -138,17 +142,17 @@ test("P2: angles are scale invariant", () => {
       a[i] = { x, y, visibility: 1 };
       b[i] = { x: x * k, y: y * k, visibility: 1 };
     }
-    const sa = scorePose(a, 1.4, DEFAULTS.scoring);
-    const sb = scorePose(b, 1.4, DEFAULTS.scoring);
+    const sa = scorePose(a, OPEN_FRAMING);
+    const sb = scorePose(b, OPEN_FRAMING);
     for (const key of ["head_forward_deg", "trunk_lean_deg", "head_tilt_deg", "shoulder_level_deg"]) {
       assert.ok(Math.abs(sa[key] - sb[key]) <= 1e-5, `${key} k=${k}`);
     }
   }
 });
 
-const GOOD = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0, depth_m: null });
-const BAD = scored({ head_forward_deg: 18, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0, depth_m: null });
-const NEUTRAL = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 2.5, depth_m: null });
+const GOOD = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
+const BAD = scored({ head_forward_deg: 18, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
+const NEUTRAL = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 2.5 });
 const KINDS = [GOOD, BAD, NEUTRAL, unreliable(Reason.NO_POSE), unreliable(Reason.LOW_VISIBILITY),
   unreliable(Reason.NON_FINITE), unreliable(Reason.FRAMING_OUT_OF_BAND, "too far")];
 

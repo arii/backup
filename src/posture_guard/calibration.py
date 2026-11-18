@@ -85,7 +85,6 @@ def _centroid(samples: list[ScoredPosture]) -> ScoredPosture:
         ),
         head_tilt_deg=sum(s.head_tilt_deg for s in samples) / n,
         shoulder_level_deg=sum(s.shoulder_level_deg for s in samples) / n,
-        depth_m=None,
         trunk_lean_available=trunk_ok,
     )
 

@@ -15,7 +15,7 @@ from typing import get_type_hints
 
 import yaml
 
-CAMERA_SOURCES = ("webcam", "realsense", "synthetic")
+CAMERA_SOURCES = ("webcam", "synthetic")
 
 
 class ConfigError(ValueError):
@@ -25,9 +25,9 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class CameraConfig:
-    # webcam: cv2.VideoCapture + MediaPipe (default, no special hardware).
-    # realsense: Intel RealSense D400 color + depth. synthetic: no camera,
-    # scripted good/slouch demo poses (headless demos and tests).
+    # webcam: cv2.VideoCapture + MediaPipe (default, any USB/laptop camera).
+    # synthetic: no camera, scripted good/slouch demo poses (headless demos
+    # and tests).
     source: str = "webcam"
     device: int = 0  # webcam index for cv2.VideoCapture
     width: int = 640
@@ -68,11 +68,8 @@ class ScoringConfig:
     shoulder_level_deg: float = 4.0
     hysteresis_margin_deg: float = 3.0
     visibility_floor: float = 0.5
-    depth_min_m: float = 0.6
-    depth_max_m: float = 2.5
-    # Webcam framing gate (no depth sensor): shoulder width as a fraction of
-    # the frame width stands in for distance. Below min = too far, above
-    # max = too close.
+    # Framing gate: shoulder width as a fraction of the frame width stands in
+    # for distance. Below min = too far, above max = too close.
     shoulder_width_min: float = 0.12
     shoulder_width_max: float = 0.65
     baseline_deviation: BaselineDeviationConfig = field(
@@ -225,8 +222,6 @@ def validate(config: AppConfig) -> AppConfig:
     sw = config.scoring
     if not 0 < sw.shoulder_width_min < sw.shoulder_width_max:
         raise ConfigError("scoring: need 0 < shoulder_width_min < shoulder_width_max")
-    if not 0 < sw.depth_min_m < sw.depth_max_m:
-        raise ConfigError("scoring: need 0 < depth_min_m < depth_max_m")
     if config.needle.tau_s < 0:
         raise ConfigError("needle.tau_s: must be >= 0")
     if config.calibration.window_s <= 0:

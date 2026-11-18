@@ -2,11 +2,11 @@
 dashboard).
 
     python -m posture_guard.dashboard.serve [--config config.yaml] [--port 8000]
-        [--camera webcam|realsense|synthetic] [--device N]
+        [--camera webcam|synthetic] [--device N]
 
 Runs the full capture -> pose -> scoring -> state -> dashboard/audio pipeline.
 The camera comes from --camera, else camera.source in config.yaml (default:
-webcam). A webcam or RealSense that fails to open falls back to the synthetic
+webcam). A webcam that fails to open falls back to the synthetic
 source, and the reason is logged and shown on the dashboard. The synthetic
 source runs a scripted good/slouch demo so every feature is visible with no
 camera at all.
@@ -25,7 +25,6 @@ from posture_guard.audio import AudioWorker
 from posture_guard.camera import (
     CameraWorker,
     FrameSource,
-    RealSenseFrameSource,
     SyntheticFrameSource,
 )
 from posture_guard.config import CAMERA_SOURCES, AppConfig, load_config
@@ -60,16 +59,6 @@ def build_source(config: AppConfig) -> FrameSource:
     cam = config.camera
     if cam.source == "synthetic":
         return _synthetic(config, None)
-    if cam.source == "realsense":
-        realsense = RealSenseFrameSource(cam.width, cam.height, cam.fps)
-        if realsense.start():
-            logger.info(
-                "RealSense source active (usb %s)", realsense.status.usb_type or "unknown"
-            )
-            worker = CameraWorker(realsense)
-            worker.start()
-            return worker
-        return _synthetic(config, realsense.status.error or "camera unavailable")
     webcam = WebcamFrameSource(cam.device, cam.width, cam.height, cam.fps)
     if webcam.start():
         logger.info("webcam source active (device %d)", cam.device)

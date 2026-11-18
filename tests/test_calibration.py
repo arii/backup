@@ -14,7 +14,7 @@ CFG = CalibrationConfig(window_s=3.0, min_samples=5)
 
 
 def scored(head: float, trunk_ok: bool = True) -> ScoredPosture:
-    return ScoredPosture(head, 1.0, 0.0, 0.0, depth_m=None, trunk_lean_available=trunk_ok)
+    return ScoredPosture(head, 1.0, 0.0, 0.0, trunk_lean_available=trunk_ok)
 
 
 def feed(recorder: CalibrationRecorder, start: float, seconds: float, result) -> float:  # noqa: ANN001

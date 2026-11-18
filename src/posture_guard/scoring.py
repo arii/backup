@@ -2,10 +2,10 @@
 
 All metric functions take landmark sequences indexed per MediaPipe Pose
 convention (33 landmarks; only ears, shoulders and hips are used here) and
-return signed angles in degrees. Scoring is gated: without a pose, readable
-depth inside the configured band, and landmark visibility above the floor,
-score_pose returns Unreliable instead of a number — the state machine never
-nudges on bad data.
+return signed angles in degrees. Scoring is gated: without a pose, landmark
+visibility above the floor, finite coordinates and a sensible framing
+distance, score_pose returns Unreliable instead of a number — the state
+machine never nudges on bad data.
 """
 
 from __future__ import annotations
@@ -47,12 +47,10 @@ class SimpleLandmark:
 class UnreliableReason(Enum):
     NO_POSE = "no_pose"
     LOW_VISIBILITY = "low_visibility"
-    DEPTH_UNREADABLE = "depth_unreadable"
-    DEPTH_OUT_OF_BAND = "depth_out_of_band"
     # NaN/inf landmark coordinates (or a metric overflow): a tracking glitch.
     # The state machine holds its previous state on these frames.
     NON_FINITE = "non_finite"
-    # Webcam mode (no depth sensor): shoulder width outside the framing band.
+    # Shoulder width outside the framing band: the person is too far or too close.
     FRAMING_OUT_OF_BAND = "framing_out_of_band"
 
 
@@ -115,7 +113,6 @@ class ScoredPosture:
     trunk_lean_deg: float
     head_tilt_deg: float
     shoulder_level_deg: float
-    depth_m: float | None  # None when the camera has no depth sensor (webcam)
     trunk_lean_available: bool = True
 
 
@@ -190,18 +187,6 @@ def measure_shoulder_level(landmarks: Sequence[Landmark]) -> float:
     return math.degrees(math.atan2(dy, abs(dx)))
 
 
-def valid_depth_median(samples: Sequence[float]) -> float | None:
-    """Median of valid depth samples (spec: sampled over a neighborhood,
-    invalid values rejected). Invalid: non-finite or <= 0. None if none valid."""
-    valid = sorted(s for s in samples if math.isfinite(s) and s > 0)
-    if not valid:
-        return None
-    n = len(valid)
-    if n % 2:
-        return valid[n // 2]
-    return (valid[n // 2 - 1] + valid[n // 2]) / 2
-
-
 def _tracked_indices(cfg: ScoringConfig) -> tuple[int, ...]:
     """Landmarks the visibility gate requires. Hips drop out when trunk lean is
     optional (scoring.trunk_lean_required: false) so the high-mount framing —
@@ -226,36 +211,18 @@ def shoulder_width(landmarks: Sequence[Landmark]) -> float:
 
 def score_pose(
     landmarks: Sequence[Landmark] | None,
-    depth_m: float | None,
     cfg: ScoringConfig,
-    *,
-    depth_sensor: bool = True,
 ) -> ScoringResult:
     """Score one frame, or return Unreliable with the blocking reason.
 
     Gate order is deliberate: a missing pose is the only absence signal (the
-    no-person timer); every other failure — depth unreadable, depth out of
-    band, low visibility, framing out of band — is an unscoreable frame for a
-    person who is visibly present (see state.py). NON_FINITE marks a tracking
-    glitch (NaN/inf coordinates) that the state machine rides out.
-
-    depth_sensor=False (webcam): there is no depth to gate on, so the depth
-    checks are skipped and shoulder width in the frame stands in for distance
-    (scoring.shoulder_width_min / shoulder_width_max)."""
+    no-person timer); every other failure — low visibility, framing out of
+    band — is an unscoreable frame for a person who is visibly present (see
+    state.py). NON_FINITE marks a tracking glitch (NaN/inf coordinates) that
+    the state machine rides out. Shoulder width in the frame stands in for
+    distance (scoring.shoulder_width_min / shoulder_width_max)."""
     if landmarks is None:
         return Unreliable(UnreliableReason.NO_POSE)
-    depth_value: float | None = None
-    if depth_sensor:
-        if depth_m is None or not math.isfinite(depth_m) or depth_m <= 0:
-            return Unreliable(UnreliableReason.DEPTH_UNREADABLE)
-        if not (cfg.depth_min_m <= depth_m <= cfg.depth_max_m):
-            return Unreliable(
-                UnreliableReason.DEPTH_OUT_OF_BAND,
-                f"depth {depth_m:.2f} m outside {cfg.depth_min_m}-{cfg.depth_max_m} m",
-            )
-        depth_value = depth_m
-    elif depth_m is not None and math.isfinite(depth_m) and depth_m > 0:
-        depth_value = depth_m
     floor = cfg.visibility_floor
     ears_shoulders = (LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER)
     hips = (LEFT_HIP, RIGHT_HIP)
@@ -272,15 +239,14 @@ def score_pose(
     hips_ok = hips_visible and _finite_xy(landmarks, hips)
     if cfg.trunk_lean_required and not hips_ok and not cfg.degraded_feedback:
         return Unreliable(UnreliableReason.NON_FINITE, "NaN/inf hip coordinate")
-    if not depth_sensor:
-        width = shoulder_width(landmarks)
-        if not (cfg.shoulder_width_min <= width <= cfg.shoulder_width_max):
-            where = "too far" if width < cfg.shoulder_width_min else "too close"
-            return Unreliable(
-                UnreliableReason.FRAMING_OUT_OF_BAND,
-                f"{where}: shoulder width {width:.2f} of frame outside "
-                f"{cfg.shoulder_width_min}-{cfg.shoulder_width_max}",
-            )
+    width = shoulder_width(landmarks)
+    if not (cfg.shoulder_width_min <= width <= cfg.shoulder_width_max):
+        where = "too far" if width < cfg.shoulder_width_min else "too close"
+        return Unreliable(
+            UnreliableReason.FRAMING_OUT_OF_BAND,
+            f"{where}: shoulder width {width:.2f} of frame outside "
+            f"{cfg.shoulder_width_min}-{cfg.shoulder_width_max}",
+        )
     head_forward = measure_head_forward(landmarks)
     head_tilt = measure_head_tilt(landmarks)
     shoulder_level = measure_shoulder_level(landmarks)
@@ -297,7 +263,6 @@ def score_pose(
         trunk_lean_deg=trunk,
         head_tilt_deg=head_tilt,
         shoulder_level_deg=shoulder_level,
-        depth_m=depth_value,
         trunk_lean_available=hips_ok,
     )
 
@@ -344,7 +309,7 @@ class PostureBaseline:
     carry no metrics); resetting re-anchors to the next update.
 
     Alpha is the exact decay for the elapsed time, 1 - exp(-dt / window_s), so
-    a 5 fps webcam and a 30 fps RealSense converge at the same wall-clock rate.
+    a 5 fps background tab and a 30 fps webcam converge at the same wall-clock rate.
 
     anchor (set by "Record good posture" calibration) is the reference a reset
     returns to, so leaving the desk does not erase the user's calibration.
@@ -384,7 +349,6 @@ class PostureBaseline:
                 self._metrics.trunk_lean_deg,
                 metrics.head_tilt_deg,
                 metrics.shoulder_level_deg,
-                metrics.depth_m,
                 metrics.trunk_lean_available,
             )
         self._metrics = ScoredPosture(
@@ -396,7 +360,6 @@ class PostureBaseline:
             + alpha * (metrics.head_tilt_deg - self._metrics.head_tilt_deg),
             shoulder_level_deg=self._metrics.shoulder_level_deg
             + alpha * (metrics.shoulder_level_deg - self._metrics.shoulder_level_deg),
-            depth_m=_blend(self._metrics.depth_m, metrics.depth_m, alpha),
         )
         self._last_t = now
 
@@ -404,14 +367,6 @@ class PostureBaseline:
         """Forget the drifted reference; return to the calibrated anchor if any."""
         self._metrics = self._anchor
         self._last_t = None
-
-
-def _blend(old: float | None, new: float | None, alpha: float) -> float | None:
-    if old is None:
-        return new
-    if new is None:
-        return old
-    return old + alpha * (new - old)
 
 
 def deviation_zone(

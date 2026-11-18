@@ -73,7 +73,7 @@ def test_frames_are_color_only_with_injected_clock():
     source = make_source(Opener(FakeCapture(frames=["a", "b"])))
     source.start()
     first, second = source.read(), source.read()
-    assert first.color == "a" and first.depth is None
+    assert first.color == "a"
     assert second.timestamp_s > first.timestamp_s
 
 

@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Ariel Anders. All rights reserved.
 """Golden timeline for the browser port (docs/app/posture-core.js).
 
-Drives the real Python PosturePipeline (webcam mode: color-only frames) through
+Drives the real Python PosturePipeline through
 a scripted session - good posture, slouch to chime and voice, recovery, head
 tilt, neutral-band wobble, hidden hips, NaN glitches, leaving the desk, sitting
 too far, and good/slouch calibration - and records every frame's result,
@@ -28,7 +28,7 @@ if str(ROOT / "src") not in sys.path:  # runnable as a plain script
     sys.path.insert(0, str(ROOT / "src"))
 
 from posture_guard.calibration import CalibrationKind  # noqa: E402
-from posture_guard.camera import ColorDepth, SyntheticFrameSource  # noqa: E402
+from posture_guard.camera import Frame, SyntheticFrameSource  # noqa: E402
 from posture_guard.config import load_config  # noqa: E402
 from posture_guard.pipeline import PosturePipeline  # noqa: E402
 from posture_guard.pose import PoseDetection  # noqa: E402
@@ -131,8 +131,8 @@ class _Detector:
     def __init__(self) -> None:
         self.pose = None
 
-    def __call__(self, frame: ColorDepth) -> PoseDetection:
-        return PoseDetection(self.pose, None)
+    def __call__(self, frame: Frame) -> PoseDetection:
+        return PoseDetection(self.pose)
 
 
 def _result_payload(result) -> dict[str, object]:  # noqa: ANN001
@@ -173,7 +173,7 @@ def build_golden() -> dict[str, object]:
             pose, encoded = _landmarks(POSES[name], rng)
             detector.pose = pose
             before = len(audio.enqueued)
-            tr = pipeline.process_once(ColorDepth(color=None, depth=None, timestamp_s=now))  # type: ignore[arg-type]
+            tr = pipeline.process_once(Frame(color=None, timestamp_s=now))  # type: ignore[arg-type]
             frames.append({
                 "t": now,
                 "pose": encoded,
