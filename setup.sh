@@ -56,8 +56,9 @@ python3 -m venv .venv
 # shellcheck disable=SC1091  # venv activate only exists after setup runs
 . .venv/bin/activate
 pip install --quiet --upgrade pip
-# hardware extra pulls pyrealsense2, mediapipe and opencv-python; dev adds
-# pytest/ruff so `make test` works on the same box.
+# hardware extra pulls opencv-python + mediapipe (webcam, the default input)
+# and pyrealsense2 (optional RealSense); dev adds pytest/ruff/hypothesis so
+# `make test` works on the same box.
 pip install --quiet -e '.[hardware,dev]'
 
 # --- 3. Hardware preflight report -------------------------------------------
@@ -77,6 +78,28 @@ def mark(ok: bool) -> str:
 
 
 print("-" * 62)
+
+# Webcam (the default input): open device 0 and read one frame.
+webcam_ok, webcam_note = False, "not checked"
+try:
+    import cv2
+
+    cap = cv2.VideoCapture(0)
+    try:
+        if cap.isOpened():
+            ok, frame = cap.read()
+            webcam_ok = bool(ok) and frame is not None
+            webcam_note = (
+                f"device 0, {frame.shape[1]}x{frame.shape[0]}" if webcam_ok else "opened, no frame"
+            )
+        else:
+            webcam_note = "device 0 did not open"
+    finally:
+        cap.release()
+except Exception as exc:  # noqa: BLE001 — report, never crash, the preflight
+    webcam_note = str(exc).strip().splitlines()[0] if str(exc).strip() else "unknown error"
+print(f"webcam (default input) ....... {mark(webcam_ok)}   ({webcam_note})")
+print("RealSense (optional, --camera realsense):")
 
 # Camera + USB type + depth stream (one pipeline probe covers all three).
 camera_ok, usb, depth_ok = False, "n/a", False

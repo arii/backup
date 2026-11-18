@@ -28,11 +28,12 @@ if TYPE_CHECKING:
 class ColorDepth:
     """One aligned color+depth frame pair.
 
-    color: HxWx3 uint8 BGR. depth: HxW uint16, Z16 millimetres.
+    color: HxWx3 uint8 BGR. depth: HxW uint16, Z16 millimetres, or None for a
+    color-only source (webcam).
     """
 
     color: npt.NDArray[np.uint8]
-    depth: npt.NDArray[np.uint16]
+    depth: npt.NDArray[np.uint16] | None
     timestamp_s: float
 
 
@@ -40,7 +41,7 @@ class ColorDepth:
 class SourceStatus:
     """Operational status of a frame source, safe to render on the dashboard.
 
-    kind names the implementation ("realsense" or "synthetic") so the
+    kind names the implementation ("webcam", "realsense" or "synthetic") so the
     dashboard and logs can always state which source is active — a silent
     fallback is impossible when the active kind travels with the status.
     """
@@ -80,14 +81,19 @@ class SyntheticFrameSource:
 
     Emits a flat color frame and a constant-depth depth frame (default 1.4 m,
     inside the scoring band) so pose workers, dashboards and tests run anywhere.
+    Timestamps advance 1/fps per frame. realtime=True paces read() to that
+    rate (the served demo); tests leave it off and run as fast as they call.
     """
 
     def __init__(self, width: int = 640, height: int = 480, depth_m: float = 1.4,
-                 reason: str | None = None):
+                 reason: str | None = None, *, fps: int = 30, realtime: bool = False):
         self._width = width
         self._height = height
         self._depth_mm = int(depth_m * 1000)
         self._frame_index = 0
+        self._fps = fps if fps > 0 else 30
+        self._realtime = realtime
+        self._t0: float | None = None
         # reason: why the real camera was not used — surfaced on the dashboard
         # so a silent synthetic fallback is visible to the user too.
         self._status = SourceStatus(connected=True, usb_type=None, error=reason, kind="synthetic")
@@ -96,10 +102,17 @@ class SyntheticFrameSource:
         import numpy as np
 
         self._frame_index += 1
+        timestamp_s = self._frame_index / self._fps
+        if self._realtime:
+            if self._t0 is None:
+                self._t0 = time.monotonic() - timestamp_s
+            delay = self._t0 + timestamp_s - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
         color = np.zeros((self._height, self._width, 3), dtype=np.uint8)
         color[:, :, 0] = 40  # dark blue backdrop so frames are visibly "live"
         depth = np.full((self._height, self._width), self._depth_mm, dtype=np.uint16)
-        return ColorDepth(color=color, depth=depth, timestamp_s=self._frame_index / 30.0)
+        return ColorDepth(color=color, depth=depth, timestamp_s=timestamp_s)
 
     @property
     def status(self) -> SourceStatus:

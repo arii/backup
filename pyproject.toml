@@ -23,11 +23,16 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
     "httpx>=0.27",  # TestClient transport for the dashboard tests
+    "hypothesis>=6.100",  # property-based tests (tests/test_properties.py)
 ]
 # Heavy camera/pose deps are optional so CI and dev machines install fast.
-# The RealSense and MediaPipe imports are lazy (inside camera.py / pose.py).
-hardware = [
+# The OpenCV, RealSense and MediaPipe imports are lazy (webcam.py, camera.py,
+# pose.py). webcam: the default input (any USB/laptop camera). realsense:
+# the optional Intel RealSense D400. hardware: both.
+realsense = [
     "pyrealsense2>=2.56",
+]
+webcam = [
     # Pinned to the mp.solutions.pose legacy API the pose worker uses. That
     # API was removed from pip packages in 0.10.30+ (google-ai-edge/mediapipe
     # issues #6192 and #6261, verified 2026-11-13), so the old <1.0 bound
@@ -35,6 +40,9 @@ hardware = [
     # tighten to ==0.10.21 (verified working per #6261).
     "mediapipe>=0.10.14,<0.10.30",
     "opencv-python>=4.8",
+]
+hardware = [
+    "posture-guard[webcam,realsense]",
 ]
 
 [tool.setuptools.packages.find]
