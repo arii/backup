@@ -2,7 +2,8 @@ name: ci
 
 on:
   push:
-    branches: ["*"]
+    # "**" (not "*") so branches with a slash, e.g. feat/webcam-v2, run CI too.
+    branches: ["**"]
   pull_request:
 
 jobs:

@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run pytest when the package or tests change",
+      "trigger": "PostFileSave",
+      "description": "Runs the full pytest suite (unit, timeline and hypothesis property tests) whenever a file under src/posture_guard/ or tests/ is saved.",
+      "matcher": "(src/posture_guard/|tests/).*\\.py$",
+      "action": {
+        "type": "command",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && { [ -f .venv/bin/activate ] && . .venv/bin/activate; true; } && pytest -q"
+      }
+    }
+  ]
+}
