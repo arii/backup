@@ -36,6 +36,10 @@ class MetricsSnapshot:
     audio_tts_backend: str | None = None
     audio_error: str | None = None
     warnings: tuple[str, ...] = ()
+    needle: float | None = None  # -1 upright .. +1 at bad thresholds
+    needle_calibrated: bool = False
+    source: str | None = None  # "synthetic" | "realsense"
+    calibration: dict[str, object] | None = None
     landmarks: tuple[tuple[float, float], ...] = field(default=())
 
     def to_payload(self) -> dict[str, object]:
@@ -62,6 +66,12 @@ class MetricsSnapshot:
                 "error": self.audio_error,
             },
             "warnings": list(self.warnings),
+            "needle": {
+                "value": _round_or_none(self.needle, 3),
+                "calibrated": self.needle_calibrated,
+            },
+            "source": self.source,
+            "calibration": self.calibration,
             "landmarks": [[round(x, 4), round(y, 4)] for x, y in self.landmarks],
         }
 

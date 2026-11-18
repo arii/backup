@@ -1,8 +1,10 @@
 """FastAPI dashboard app (spec §dashboard).
 
-Three surfaces over the shared hub, all clients sharing one upstream buffer:
+Surfaces over the shared hub, all clients sharing one upstream buffer:
 GET /video.mjpg streams annotated JPEGs; WS /ws pushes the metrics JSON and
-drops dead clients; POST /nudge/test fires the audio test prompt.
+drops dead clients; POST /nudge/test fires the audio test prompt;
+POST /sound/test/{good,bad} previews the custom sounds; POST /calibrate/{good,bad},
+DELETE /calibrate and GET /calibrate/status drive few-shot calibration.
 """
 
 from __future__ import annotations
@@ -13,10 +15,11 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Protocol
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from posture_guard.calibration import CalibrationKind, CalibrationRecorder
 from posture_guard.dashboard.hub import DashboardHub
 
 MJPEG_BOUNDARY = "frame"
@@ -33,6 +36,7 @@ def create_app(
     audio: NudgeSink,
     *,
     should_stop: Callable[[], bool] | None = None,
+    calibration: CalibrationRecorder | None = None,
 ) -> FastAPI:
     """Build the dashboard app.
 
@@ -96,6 +100,40 @@ def create_app(
     def nudge_test() -> dict[str, str]:
         audio.test_nudge()
         return {"status": "queued"}
+
+    @app.post("/sound/test/{kind}")
+    def sound_test(kind: str) -> dict[str, str]:
+        if kind not in ("good", "bad"):
+            raise HTTPException(status_code=404, detail="kind must be good or bad")
+        play = getattr(audio, "test_sound", None)
+        if play is None or not play(kind):
+            raise HTTPException(status_code=409, detail=f"no {kind} sound available")
+        return {"status": "queued"}
+
+    def _recorder() -> CalibrationRecorder:
+        if calibration is None:
+            raise HTTPException(status_code=503, detail="calibration not available")
+        return calibration
+
+    @app.post("/calibrate/{kind}")
+    def calibrate(kind: str) -> dict[str, object]:
+        try:
+            parsed = CalibrationKind(kind)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="kind must be good or bad") from None
+        recorder = _recorder()
+        recorder.start(parsed)
+        return recorder.status.to_payload()
+
+    @app.delete("/calibrate")
+    def calibrate_reset() -> dict[str, object]:
+        recorder = _recorder()
+        recorder.reset()
+        return recorder.status.to_payload()
+
+    @app.get("/calibrate/status")
+    def calibrate_status() -> dict[str, object]:
+        return _recorder().status.to_payload()
 
     @app.get("/")
     def index() -> FileResponse:

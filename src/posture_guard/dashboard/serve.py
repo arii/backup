@@ -57,7 +57,8 @@ def main(argv: list[str] | None = None) -> None:
     pipeline.start()
 
     try:
-        uvicorn.run(create_app(hub, audio), host=args.host, port=args.port, log_level="info")
+        app = create_app(hub, audio, calibration=pipeline.calibration)
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     finally:
         pipeline.close()
         audio.close()

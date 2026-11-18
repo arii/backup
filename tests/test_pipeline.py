@@ -227,3 +227,83 @@ def test_center_depth_median_ignores_invalid_values() -> None:
     depth[200:280, 240:400] = 0  # invalid zeros inside the center box
 
     assert center_depth_m(depth) == pytest.approx(1.4)
+
+
+# -- needle, calibration and recovery sound ---------------------------------------------
+
+
+def _slouch() -> list[SimpleLandmark]:
+    return make_pose(
+        {
+            7: SimpleLandmark(x=0.48, y=0.54),  # head-forward ~18.4 deg
+            8: SimpleLandmark(x=0.56, y=0.54),
+        }
+    )
+
+
+def test_recovery_enqueues_good_sound_only_when_configured() -> None:
+    from posture_guard.config import AudioConfig
+
+    detector = MutableDetector(make_pose())
+    hub, audio = DashboardHub(), RecordingAudio()
+    config = AppConfig(audio=AudioConfig(good_sound="/tmp/good.wav"))
+    pipeline = PosturePipeline(
+        SyntheticFrameSource(), config, hub=hub, audio=audio,
+        detector=detector, renderer=fake_jpeg,
+    )
+    index = feed(pipeline, detector, 2.0, 0)
+    detector.pose = _slouch()
+    index = feed(pipeline, detector, 2.5, index)
+    detector.pose = make_pose()
+    feed(pipeline, detector, 4.0, index)
+
+    assert audio.enqueued == [Nudge.CHIME, Nudge.RECOVERY]
+
+
+def test_needle_and_source_are_published() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+
+    index = feed(pipeline, detector, 1.0, 0)
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.source == "synthetic"
+    assert snapshot.needle == pytest.approx(-1.0, abs=0.05)  # upright
+    assert snapshot.needle_calibrated is False
+
+    detector.pose = _slouch()
+    feed(pipeline, detector, 3.0, index)
+    assert hub.latest_metrics()[0].needle == pytest.approx(1.0, abs=0.05)
+
+
+def test_needle_holds_through_unreliable_frames() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    index = feed(pipeline, detector, 1.0, 0)
+    before = pipeline.needle
+
+    detector.pose = None
+    feed(pipeline, detector, 1.0, index)
+    assert pipeline.needle == before
+
+
+def test_calibration_switches_needle_to_projection() -> None:
+    from posture_guard.calibration import CalibrationKind
+
+    detector = MutableDetector(make_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    index = 0
+    pipeline.calibration.start(CalibrationKind.GOOD)
+    index = feed(pipeline, detector, 3.5, index)
+    detector.pose = _slouch()
+    pipeline.calibration.start(CalibrationKind.BAD)
+    index = feed(pipeline, detector, 3.5, index)
+    index = feed(pipeline, detector, 2.0, index)
+
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.needle_calibrated is True
+    assert snapshot.calibration["calibrated"] is True
+    assert snapshot.needle == pytest.approx(1.0, abs=0.05)  # at the bad centroid
+
+    detector.pose = make_pose()
+    feed(pipeline, detector, 3.0, index)
+    assert hub.latest_metrics()[0].needle == pytest.approx(-1.0, abs=0.05)

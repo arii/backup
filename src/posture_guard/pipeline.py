@@ -17,9 +17,17 @@ from typing import Protocol
 
 from numpy.typing import NDArray
 
-from posture_guard.camera import ColorDepth, FrameSource, SourceStatus, usb_bandwidth_warning
+from posture_guard.calibration import CalibrationRecorder
+from posture_guard.camera import (
+    ColorDepth,
+    FrameSource,
+    SourceStatus,
+    SyntheticFrameSource,
+    usb_bandwidth_warning,
+)
 from posture_guard.config import AppConfig, ScoringConfig
 from posture_guard.dashboard.hub import DashboardHub, MetricsSnapshot
+from posture_guard.needle import NeedleSmoother, raw_needle
 from posture_guard.pose import PoseDetection, PoseDetector, default_detector, tracked_landmarks
 from posture_guard.scoring import (
     Landmark,
@@ -85,6 +93,8 @@ def placement_warnings(
             warnings.append("person not fully in frame - keep shoulders and hips visible")
         elif result.reason is UnreliableReason.DEPTH_UNREADABLE:
             warnings.append("depth unreadable - check the camera view")
+        elif result.reason is UnreliableReason.NON_FINITE:
+            warnings.append("tracking glitch - invalid landmark coordinates")
         elif result.reason is UnreliableReason.NO_POSE:
             warnings.append("waiting for a person - sit fully in frame")
     return tuple(warnings)
@@ -133,6 +143,10 @@ class PosturePipeline:
         self._thread: threading.Thread | None = None
         self._fps = 0.0
         self._last_timestamp: float | None = None
+        self.calibration = CalibrationRecorder(config.calibration)
+        self._needle = NeedleSmoother(config.needle)
+        self._needle_calibrated = False
+        self._source_kind = "synthetic" if isinstance(source, SyntheticFrameSource) else "realsense"
 
     @property
     def state(self) -> PostureState:
@@ -144,12 +158,31 @@ class PosturePipeline:
         detection = self._detector(frame)
         result = score_pose(detection.landmarks, detection.depth_m, self._config.scoring)
         transition = self._state_machine.update(result, frame.timestamp_s)
+        self.calibration.feed(result, frame.timestamp_s)
+        self._update_needle(result, frame.timestamp_s)
         if transition.nudge is not Nudge.NONE and self._audio is not None:
             self._audio.enqueue(transition.nudge)
+        if transition.recovered and self._audio is not None and self._config.audio.good_sound:
+            self._audio.enqueue(Nudge.RECOVERY)
         self._update_fps(frame.timestamp_s)
         if self._hub is not None:
             self._publish(detection, result, transition.state, frame)
         return transition
+
+    @property
+    def needle(self) -> float | None:
+        return self._needle.value
+
+    def _update_needle(self, result: ScoringResult, now: float) -> None:
+        if not isinstance(result, ScoredPosture):
+            return  # hold the last value through unreliable frames
+        calibration = self.calibration.calibration
+        usable = calibration is not None and calibration.axis_ok()
+        if usable != self._needle_calibrated:
+            self._needle.reset()  # mapping changed; do not blend the two scales
+            self._needle_calibrated = usable
+        raw = raw_needle(result, self._config.scoring, calibration if usable else None)
+        self._needle.update(raw, now)
 
     # -- dashboard publication -----------------------------------------------------
 
@@ -175,6 +208,10 @@ class PosturePipeline:
             camera_usb_type=camera.usb_type,
             camera_error=camera.error,
             warnings=placement_warnings(result, depth_m, camera, self._config.scoring),
+            needle=self._needle.value,
+            needle_calibrated=self._needle_calibrated,
+            source=self._source_kind,
+            calibration=self.calibration.status.to_payload(),
             landmarks=(
                 tracked_landmarks(detection.landmarks)
                 if detection.landmarks is not None
