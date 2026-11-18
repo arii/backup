@@ -25,6 +25,7 @@ LEFT_SHOULDER = 11
 RIGHT_SHOULDER = 12
 LEFT_HIP = 23
 RIGHT_HIP = 24
+_TRACKED = (LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP)
 
 
 class Landmark(Protocol):
@@ -49,6 +50,7 @@ class UnreliableReason(Enum):
     LOW_VISIBILITY = "low_visibility"
     DEPTH_UNREADABLE = "depth_unreadable"
     DEPTH_OUT_OF_BAND = "depth_out_of_band"
+    NON_FINITE = "non_finite"
 
 
 @dataclass(frozen=True)
@@ -137,8 +139,14 @@ def valid_depth_median(samples: Sequence[float]) -> float | None:
 
 def visibility_ok(landmarks: Sequence[Landmark], cfg: ScoringConfig) -> bool:
     """True when every tracked landmark clears the visibility floor."""
-    tracked = (LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP)
-    return all(landmarks[i].visibility >= cfg.visibility_floor for i in tracked)
+    return all(landmarks[i].visibility >= cfg.visibility_floor for i in _TRACKED)
+
+
+def coordinates_finite(landmarks: Sequence[Landmark]) -> bool:
+    """True when every tracked landmark has finite x and y."""
+    return all(
+        math.isfinite(landmarks[i].x) and math.isfinite(landmarks[i].y) for i in _TRACKED
+    )
 
 
 def score_pose(
@@ -153,7 +161,7 @@ def score_pose(
     unreliable state (see state.py)."""
     if landmarks is None:
         return Unreliable(UnreliableReason.NO_POSE)
-    if depth_m is None or depth_m <= 0:
+    if depth_m is None or not math.isfinite(depth_m) or depth_m <= 0:
         return Unreliable(UnreliableReason.DEPTH_UNREADABLE)
     if not (cfg.depth_min_m <= depth_m <= cfg.depth_max_m):
         return Unreliable(
@@ -162,13 +170,26 @@ def score_pose(
         )
     if not visibility_ok(landmarks, cfg):
         return Unreliable(UnreliableReason.LOW_VISIBILITY)
-    return ScoredPosture(
+    if not coordinates_finite(landmarks):
+        return Unreliable(UnreliableReason.NON_FINITE, "NaN/inf landmark coordinate")
+    scored = ScoredPosture(
         head_forward_deg=measure_head_forward(landmarks),
         trunk_lean_deg=measure_trunk_lean(landmarks),
         head_tilt_deg=measure_head_tilt(landmarks),
         shoulder_level_deg=measure_shoulder_level(landmarks),
         depth_m=depth_m,
     )
+    # Finite but extreme coordinates can still overflow in the midpoint math
+    # (inf - inf = NaN); never hand a non-finite angle to the state machine.
+    angles = (
+        scored.head_forward_deg,
+        scored.trunk_lean_deg,
+        scored.head_tilt_deg,
+        scored.shoulder_level_deg,
+    )
+    if not all(math.isfinite(a) for a in angles):
+        return Unreliable(UnreliableReason.NON_FINITE, "metric overflow")
+    return scored
 
 
 def zone_of(metrics: ScoredPosture, cfg: ScoringConfig) -> str:

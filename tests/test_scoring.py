@@ -4,12 +4,17 @@ All angle assertions use a 1-degree tolerance per the spec acceptance table.
 Expected values are the precomputed constants in conftest.py.
 """
 
+import math
+
 import pytest
 
-from conftest import GOOD_ANGLES, SLOUCHED_ANGLES
+from conftest import GOOD_ANGLES, SLOUCHED_ANGLES, make_pose
 from posture_guard.config import ScoringConfig
 from posture_guard.scoring import (
+    LEFT_EAR,
+    RIGHT_EAR,
     ScoredPosture,
+    SimpleLandmark,
     Unreliable,
     UnreliableReason,
     measure_head_forward,
@@ -149,3 +154,34 @@ class TestZoneOf:
             depth_m=1.4,
         )
         assert zone_of(metrics, CFG) == "bad"
+
+
+class TestNonFiniteInput:
+    """Requirement 1.4: NaN/inf never become a score."""
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_non_finite_landmark_coordinate_is_unreliable(self, bad):
+        pose = make_pose({LEFT_EAR: SimpleLandmark(x=bad, y=0.45)})
+        result = score_pose(pose, depth_m=1.4, cfg=CFG)
+        assert isinstance(result, Unreliable)
+        assert result.reason == UnreliableReason.NON_FINITE
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+    def test_non_finite_depth_is_unreadable(self, good_pose, bad):
+        result = score_pose(good_pose, depth_m=bad, cfg=CFG)
+        assert result.reason == UnreliableReason.DEPTH_UNREADABLE
+
+    def test_overflowing_coordinates_are_unreliable(self):
+        pose = make_pose(
+            {
+                LEFT_EAR: SimpleLandmark(x=1.7e308, y=0.45),
+                RIGHT_EAR: SimpleLandmark(x=1.7e308, y=0.45),
+            }
+        )
+        result = score_pose(pose, depth_m=1.4, cfg=CFG)
+        # Either the midpoint overflowed (NON_FINITE) or a finite angle came
+        # out; never a non-finite metric.
+        if isinstance(result, ScoredPosture):
+            assert math.isfinite(result.head_forward_deg)
+        else:
+            assert result.reason == UnreliableReason.NON_FINITE
