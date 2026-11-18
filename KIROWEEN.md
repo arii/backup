@@ -1,8 +1,10 @@
 # Posture Guard: Kiroween 2026 submission
 
-**Posture to die for.** Leave a browser tab open; your webcam watches how you sit
-and chimes when you slouch. Nothing leaves your computer.
+**Posture to die for.** (Please don't.) Leave a browser tab open; your webcam
+watches how you sit, chimes when you slouch, and tells you out loud what to fix.
+Nothing leaves your computer.
 
+- **Category:** Frankenstein
 - **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
 - **Code:** <https://github.com/arii/posture-guard> (MIT License)
 - **Kiro artifacts:** [`.kiro/`](.kiro/) (spec, steering, two hooks)
@@ -25,6 +27,35 @@ It comes in two forms that share one behavior:
   totals in `localStorage`.
 - **Linux desktop app** (Python, FastAPI dashboard): the same logic for offline use,
   with a webcam or a no-camera demo.
+
+## Devpost copy
+
+**Tagline:** Posture to die for. A webcam posture coach stitched together from
+parts that were never meant to share a body.
+
+**Short description:** Leave a browser tab open and Posture Guard watches how you
+sit. Slouch and it chimes; keep slouching and it tells you what's wrong ("Head
+forward: tuck your chin") and how to fix it. MediaPipe eyes, a Python brain and its
+JavaScript twin, kept in lockstep by a 632-frame golden timeline. Runs locally, no install.
+
+## Why Frankenstein
+
+The category asks for seemingly incompatible technologies stitched into one app.
+Posture Guard's body parts come from different languages and runtimes, and the
+interesting work is in the stitches:
+
+| Part | Donor | Stitch |
+|---|---|---|
+| Eyes | MediaPipe Pose as WebAssembly in the browser, `mp.solutions.pose` in Python | Both feed the same 33-landmark format into the same scoring |
+| Brain | Python scoring, state machine, needle, calibration | Specified, property-tested, the reference implementation |
+| Second brain | JavaScript port in `docs/app/posture-core.js` | A golden timeline: Python records 632 frames, Node must reproduce every state, reminder, cue and number (within 1e-9). A Kiro hook re-runs it whenever the JS core or the fixture is saved, and a pytest fails if Python changes without regenerating it |
+| Voice | Web Audio + speech synthesis; `paplay` + pico2wave/espeak-ng | One cue text ("Your right shoulder is low...") spoken by either |
+| Heartbeat | A Web Worker timer | Browsers throttle background tabs; the worker keeps ticking and the frame-rate-independent state machine still times reminders correctly at 5 fps |
+| Lab test subject | Playwright, Chromium's fake camera, ffmpeg | A photo is turned into a video feed so CI can check the deployed site detects a real person |
+| Amputated limb | Intel RealSense depth camera | Removed; shoulder width in the frame replaced depth as the distance check |
+
+The README's [The monster](README.md#the-monster-kiroween-2026-frankenstein) section
+has the full anatomy.
 
 ## How the project changed during the hackathon
 
@@ -120,12 +151,13 @@ What the Kiro phase changed (PRs #19 onward):
 | `.kiro/` committed (not gitignored) | Yes: spec, steering, 2 hooks |
 | Working demo link | Yes: <https://arii.github.io/posture-guard/app/> |
 | How Kiro was used | This file and the README's "Built with Kiro" section |
-| Category | To choose on Devpost |
+| Category | Frankenstein |
 | Demo video | To record |
 
 ### Demo video outline (about 3 minutes)
 
-1. **0:00** "Posture to die for": open the live URL, press *Start with webcam*.
+1. **0:00** "Posture to die for. Please don't." Slump dramatically, open the live
+   URL, press *Start with webcam*.
 2. **0:20** Sit up straight: the badge reads GOOD POSTURE, the skeleton is green.
 3. **0:40** Slouch: the needle swings right, the chime plays and the *What to fix*
    box says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
@@ -133,7 +165,8 @@ What the Kiro phase changed (PRs #19 onward):
 4. **1:10** Sit up: the recovery chime and "Back to good posture".
 5. **1:30** Record good and slouch posture; show the calibrated needle.
 6. **1:50** Switch tabs: reminders still fire in the background.
-7. **2:10** The `.kiro/` spec, steering and hooks; the property tests and the
-   Python-to-browser parity test in CI.
-8. **2:40** The build history: RealSense prototype first, then the webcam and
-   browser version with Kiro.
+7. **2:10** The monster: the anatomy table (eyes, two brains, spinal cord, voice,
+   heartbeat), then the golden-timeline parity test and the property tests in CI,
+   and the `.kiro/` spec, steering and hooks that were the lightning.
+8. **2:40** The build history: the RealSense prototype first, the amputation, then
+   the webcam and browser version with Kiro. End on "It's alive."

@@ -1,15 +1,68 @@
 # Posture Guard
 
-**Posture to die for.** Open a browser tab, allow your webcam, and leave the tab
-open: Posture Guard scores your posture from head and shoulder geometry with
-MediaPipe Pose and reminds you when you slouch, first with a chime and then a
-spoken prompt. Everything runs on your computer; no video or landmark leaves it.
+**Posture to die for.** (Please don't. That's the whole point.)
+
+Somewhere between your third coffee and your fourth meeting, your head drifted
+forward until your ears were hovering over the keyboard. Posture Guard noticed.
+Leave a browser tab open with your webcam on, and it watches how you sit. Slouch,
+and it chimes. Keep slouching, and it tells you out loud exactly what is wrong and
+how to fix it. Everything runs on your computer; no video or landmark leaves it.
 
 **Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
 you have no camera).
 
 There is also a Linux desktop version (Python, local web dashboard) with the same
 behavior, for running offline or on a machine of your own.
+
+### What it can diagnose
+
+| Ailment | Folk name | What Posture Guard tells you |
+|---|---|---|
+| Head forward | Tech neck: your ears have wandered ahead of your shoulders | "Tuck your chin and bring your ears back over your shoulders." |
+| Head tilted | The puzzled dog | "Straighten your neck so your ears are level." |
+| Shoulder dropped | The one-elbow lean | "Lift your right shoulder and take your weight off that elbow." |
+| Leaning sideways | The Leaning Tower of Pisa | "Sit up straight with your weight even on both hips." |
+
+It names *your* left and right, even when your webcam mirrors the picture. Sit up
+and it plays a reward chime, because positive reinforcement works on spines too.
+
+Posture Guard is a reminder, not a doctor. If something hurts, see a human
+professional, not a webcam.
+
+## The monster (Kiroween 2026: Frankenstein)
+
+Posture Guard is stitched together from parts that were never meant to share a
+body. Unlike its namesake, it sits up straight.
+
+| Body part | Donor | Job |
+|---|---|---|
+| **Eyes** | Google MediaPipe Pose, compiled to WebAssembly in the browser (Python on Linux) | 33 body landmarks per frame from an ordinary webcam |
+| **Brain** | Python: scoring, reminder state machine, posture needle, calibration | Decides when you are slouching and what to say about it |
+| **Second brain** | A JavaScript transplant of the first (`docs/app/posture-core.js`) | The same decisions, running inside your browser tab |
+| **Spinal cord** | A golden timeline: Python records a scripted 632-frame session, Node replays it | Keeps both brains making identical decisions, numbers within 1e-9 |
+| **Voice** | Web Audio and speech synthesis in the browser; `paplay` with pico2wave or espeak-ng on Linux | The chime, then "Head forward. Tuck your chin..." |
+| **Heartbeat** | A Web Worker timer | Keeps tracking at ~5 fps after the browser throttles a background tab |
+| **Memory** | `localStorage` | Your calibration, settings, custom sounds and daily totals |
+| **Desktop nervous system** | FastAPI, WebSocket, MJPEG | The Linux dashboard |
+| **Immune system** | pytest and hypothesis (Python), `node:test` (JavaScript) | Seven correctness properties plus unit tests; every bug we planted on purpose got caught |
+| **Lab test subject** | Playwright, Chromium's fake camera, and ffmpeg turning a photo into a video feed | Checks that the deployed site finds a real person (an Apache-2.0 sample photo; the paperwork is in order) |
+| **Lightning** | Kiro: specs, steering and hooks | It's alive. |
+
+Why these parts don't normally fit, and the stitches that hold them:
+
+- **Python can't run in a browser tab, and JavaScript can't import Python.** So the
+  brain exists twice, and the golden timeline proves the twins agree on every frame
+  of a scripted 632-frame session: every state, every reminder, every word of advice.
+- **Browsers throttle background tabs to save battery,** which is exactly when a
+  posture coach needs to keep working. A Web Worker keeps the pulse going, and the
+  state machine is frame-rate independent, so reminders still land on time at 5 fps in
+  the background.
+- **A webcam has no depth sensor.** The prototype needed an Intel RealSense depth
+  camera; that limb was amputated. Distance now comes from how wide your shoulders
+  are in the frame.
+- **MediaPipe labels sides from your point of view; webcams often mirror the image.**
+  The advice works out which side is yours from the shoulder line, and a property
+  test checks that mirroring the picture never changes what it tells you.
 
 ## In your browser (no install)
 
@@ -288,9 +341,12 @@ session that starts slouched teaches the deviation baseline the wrong neutral
 
 ## Kiroween 2026
 
-Posture Guard is a [Kiroween 2026](https://kiroween.devpost.com/) entry.
-[`KIROWEEN.md`](KIROWEEN.md) has the submission write-up, the build history and
-what Kiro did. Licensed under the [MIT License](LICENSE).
+Posture Guard is a [Kiroween 2026](https://kiroween.devpost.com/) entry in the
+**Frankenstein** category: seemingly incompatible technologies (a Python brain and
+its JavaScript transplant, WebAssembly eyes, two voice boxes, a Web Worker heartbeat)
+stitched into one app. See [The monster](#the-monster-kiroween-2026-frankenstein)
+above. [`KIROWEEN.md`](KIROWEEN.md) has the submission write-up, the build history
+and what Kiro did. Licensed under the [MIT License](LICENSE).
 
 Fastest path: open <https://arii.github.io/posture-guard/app/> and press
 *Try the demo*, or *Start with webcam*.
