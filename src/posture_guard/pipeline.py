@@ -17,11 +17,13 @@ from typing import Protocol
 
 from numpy.typing import NDArray
 
+from posture_guard.calibration import CalibrationRecorder
 from posture_guard.camera import ColorDepth, FrameSource, SourceStatus, usb_bandwidth_warning
 from posture_guard.config import AppConfig, ScoringConfig
 from posture_guard.dashboard.hub import DashboardHub, MetricsSnapshot, ScoringThresholds
 from posture_guard.feedback import RuntimeFeedback
 from posture_guard.pose import PoseDetection, PoseDetector, default_detector, tracked_landmarks
+from posture_guard.posture_needle import NeedleSmoother, raw_needle
 from posture_guard.scoring import (
     LEFT_EAR,
     LEFT_HIP,
@@ -125,6 +127,12 @@ def root_cause(
             if depth_m is not None and depth_m < cfg.depth_min_m:
                 return {"title": "person too close", "action": "step back", "edge": None}
             return {"title": "person too far", "action": "step closer", "edge": None}
+        if result.reason is UnreliableReason.FRAMING_OUT_OF_BAND:
+            if result.detail.startswith("too close"):
+                return {"title": "person too close", "action": "move back", "edge": None}
+            return {"title": "person too far", "action": "move closer", "edge": None}
+        if result.reason is UnreliableReason.NON_FINITE:
+            return {"title": "tracking glitch", "action": "hold still", "edge": None}
         return {"title": "depth unreadable", "action": "check the camera view", "edge": None}
     return None
 
@@ -187,6 +195,10 @@ def placement_warnings(
             warnings.append(low_visibility_warning(landmarks, cfg))
         elif result.reason is UnreliableReason.DEPTH_UNREADABLE:
             warnings.append("depth unreadable - check the camera view")
+        elif result.reason is UnreliableReason.FRAMING_OUT_OF_BAND:
+            warnings.append(f"person {result.detail}")
+        elif result.reason is UnreliableReason.NON_FINITE:
+            warnings.append("tracking glitch - invalid landmark coordinates (holding state)")
         elif result.reason is UnreliableReason.NO_POSE:
             warnings.append("waiting for a person - sit fully in frame")
     return tuple(warnings)
@@ -250,6 +262,11 @@ class PosturePipeline:
         self._last_timestamp: float | None = None
         self._nudge_seq = 0
         self._nudge_event: dict[str, object] | None = None
+        # Relative calibration ("Record good / slouch posture") and the needle.
+        self.calibration = CalibrationRecorder(config.calibration)
+        self._calibration_version = self.calibration.version
+        self._needle = NeedleSmoother(config.needle)
+        self._needle_calibrated = False
 
     @property
     def state(self) -> PostureState:
@@ -259,20 +276,56 @@ class PosturePipeline:
         """Run the full frame path once. Clock is the frame timestamp, keeping
         state-machine timelines reproducible in tests."""
         detection = self._detector(frame)
-        result = score_pose(detection.landmarks, detection.depth_m, self._config.scoring)
+        # A color-only source (webcam) has no depth: score with the framing
+        # gate instead of the depth band.
+        depth_sensor = frame.depth is not None
+        result = score_pose(
+            detection.landmarks, detection.depth_m, self._config.scoring,
+            depth_sensor=depth_sensor,
+        )
+        self.calibration.feed(result, frame.timestamp_s)
+        self._sync_calibration()
         transition = self._state_machine.update(result, frame.timestamp_s)
-        if transition.nudge is not Nudge.NONE:
+        self._update_needle(result, frame.timestamp_s)
+        nudges = [transition.nudge] if transition.nudge is not Nudge.NONE else []
+        if transition.recovered and self._config.feedback.recovery_chime.enabled:
+            nudges.append(Nudge.RECOVERY)
+        for nudge in nudges:
             # Mode filter is the single enforcement point (spec): the machine
             # keeps sole emission authority; silent/chime-only drop the audio
             # here while state logic advances identically.
-            allowed = self._feedback is None or self._feedback.allows(transition.nudge)
+            allowed = self._feedback is None or self._feedback.allows(nudge)
             if allowed and self._audio is not None:
-                self._audio.enqueue(transition.nudge)
-            self._nudge_event = self._emit_nudge_event(transition.nudge, allowed)
+                self._audio.enqueue(nudge)
+            self._nudge_event = self._emit_nudge_event(nudge, allowed)
         self._update_fps(frame.timestamp_s)
         if self._hub is not None:
             self._publish(detection, result, transition.state, frame)
         return transition
+
+    @property
+    def needle(self) -> float | None:
+        """Smoothed posture needle in [-1, 1], or None before a scored frame."""
+        return self._needle.value
+
+    def _sync_calibration(self) -> None:
+        """Push a newly recorded (or reset) good centroid into the state
+        machine's deviation baseline as its anchor."""
+        version = self.calibration.version
+        if version != self._calibration_version:
+            self._calibration_version = version
+            self._state_machine.set_baseline_anchor(self.calibration.good)
+
+    def _update_needle(self, result: ScoringResult, now: float) -> None:
+        if not isinstance(result, ScoredPosture):
+            return  # hold the last value through unscoreable frames
+        calibration = self.calibration.calibration
+        usable = calibration is not None and calibration.axis_ok()
+        if usable != self._needle_calibrated:
+            self._needle.reset()  # mapping changed; never blend the two scales
+            self._needle_calibrated = usable
+        raw = raw_needle(result, self._config.scoring, calibration if usable else None)
+        self._needle.update(raw, now)
 
     # -- dashboard publication -----------------------------------------------------
 
@@ -352,10 +405,16 @@ class PosturePipeline:
                 else None
             ),
             nudge_event=self._nudge_event,
+            needle=self._needle.value,
+            needle_calibrated=self._needle_calibrated,
+            calibration=self.calibration.status.to_payload(),
         )
         self._hub.publish_metrics(snapshot)
         state_text = state.value.replace("_", " ")
-        depth_text = f"depth {depth_m:.1f} m" if depth_m is not None else "depth -"
+        if depth_m is not None:
+            depth_text = f"depth {depth_m:.1f} m"
+        else:
+            depth_text = "no depth sensor" if frame.depth is None else "depth -"
         reason_text = result.detail if isinstance(result, Unreliable) else ""
         self._hub.publish_video(
             self._renderer(

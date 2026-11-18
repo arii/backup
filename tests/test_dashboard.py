@@ -402,3 +402,88 @@ def test_docs_page_is_served_and_linked_from_index() -> None:
         assert heading in page
     assert index.status_code == 200
     assert 'href="/docs"' in index.text
+
+
+# -- needle, calibration and good/bad sound endpoints ---------------------------------
+
+
+class SoundAudio(RecordingAudio):
+    """RecordingAudio plus test_sound; only the "bad" sound is playable."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sounds: list[str] = []
+
+    def test_sound(self, kind: str) -> bool:
+        if kind != "bad":
+            return False
+        self.sounds.append(kind)
+        return True
+
+
+def test_ws_payload_carries_needle_and_calibration() -> None:
+    hub = DashboardHub()
+    hub.publish_metrics(
+        make_snapshot(
+            needle=0.25,
+            needle_calibrated=True,
+            calibration={"active": None, "calibrated": True},
+            camera_source="webcam",
+        )
+    )
+    client = TestClient(create_app(hub, RecordingAudio()))
+
+    with client.websocket_connect("/ws") as ws:
+        payload = ws.receive_json()
+
+    assert payload["needle"] == {"value": 0.25, "calibrated": True}
+    assert payload["calibration"]["calibrated"] is True
+    assert payload["camera"]["source"] == "webcam"
+
+
+def test_sound_test_endpoint_plays_available_sound() -> None:
+    audio = SoundAudio()
+    client = TestClient(create_app(DashboardHub(), audio))
+
+    assert client.post("/sound/test/bad").json() == {"status": "queued"}
+    assert audio.sounds == ["bad"]
+    assert client.post("/sound/test/good").status_code == 409
+    assert client.post("/sound/test/loud").status_code == 404
+
+
+def test_sound_test_without_audio_support_is_409() -> None:
+    client = TestClient(create_app(DashboardHub(), RecordingAudio()))
+    assert client.post("/sound/test/bad").status_code == 409
+
+
+def test_calibration_endpoints_drive_the_recorder() -> None:
+    from posture_guard.calibration import CalibrationRecorder
+    from posture_guard.config import CalibrationConfig
+
+    recorder = CalibrationRecorder(CalibrationConfig())
+    client = TestClient(create_app(DashboardHub(), RecordingAudio(), calibration=recorder))
+
+    response = client.post("/calibrate/good")
+    assert response.status_code == 200
+    assert response.json()["active"] == "good"
+    assert client.get("/calibrate/status").json()["active"] == "good"
+    assert client.post("/calibrate/sideways").status_code == 404
+
+    reset = client.delete("/calibrate").json()
+    assert reset["active"] is None and reset["calibrated"] is False
+
+
+def test_calibration_endpoints_without_recorder_are_503() -> None:
+    client = TestClient(create_app(DashboardHub(), RecordingAudio()))
+    assert client.get("/calibrate/status").status_code == 503
+    assert client.post("/calibrate/good").status_code == 503
+
+
+def test_index_has_calibration_and_sound_controls() -> None:
+    client = TestClient(create_app(DashboardHub(), RecordingAudio()))
+    html = client.get("/").text
+    for fragment in (
+        "Record good posture", "Record slouch posture", "/calibrate/good",
+        "/calibrate/bad", "/sound/test/good", "/sound/test/bad", "payload.needle",
+    ):
+        assert fragment in html

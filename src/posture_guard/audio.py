@@ -2,7 +2,11 @@
 
 Pre-renders every prompt to WAV at startup — the chime is synthesized tone
 pairs (no dependency), speech via pico2wave with espeak-ng as fallback — so
-playback is a single paplay call on the configured sink. One daemon thread
+playback is a single paplay call on the configured sink (aplay is the
+fallback when paplay cannot be launched, e.g. no PulseAudio/PipeWire; with no
+player at all the failure is a status, never an exception). Custom WAVs from
+audio.bad_sound / audio.good_sound replace the built-in chimes when the files
+exist. One daemon thread
 owns the queue: prompts serialize, never overlap, and enqueue() never blocks
 the camera or state-machine threads. External commands all flow through an
 injected runner, so tests stub the subprocess layer entirely.
@@ -48,6 +52,8 @@ class AudioStatus:
     sink: str | None  # resolved sink name, None = paplay default
     tts_backend: str | None  # "pico2wave" | "espeak-ng" | None
     error: str | None = None
+    warnings: tuple[str, ...] = ()  # e.g. a configured custom sound is missing
+    player: str | None = None  # "paplay" | "aplay" | None before the first play
 
 
 def _render_chime(path: Path) -> None:
@@ -95,12 +101,16 @@ class AudioWorker:
         *,
         sound_dir: Path | None = None,
         paplay_cmd: str = "paplay",
+        aplay_cmd: str = "aplay",
         pactl_cmd: str = "pactl",
         which: Which = shutil.which,
         runner: Runner | None = None,
     ):
         self._config = config
         self._paplay = paplay_cmd
+        self._aplay = aplay_cmd
+        self._player: str | None = None  # set once a play succeeds
+        self._warnings: list[str] = []
         self._pactl = pactl_cmd
         self._which = which
         self._runner: Runner = runner or self._run_subprocess
@@ -141,6 +151,8 @@ class AudioWorker:
             sink=self._sink,
             tts_backend=self._tts_backend,
             error=self._error,
+            warnings=tuple(self._warnings),
+            player=self._player,
         )
 
     # -- public API (caller-side, never blocks on playback) -------------------------
@@ -166,6 +178,18 @@ class AudioWorker:
     def play_chime(self) -> None:
         """Dashboard hook: force-play the chime only, bypassing dedupe and mode."""
         self.enqueue(Nudge.CHIME, force=True)
+
+    def test_sound(self, kind: str) -> bool:
+        """Dashboard hook: force-play the "bad" (reminder) or "good" sound,
+        bypassing dedupe and mode. False when nothing is playable for kind."""
+        nudge = {"bad": Nudge.CHIME, "good": Nudge.RECOVERY}.get(kind)
+        if nudge is None:
+            return False
+        with self._sounds_lock:
+            if nudge not in self._sounds:
+                return False
+        self.enqueue(nudge, force=True)
+        return True
 
     def play_voice(self) -> None:
         """Dashboard hook: force-play the spoken prompt only, bypassing dedupe
@@ -212,11 +236,32 @@ class AudioWorker:
         positive_path = self._sound_dir / "positive-chime.wav"
         _render_positive_chime(positive_path)
         self._sounds[Nudge.POSITIVE_CHIME] = positive_path
+        self._sounds[Nudge.RECOVERY] = positive_path
+        bad = self._custom_sound("bad_sound", self._config.bad_sound)
+        if bad is not None:
+            self._sounds[Nudge.CHIME] = bad
+        good = self._custom_sound("good_sound", self._config.good_sound)
+        if good is not None:
+            self._sounds[Nudge.POSITIVE_CHIME] = good
+            self._sounds[Nudge.RECOVERY] = good
         voice_path = self._sound_dir / "voice.wav"
         backend = self._render_voice(self._config.voice_text, voice_path)
         if backend is not None:
             self._sounds[Nudge.VOICE] = voice_path
             self._tts_backend = backend
+
+    def _custom_sound(self, key: str, value: str | None) -> Path | None:
+        """Validated path for a configured custom sound, or None (with a logged
+        warning when one was configured but is not a readable file)."""
+        if not value:
+            return None
+        path = Path(value).expanduser()
+        if path.is_file():
+            return path
+        message = f"audio.{key}: {path} not found - using the built-in sound"
+        logger.warning(message)
+        self._warnings.append(message)
+        return None
 
     def _render_voice(self, text: str, path: Path) -> str | None:
         """Render the spoken prompt to path; pico2wave first, espeak-ng fallback.
@@ -276,11 +321,15 @@ class AudioWorker:
             except OSError as exc:
                 # A missing or unlaunchable player (FileNotFoundError etc.) is
                 # surfaced as status, never raised out of the worker thread —
-                # a dead sink must not kill nudging.
+                # a dead sink must not kill nudging. Headless boxes without
+                # PulseAudio/PipeWire often still have ALSA's aplay.
+                if self._play_aplay(path):
+                    return
                 self._error = f"{self._paplay} unavailable: {exc}"
                 return
             if result.returncode == 0:
                 self._error = None  # a successful play supersedes a stale error
+                self._player = self._paplay
                 logger.info("played %s on sink %s", path.name, sink or "default")
                 return
             failures.append(f"sink {sink or 'default'}: exited {result.returncode}")
@@ -291,6 +340,21 @@ class AudioWorker:
                 result.returncode,
             )
         self._error = f"{self._paplay} failed for {path.name}: " + "; ".join(failures)
+
+    def _play_aplay(self, path: Path) -> bool:
+        """Fallback player when paplay cannot be launched. True on success."""
+        if self._which(self._aplay) is None:
+            return False
+        try:
+            result = self._runner([self._aplay, "-q", str(path)])
+        except OSError:
+            return False
+        if result.returncode != 0:
+            return False
+        self._error = None
+        self._player = self._aplay
+        logger.info("played %s with %s (paplay unavailable)", path.name, self._aplay)
+        return True
 
     @staticmethod
     def _run_subprocess(cmd: Sequence[str]) -> CommandResult:
