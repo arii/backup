@@ -1,6 +1,6 @@
 # Implementation Plan: Posture Guard
 
-- [ ] 1. Audit config wiring
+- [x] 1. Audit config wiring
   - Confirm no thresholds or timings are hardcoded outside `config.yaml` / `config.py`. Add `hypothesis` to the `dev` extra in `pyproject.toml`.
   - _Requirements: 1, 2_
 - [ ] 2. Harden `scoring.py` against non-finite input
