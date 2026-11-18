@@ -577,8 +577,12 @@ function apply(payload) {
     badge.className = "badge cause" + (pulseActive ? " pulse" : "");
   } else {
     badge.title = "";
-    badge.textContent =
-      payload.state === "unreliable" ? "tracking partial" : payload.state.replace(/_/g, " ");
+    // NO_PERSON is also the start state and lasts until posture is clearly
+    // good or bad: a tracked person in the in-between band is "settling in".
+    const scored = payload.metrics && payload.metrics.head_forward_deg !== null;
+    badge.textContent = payload.state === "unreliable" ? "tracking partial"
+      : payload.state === "no_person" && scored ? "settling in"
+      : payload.state.replace(/_/g, " ");
     badge.className = "badge " + payload.state + (pulseActive ? " pulse" : "");
   }
   last.state = payload.state;

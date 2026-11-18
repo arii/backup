@@ -26,10 +26,12 @@ jobs:
         with:
           node-version: "22"
       - name: Install Playwright Chromium
+        timeout-minutes: 8
         run: |
           npm install --no-save playwright@1
           npx playwright install --with-deps chromium
       - name: Build the fake camera feed
+        timeout-minutes: 5  # an apt mirror once hung this step for 15+ minutes
         # Apache-2.0 sample photo from google-ai-edge/mediapipe-samples-web,
         # cropped around the person to a webcam-like waist-up framing.
         run: |
@@ -47,6 +49,7 @@ jobs:
           done
           exit 1
       - name: Run the live-site check
+        timeout-minutes: 5
         run: node tests/e2e/live-site.mjs https://arii.github.io/posture-guard/ "$PWD/person.y4m" live-site-report
       - name: Upload screenshots and report
         if: always()
