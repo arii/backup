@@ -6,24 +6,23 @@
 FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine ──> AudioWorker
  webcam.py       pose.py          scoring.py      state.py                audio.py
  camera.py                           │                │
- (RealSense,                         ├──> CalibrationRecorder (calibration.py)
-  synthetic)                         └──> NeedleSmoother (posture_needle.py)
+ (synthetic)                         ├──> CalibrationRecorder (calibration.py)
+                                     └──> NeedleSmoother (posture_needle.py)
                                               │
                        pipeline.py ──> DashboardHub ──> FastAPI (dashboard/app.py)
 ```
 
-- `webcam.py` (new): `WebcamFrameSource` over `cv2.VideoCapture`. Color only
-  (`ColorDepth.depth = None`), monotonic-clock timestamps, bounded open retries,
-  reopen after `max_read_failures` empty reads. The opener is injectable for tests.
-- `camera.py`: `SyntheticFrameSource` (optional real-time pacing for the served
-  demo), `RealSenseFrameSource`, `CameraWorker` (latest-frame buffer thread).
-- `pose.py`: `MediaPipePoseDetector`; `center_depth_m` returns None for color-only
-  frames; `SyntheticPoseDetector(demo_cycle_s=...)` alternates good and slouch.
+- `webcam.py`: `WebcamFrameSource` over `cv2.VideoCapture`. Emits `Frame(color,
+  timestamp_s)`, monotonic-clock timestamps, bounded open retries, reopen after
+  `max_read_failures` empty reads. The opener is injectable for tests.
+- `camera.py`: `Frame`, `SourceStatus`, `SyntheticFrameSource` (optional real-time
+  pacing for the served demo), `CameraWorker` (latest-frame buffer thread).
+- `pose.py`: `MediaPipePoseDetector` -> `PoseDetection(landmarks)`;
+  `SyntheticPoseDetector(demo_cycle_s=...)` alternates good and slouch.
 - `dashboard/serve.py`: `build_source(config)` selects by `camera.source` (CLI
   `--camera` / `--device` override via `apply_cli`) and falls back to synthetic with
   the reason. `build_detector` gives the synthetic source the scripted demo.
-- `scoring.py`: `score_pose(landmarks, depth_m, cfg, *, depth_sensor=True)`.
-  The pipeline passes `depth_sensor = frame.depth is not None`.
+- `scoring.py`: `score_pose(landmarks, cfg)`.
 - `state.py`: `PostureStateMachine.update(result, now) -> Transition(state, nudge,
   seconds_bad, recovered)`; `set_baseline_anchor(metrics)`.
 - `posture_needle.py` (new), `calibration.py` (new): see below.
@@ -33,7 +32,7 @@ FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine 
 ## Browser version (`docs/app/`)
 - `posture-core.js`: pure ES module, a line-for-line port of `scoring.py`, `state.py`,
   `posture_needle.py`, `calibration.py` and `PosturePipeline.process_once` (as
-  `PostureEngine.process`). Always webcam mode (`depthSensor: false`).
+  `PostureEngine.process(landmarks, now)`).
 - `app.js`: `getUserMedia` -> `PoseLandmarker.detectForVideo` (tasks-vision 0.10.14
   from jsDelivr, lite model, GPU with CPU fallback) at 15 fps while visible; a
   Blob worker's `setInterval` drives ~5 fps ticks while hidden (rAF and page timers
@@ -45,11 +44,10 @@ FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine 
 
 ## Gate order in `score_pose`
 1. No landmarks -> `NO_POSE` (the only absence signal).
-2. RealSense only: depth non-finite / <= 0 -> `DEPTH_UNREADABLE`; outside the band -> `DEPTH_OUT_OF_BAND`.
-3. Ears/shoulders below the visibility floor (or hips, when degraded feedback is off) -> `LOW_VISIBILITY`.
-4. Non-finite ear/shoulder coordinates -> `NON_FINITE`. Non-finite hips -> trunk unavailable (or `NON_FINITE` when degraded feedback is off).
-5. Webcam only: shoulder width outside the framing band -> `FRAMING_OUT_OF_BAND` ("too far" / "too close").
-6. Metrics computed; any non-finite metric -> `NON_FINITE` (midpoint overflow, `inf - inf`).
+2. Ears/shoulders below the visibility floor (or hips, when degraded feedback is off) -> `LOW_VISIBILITY`.
+3. Non-finite ear/shoulder coordinates -> `NON_FINITE`. Non-finite hips -> trunk unavailable (or `NON_FINITE` when degraded feedback is off).
+4. Shoulder width outside the framing band -> `FRAMING_OUT_OF_BAND` ("too far" / "too close").
+5. Metrics computed; any non-finite metric -> `NON_FINITE` (vector overflow, e.g. `inf * 0`).
 
 State mapping: `NO_POSE` feeds the no-person timer; `NON_FINITE` holds everything;
 all other reasons -> `UNRELIABLE` (streak dropped, baseline and calibration kept).
@@ -94,12 +92,13 @@ straight then reads as a deviation and can chime. "Record good posture" anchors 
 baseline and removes this. Property P3 states the precondition (session starts upright).
 
 ## Correctness Properties (hypothesis, `tests/test_properties.py`)
-1. **P1 Bounded needle.** For any landmarks (NaN, inf, extreme), visibility, depth,
-   either camera mode and any calibration: `score_pose` never raises, scored metrics
+1. **P1 Bounded needle.** For any landmarks (NaN, inf, extreme), any visibility and
+   any calibration: `score_pose` never raises, scored metrics
    are finite, the needle is None or finite in `[-1, 1]`; the smoother stays bounded
    for any `(raw, now)` stream.
 2. **P2 Scale invariance.** Scaling all landmarks by `k in [1e-3, 1e3]` leaves the four
-   angles and the threshold needle unchanged within `1e-5`.
+   angles and the threshold needle unchanged within `1e-5`. (The framing gate measures
+   distance, so it is deliberately not scale invariant; P2 runs with it opened.)
 3. **P3 Anti-chatter / dwell.** At any frame interval in `[0.01, 0.5]` s: neutral-band
    and good noise never emits CHIME or VOICE; bad runs shorter than `bad_sustain_s`,
    separated by good runs longer than the smoothing window, never remind.

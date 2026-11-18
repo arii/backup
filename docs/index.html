@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Posture Guard — posture to die for</title>
-<meta name="description" content="Posture to die for. Posture Guard watches you through your webcam, in the browser or on Linux, and chimes when you slouch. Everything runs locally.">
+<meta name="description" content="Posture to die for. Leave a browser tab open; Posture Guard watches you through your webcam and chimes when you slouch. Everything runs on your computer.">
 <style>
   :root {
     --bg: #14171c;
@@ -265,11 +265,11 @@
       <h1>Posture Guard</h1>
       <p class="tagline">Posture to die for.</p>
       <p class="lede">
-        A posture coach that watches you through your normal webcam: open the
-        <a href="./app/">browser version</a>, leave the tab open, and it chimes when you slouch.
-        The Linux desktop app adds an optional Intel RealSense (D415&nbsp;/&nbsp;D435&nbsp;/&nbsp;D435i)
-        for <b>depth+RGB pose scoring</b>, with <b>chime-then-voice reminders</b> and a
-        <b>local verification dashboard</b>.
+        A posture coach that watches you through your normal webcam. Open the
+        <a href="./app/">app</a>, leave the tab open, and it chimes when you slouch, then
+        speaks up if you keep slouching. <b>Nothing to install</b>, <b>no special camera</b>,
+        and <b>no video leaves your computer</b>. A Linux desktop version with a local
+        dashboard is available too.
       </p>
       <div class="cta-row">
         <a class="btn primary" href="./app/">Try it in your browser</a>
@@ -354,24 +354,24 @@
 
   <section>
     <h2>How it works</h2>
-    <p class="section-sub">One pipeline, end to end, on your own machine:</p>
+    <p class="section-sub">One pipeline, end to end, on your own machine. The browser and desktop versions share it and are tested frame by frame against each other.</p>
     <ol class="pipeline">
-      <li><b>RealSense capture</b>
-        <span class="muted">Depth + RGB from a D400-series camera; depth doubles as a distance gate — you are only scored inside 0.6–2.5&nbsp;m.</span></li>
+      <li><b>Your webcam</b>
+        <span class="muted">Any laptop or USB camera. Your shoulder width in the frame doubles as a distance check, so sitting too far or too close is flagged instead of scored.</span></li>
       <li><b>MediaPipe Pose</b>
-        <span class="muted">33 2D landmarks with per-landmark visibility, running fully on CPU, in-process.</span></li>
+        <span class="muted">33 landmarks with per-landmark visibility, running on your computer: in the browser tab, or in-process on the desktop.</span></li>
       <li><b>Scoring</b>
         <span class="muted">Four angles (head forward, trunk lean, head tilt, shoulder level) against thresholds, with hysteresis, sustain windows, and a personal EMA baseline.</span></li>
       <li><b>State machine</b>
         <span class="muted">Bad posture must hold ~2&nbsp;s before a chime; a spoken prompt follows ~10&nbsp;s later and repeats at most every 30&nbsp;s while you stay slouched.</span></li>
-      <li><b>PulseAudio chime + pico2wave TTS</b>
-        <span class="muted">A serialized playback queue renders each prompt on the fly (espeak-ng as fallback) on your chosen audio sink.</span></li>
+      <li><b>Chime + spoken prompt</b>
+        <span class="muted">In the browser: Web Audio and speech synthesis, still working when the tab is in the background. On the desktop: a serialized playback queue with pico2wave or espeak-ng.</span></li>
     </ol>
   </section>
 
   <section>
-    <h2>The dashboard</h2>
-    <p class="section-sub">Real screenshots from the live app — wireframe overlay, per-metric target bands, placement guidance, and feedback controls.</p>
+    <h2>The desktop dashboard</h2>
+    <p class="section-sub">Screenshots from the Linux desktop version's local dashboard — wireframe overlay, per-metric target bands, placement guidance, and feedback controls.</p>
     <div class="shots">
       <figure class="shot">
         <img src="assets/dashboard-shot-1.png" alt="Posture Guard dashboard: live camera view with a green tracking wireframe over a seated person, posture metric tiles with target bands, camera placement checklist, and feedback controls" loading="lazy">
@@ -379,17 +379,18 @@
       </figure>
       <figure class="shot">
         <img src="assets/dashboard-shot-2.png" alt="Posture Guard dashboard with the person leaning: the wireframe tilts with the torso and the shoulder-level metric is lit amber outside its target band" loading="lazy">
-        <figcaption>The same dashboard mid-lean: the wireframe tilts with the torso and the shoulder-level reading (9°, outside its ±6° band) lights amber.</figcaption>
+        <figcaption>The same dashboard mid-lean: the wireframe tilts with the torso and the shoulder-level reading, outside its target band, lights amber.</figcaption>
       </figure>
     </div>
   </section>
 
   <section>
     <h2>Quickstart</h2>
-    <p class="section-sub">Linux, Python 3.10+, and (optionally, to start) a RealSense — without a camera the pipeline falls back to a synthetic frame source so the dashboard is fully verifiable first.</p>
+    <p class="section-sub"><b>In the browser:</b> open <a href="./app/">the app</a>, press <i>Start with webcam</i> (or <i>Try the demo</i> without a camera), and leave the tab open.</p>
+    <p class="section-sub"><b>On Linux</b> (Python 3.10+, any webcam; without one the app runs a scripted demo):</p>
     <div class="quickstart">
       <ol>
-        <li>Clone and set up (system packages + venv + hardware preflight report):
+        <li>Clone and set up (system packages + venv + preflight report):
 <pre><code>git clone https://github.com/arii/posture-guard.git
 cd posture-guard
 ./setup.sh</code></pre></li>
@@ -398,8 +399,8 @@ cd posture-guard
           <p style="margin:6px 0 0">(equivalently: <code>python -m posture_guard.dashboard.serve</code>)</p></li>
         <li>Tune everything from <code>config.yaml</code> — thresholds
             (<code>scoring.*_deg</code>), sustain windows (<code>state.*_s</code>),
-            the positive chime (<code>feedback.positive_chime.*</code>), the depth band
-            (<code>scoring.depth_min_m</code> / <code>scoring.depth_max_m</code>), and your
+            the positive chime (<code>feedback.positive_chime.*</code>), the framing band
+            (<code>scoring.shoulder_width_min</code> / <code>scoring.shoulder_width_max</code>), and your
             audio sink (<code>audio.sink</code>).</li>
       </ol>
     </div>
@@ -411,14 +412,14 @@ cd posture-guard
       <span class="dot" aria-hidden="true"></span>
       <p>
         <b>Nothing is recorded, nothing leaves the machine.</b>
-        <span class="muted">Frames are analyzed in memory and dropped — no video, landmarks, or metrics are ever written to disk. The pose model and speech render locally on CPU; the dashboard binds to 127.0.0.1. No cloud, no third-party services — unplug the network and everything keeps working. Verified in the code before it was written on the How-it-works page.</span>
+        <span class="muted">Frames are analyzed in memory and dropped — no video or landmarks are uploaded or written to disk. The browser version downloads only the pose model and its runtime (from jsDelivr and Google's model bucket) and keeps your calibration and daily totals in the browser's local storage. The desktop version runs the model and speech locally on CPU, binds its dashboard to 127.0.0.1, and keeps working with the network unplugged.</span>
       </p>
     </div>
   </section>
 </main>
 
 <footer>
-  Posture Guard — built end to end at the Obvious hackathon, San Francisco, November 13, 2026.
+  Posture Guard — posture to die for. Built with Kiro for Kiroween 2026. MIT licensed.
   <a href="https://github.com/arii/posture-guard">arii/posture-guard</a>
 </footer>
 

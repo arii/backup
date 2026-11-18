@@ -6,15 +6,14 @@
     `feedback.recovery_chime`, `audio.bad_sound/good_sound`, `camera.source/device/
     demo_cycle_s`, `scoring.shoulder_width_min/max`. Tests: `tests/test_config.py`.
   - _Requirements: 7_
-- [x] 2. Webcam input (default) with RealSense and synthetic modes
-  - `webcam.py` (`WebcamFrameSource`), color-only `ColorDepth`, `--camera` / `--device`
+- [x] 2. Webcam input with a synthetic fallback
+  - `webcam.py` (`WebcamFrameSource`), `--camera` / `--device`
     CLI, synthetic fallback with reason, scripted synthetic demo with real-time pacing,
-    `[webcam]` / `[realsense]` extras, preflight webcam check, smoke check for cv2.
+    `[webcam]` extra, preflight webcam check, smoke check for cv2.
     Tests: `tests/test_webcam.py`, `tests/test_serve.py`.
   - _Requirements: 1_
 - [x] 3. Frame hardening in `scoring.py`
-  - `NON_FINITE`, `FRAMING_OUT_OF_BAND`, `depth_sensor=False` framing gate, optional
-    depth on `ScoredPosture`. Tests: `tests/test_scoring.py`.
+  - `NON_FINITE`, `FRAMING_OUT_OF_BAND` framing gate. Tests: `tests/test_scoring.py`.
   - _Requirements: 1.5, 2_
 - [x] 4. State machine fixes in `state.py`
   - Glitch hold, smoothing-window boundary sample (low fps / jitter), `recovered` flag,
@@ -43,3 +42,10 @@
   - Golden parity: `tests/browser_golden.py` -> `tests/fixtures/browser_golden.json`,
     `tests/js/posture-core.test.mjs`, `tests/test_browser_golden.py`; CI `browser-core` job.
   - _Requirements: 8_
+- [x] 11. Remove RealSense support
+  - The browser version is the primary product and needs no special camera. Delete
+    `RealSenseFrameSource`, the depth gates (`DEPTH_UNREADABLE`, `DEPTH_OUT_OF_BAND`,
+    `scoring.depth_min_m/max_m`), `center_depth_m`, the `[realsense]` extra, the udev
+    rules and the RealSense preflight. `ColorDepth` becomes `Frame(color, timestamp_s)`.
+  - Verified: the regenerated golden timeline is frame-for-frame identical (only the two
+    depth config keys dropped), so webcam behavior did not change.

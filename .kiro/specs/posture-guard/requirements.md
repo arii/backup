@@ -1,24 +1,25 @@
 # Requirements Document: Posture Guard
 
 ## Introduction
-Posture Guard is a local posture monitor. It reads a standard webcam by default
-(optionally an Intel RealSense D400, or a synthetic demo stream), runs MediaPipe Pose,
-scores head and shoulder geometry, and reminds the user with a chime and then a spoken
-prompt through `paplay`. A FastAPI dashboard on `127.0.0.1` shows the live skeleton,
-metrics, a posture needle, and the calibration and sound controls.
+Posture Guard is a local posture monitor. It reads a standard webcam (or a synthetic
+demo stream), runs MediaPipe Pose, scores head and shoulder geometry, and reminds the
+user with a chime and then a spoken prompt. It ships as a browser app on GitHub Pages
+(Requirement 8) and as a Linux desktop app whose FastAPI dashboard on `127.0.0.1`
+shows the live skeleton, metrics, a posture needle, and the calibration and sound
+controls.
 
 ## Requirements
 
 ### Requirement 1: Camera input
-**User Story:** As a user or hackathon judge, I want Posture Guard to run with the
-laptop webcam I already have, with RealSense and a no-camera demo as options.
+**User Story:** As a user or judge, I want Posture Guard to run with the laptop
+webcam I already have, with a no-camera demo as a fallback.
 
 #### Acceptance Criteria
 1. THE System SHALL use `cv2.VideoCapture(camera.device)` + MediaPipe Pose by default (`camera.source: webcam`).
-2. WHEN `--camera realsense` or `camera.source: realsense` is set, THE System SHALL read aligned color and depth from a RealSense D400.
-3. WHEN `--camera synthetic` is set, OR the selected camera fails to open, THE System SHALL run the synthetic source with scripted good/slouch poses alternating every `camera.demo_cycle_s`, and SHALL show the fallback reason on the dashboard and in the log.
+2. THE System SHALL NOT require any camera other than a standard webcam.
+3. WHEN `--camera synthetic` is set, OR the webcam fails to open, THE System SHALL run the synthetic source with scripted good/slouch poses alternating every `camera.demo_cycle_s`, and SHALL show the fallback reason on the dashboard and in the log.
 4. WHEN a webcam stops delivering frames, THE System SHALL reopen it and report the state on the dashboard, without raising.
-5. WHEN the camera has no depth sensor, THE System SHALL replace the depth band with a framing gate: shoulder width outside `[scoring.shoulder_width_min, scoring.shoulder_width_max]` of the frame width is reported as too far / too close.
+5. THE System SHALL judge distance with a framing gate: shoulder width outside `[scoring.shoulder_width_min, scoring.shoulder_width_max]` of the frame width is reported as too far / too close.
 
 ### Requirement 2: Frame hardening
 **User Story:** As a user, I want tracking glitches to be ignored, so a bad frame never
@@ -28,8 +29,7 @@ triggers or cancels a reminder.
 1. WHEN any ear or shoulder coordinate is NaN or infinite, or a metric overflows, THE System SHALL return `Unreliable(NON_FINITE)` instead of a score.
 2. WHEN a frame is `NON_FINITE`, THE state machine SHALL hold its previous state and SHALL NOT change any streak, timer, baseline or calibration.
 3. WHEN hip coordinates are non-finite and degraded feedback is on, THE System SHALL score the remaining metrics and mark trunk lean unavailable.
-4. WHEN depth is NaN or infinite (RealSense), THE System SHALL treat it as unreadable.
-5. WHEN ears or shoulders fall below `scoring.visibility_floor`, THE System SHALL report `LOW_VISIBILITY` (state `UNRELIABLE`), drop the bad streak, and keep the baseline and calibration.
+4. WHEN ears or shoulders fall below `scoring.visibility_floor`, THE System SHALL report `LOW_VISIBILITY` (state `UNRELIABLE`), drop the bad streak, and keep the baseline and calibration.
 
 ### Requirement 3: Smoothing and reminders
 **User Story:** As a user, I want reminders only after sustained bad posture, at any
@@ -73,7 +73,7 @@ and the deviation check fit my desk.
 
 ### Requirement 7: Configuration
 1. Unknown keys and wrong-typed values in `config.yaml` SHALL raise `ConfigError` naming the full key path.
-2. `camera.source` SHALL be one of `webcam`, `realsense`, `synthetic`; invalid ranges (`shoulder_width_min >= shoulder_width_max`, `calibration.window_s <= 0`, ...) SHALL be rejected.
+2. `camera.source` SHALL be one of `webcam`, `synthetic`; invalid ranges (`shoulder_width_min >= shoulder_width_max`, `calibration.window_s <= 0`, ...) SHALL be rejected.
 3. CLI flags `--camera` and `--device` SHALL override `config.yaml`.
 
 ### Requirement 8: Browser version (GitHub Pages)
