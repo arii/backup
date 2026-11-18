@@ -1,4 +1,4 @@
-"""Posture Guard: RealSense posture corrector with live verification dashboard."""
+"""Posture Guard: webcam posture coach with a live verification dashboard."""
 
 from posture_guard.config import AppConfig, load_config
 

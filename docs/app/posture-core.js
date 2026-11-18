@@ -32,8 +32,6 @@ export const DEFAULTS = Object.freeze({
     visibility_floor: 0.5,
     trunk_lean_required: true,
     degraded_feedback: true,
-    depth_min_m: 0.6,
-    depth_max_m: 2.5,
     shoulder_width_min: 0.12,
     shoulder_width_max: 0.65,
     baseline_deviation: { enabled: true, window_s: 300.0 },
@@ -58,8 +56,6 @@ export const DEFAULTS = Object.freeze({
 export const Reason = Object.freeze({
   NO_POSE: "no_pose",
   LOW_VISIBILITY: "low_visibility",
-  DEPTH_UNREADABLE: "depth_unreadable",
-  DEPTH_OUT_OF_BAND: "depth_out_of_band",
   NON_FINITE: "non_finite",
   FRAMING_OUT_OF_BAND: "framing_out_of_band",
 });
@@ -91,7 +87,6 @@ export function scored(m) {
     trunk_lean_deg: m.trunk_lean_deg,
     head_tilt_deg: m.head_tilt_deg,
     shoulder_level_deg: m.shoulder_level_deg,
-    depth_m: m.depth_m ?? null,
     trunk_lean_available: m.trunk_lean_available ?? true,
   };
 }
@@ -172,21 +167,8 @@ function finiteXY(lm, indices) {
 }
 
 /** scoring.score_pose. landmarks: array of {x, y, visibility} (33) or null. */
-export function scorePose(landmarks, depthM, cfg, { depthSensor = true } = {}) {
+export function scorePose(landmarks, cfg) {
   if (landmarks === null || landmarks === undefined) return unreliable(Reason.NO_POSE);
-  let depthValue = null;
-  if (depthSensor) {
-    if (depthM === null || depthM === undefined || !isFinite_(depthM) || depthM <= 0) {
-      return unreliable(Reason.DEPTH_UNREADABLE);
-    }
-    if (!(cfg.depth_min_m <= depthM && depthM <= cfg.depth_max_m)) {
-      return unreliable(Reason.DEPTH_OUT_OF_BAND,
-        `depth ${depthM.toFixed(2)} m outside ${cfg.depth_min_m}-${cfg.depth_max_m} m`);
-    }
-    depthValue = depthM;
-  } else if (depthM !== null && depthM !== undefined && isFinite_(depthM) && depthM > 0) {
-    depthValue = depthM;
-  }
   const floor = cfg.visibility_floor;
   const earsShoulders = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER];
   const hips = [LEFT_HIP, RIGHT_HIP];
@@ -203,14 +185,12 @@ export function scorePose(landmarks, depthM, cfg, { depthSensor = true } = {}) {
   if (cfg.trunk_lean_required && !hipsOk && !cfg.degraded_feedback) {
     return unreliable(Reason.NON_FINITE, "NaN/inf hip coordinate");
   }
-  if (!depthSensor) {
-    const width = shoulderWidth(landmarks);
-    if (!(cfg.shoulder_width_min <= width && width <= cfg.shoulder_width_max)) {
-      const where = width < cfg.shoulder_width_min ? "too far" : "too close";
-      return unreliable(Reason.FRAMING_OUT_OF_BAND,
-        `${where}: shoulder width ${width.toFixed(2)} of frame outside ` +
-        `${cfg.shoulder_width_min}-${cfg.shoulder_width_max}`);
-    }
+  const width = shoulderWidth(landmarks);
+  if (!(cfg.shoulder_width_min <= width && width <= cfg.shoulder_width_max)) {
+    const where = width < cfg.shoulder_width_min ? "too far" : "too close";
+    return unreliable(Reason.FRAMING_OUT_OF_BAND,
+      `${where}: shoulder width ${width.toFixed(2)} of frame outside ` +
+      `${cfg.shoulder_width_min}-${cfg.shoulder_width_max}`);
   }
   const headForward = measureHeadForward(landmarks);
   const headTilt = measureHeadTilt(landmarks);
@@ -228,7 +208,6 @@ export function scorePose(landmarks, depthM, cfg, { depthSensor = true } = {}) {
     trunk_lean_deg: trunk,
     head_tilt_deg: headTilt,
     shoulder_level_deg: shoulderLevel,
-    depth_m: depthValue,
     trunk_lean_available: hipsOk,
   });
 }
@@ -253,11 +232,6 @@ export function zoneOf(m, cfg) {
   return classify(pairs, cfg);
 }
 
-function blend(oldV, newV, alpha) {
-  if (oldV === null) return newV;
-  if (newV === null) return oldV;
-  return oldV + alpha * (newV - oldV);
-}
 
 export class PostureBaseline {
   constructor(cfg) {
@@ -292,7 +266,6 @@ export class PostureBaseline {
       trunk_lean_deg: ref.trunk_lean_deg + alpha * (trunkIn - ref.trunk_lean_deg),
       head_tilt_deg: ref.head_tilt_deg + alpha * (m.head_tilt_deg - ref.head_tilt_deg),
       shoulder_level_deg: ref.shoulder_level_deg + alpha * (m.shoulder_level_deg - ref.shoulder_level_deg),
-      depth_m: blend(ref.depth_m, m.depth_m, alpha),
       trunk_lean_available: true,
     });
     this.lastT = now;
@@ -576,7 +549,6 @@ function centroid(samples) {
     trunk_lean_deg: trunkOk ? mean("trunk_lean_deg", withTrunk) : 0.0,
     head_tilt_deg: mean("head_tilt_deg", samples),
     shoulder_level_deg: mean("shoulder_level_deg", samples),
-    depth_m: null,
     trunk_lean_available: trunkOk,
   });
 }
@@ -700,8 +672,8 @@ export class PostureEngine {
     this.needleCalibrated = false;
   }
 
-  process(landmarks, now, { depthM = null, depthSensor = false } = {}) {
-    const result = scorePose(landmarks, depthM, this.config.scoring, { depthSensor });
+  process(landmarks, now) {
+    const result = scorePose(landmarks, this.config.scoring);
     this.calibration.feed(result, now);
     if (this.calibration.version !== this.calibrationVersion) {
       this.calibrationVersion = this.calibration.version;

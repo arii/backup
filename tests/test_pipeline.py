@@ -15,12 +15,12 @@ import numpy as np
 import pytest
 
 from conftest import make_pose
-from posture_guard.camera import ColorDepth, SourceStatus, SyntheticFrameSource
+from posture_guard.camera import Frame, SourceStatus, SyntheticFrameSource
 from posture_guard.config import AppConfig, FeedbackConfig, PositiveChimeConfig, ScoringConfig
 from posture_guard.dashboard.hub import DashboardHub, ScoringThresholds
 from posture_guard.feedback import FeedbackMode, RuntimeFeedback
 from posture_guard.pipeline import PosturePipeline, placement_warnings, root_cause, wire_color_for
-from posture_guard.pose import PoseDetection, SyntheticPoseDetector, center_depth_m
+from posture_guard.pose import PoseDetection, SyntheticPoseDetector
 from posture_guard.scoring import (
     LEFT_EAR,
     LEFT_HIP,
@@ -31,7 +31,6 @@ from posture_guard.scoring import (
     ScoredPosture,
     SimpleLandmark,
     Unreliable,
-    UnreliableReason,
     score_pose,
 )
 from posture_guard.state import Nudge
@@ -48,34 +47,31 @@ class RecordingAudio:
 
 
 def fake_jpeg(
-    color: np.ndarray, landmarks: object, state_text: str, depth_text: str,
+    color: np.ndarray, landmarks: object, state_text: str, info_text: str,
     reason_text: str = "", *,
     wire_color: str = "",
 ) -> bytes:
-    return f"{state_text}|{depth_text}|{reason_text}|{wire_color}".encode()
+    return f"{state_text}|{info_text}|{reason_text}|{wire_color}".encode()
 
 
 class MutableDetector:
     """Synthetic detector whose pose the timeline can switch mid-run."""
 
-    def __init__(self, pose: Sequence[SimpleLandmark] | None, depth_m: float = 1.4):
+    def __init__(self, pose: Sequence[SimpleLandmark] | None):
         self.pose = pose
-        self.depth_m = depth_m
 
-    def __call__(self, frame: ColorDepth) -> PoseDetection:
-        return PoseDetection(self.pose, self.depth_m)
+    def __call__(self, frame: Frame) -> PoseDetection:
+        return PoseDetection(self.pose)
 
 
-def make_frame(index: int, depth_m: float = 1.4) -> ColorDepth:
-    color = np.zeros((480, 640, 3), dtype=np.uint8)
-    depth = np.full((480, 640), int(depth_m * 1000), dtype=np.uint16)
-    return ColorDepth(color=color, depth=depth, timestamp_s=index / 30.0)
+def make_frame(index: int) -> Frame:
+    return Frame(color=np.zeros((480, 640, 3), dtype=np.uint8), timestamp_s=index / 30.0)
 
 
 def feed(pipeline: PosturePipeline, detector: MutableDetector, seconds: float, index: int) -> int:
     """Feed 30 fps frames for a wall of simulated seconds; returns next index."""
     for _ in range(int(seconds * 30)):
-        pipeline.process_once(make_frame(index, detector.depth_m))
+        pipeline.process_once(make_frame(index))
         index += 1
     return index
 
@@ -106,7 +102,6 @@ def test_good_pose_reaches_good_state_with_zeroed_metrics() -> None:
 
     snapshot, _ = hub.latest_metrics()
     assert snapshot.state == "good"
-    assert snapshot.depth_m == pytest.approx(1.4)
     assert snapshot.head_forward_deg == pytest.approx(0.0, abs=1.0)
     assert snapshot.trunk_lean_deg == pytest.approx(0.0, abs=1.0)
     assert len(snapshot.landmarks) == 6
@@ -155,13 +150,23 @@ def test_full_nudge_timeline_chime_then_voice_then_recovery() -> None:
     assert audio.enqueued == [Nudge.CHIME, Nudge.VOICE]  # silence on recovery
 
 
-def test_out_of_band_depth_surfaces_as_warning_not_no_person() -> None:
-    """Regression (NO PERSON flap): the pose is detected, so a center-box
-    depth reading outside the band is an unscoreable frame for a present
-    person — placement warning fires, the header never reports NO PERSON.
-    Previously this flapped the header to no_person while the wireframe
-    rendered and the metrics showed the last in-band reading."""
-    detector = MutableDetector(make_pose(), depth_m=2.9)  # beyond 2.5 m band
+def _far_pose() -> list[SimpleLandmark]:
+    """Shoulders span 0.06 of the frame: below the 0.12 framing floor."""
+    return make_pose(
+        {
+            LEFT_SHOULDER: SimpleLandmark(x=0.47, y=0.60),
+            RIGHT_SHOULDER: SimpleLandmark(x=0.53, y=0.60),
+            LEFT_EAR: SimpleLandmark(x=0.49, y=0.55),
+            RIGHT_EAR: SimpleLandmark(x=0.51, y=0.55),
+        }
+    )
+
+
+def test_out_of_band_framing_surfaces_as_warning_not_no_person() -> None:
+    """Regression (NO PERSON flap): the pose is detected, so sitting too far is
+    an unscoreable frame for a present person — placement warning fires, the
+    header never reports NO PERSON."""
+    detector = MutableDetector(_far_pose())
     pipeline, hub, _ = build_pipeline(detector)
 
     feed(pipeline, detector, 3.0, 0)
@@ -169,7 +174,8 @@ def test_out_of_band_depth_surfaces_as_warning_not_no_person() -> None:
     snapshot, _ = hub.latest_metrics()
     assert snapshot.state == "unreliable"
     assert snapshot.head_forward_deg is None
-    assert snapshot.warnings == ("person too far - 2.9 m (band 0.6-2.5 m)",)
+    assert len(snapshot.warnings) == 1
+    assert snapshot.warnings[0].startswith("person too far")
 
 
 def test_cropped_person_surfaces_low_visibility_warning() -> None:
@@ -182,7 +188,7 @@ def test_cropped_person_surfaces_low_visibility_warning() -> None:
     snapshot, _ = hub.latest_metrics()
     assert snapshot.state == "unreliable"
     assert snapshot.warnings == (
-        "shoulders not visible - sit facing the camera, 1.0-1.5 m away",
+        "shoulders not visible - sit facing the camera, 0.6-1.2 m away",
     )
     # Landmark-level reliability detail: which tracked landmark failed and by
     # how much, consumed by the dashboard overlay and status row.
@@ -195,7 +201,7 @@ def test_cropped_person_surfaces_low_visibility_warning() -> None:
         make_pose({LEFT_HIP: SimpleLandmark(x=0.48, y=0.80, visibility=0.0),
                    RIGHT_HIP: SimpleLandmark(x=0.52, y=0.80, visibility=0.0)}),
         ScoringConfig(),
-    ) == "hips not visible - trunk lean unavailable, move back to 1.0-1.5 m"
+    ) == "hips not visible - trunk lean unavailable, move back to 0.6-1.2 m"
 
 
 def test_low_visibility_warning_names_head_when_ears_cropped() -> None:
@@ -211,11 +217,11 @@ def test_low_visibility_warning_names_head_when_ears_cropped() -> None:
     snapshot, _ = hub.latest_metrics()
     assert snapshot.state == "unreliable"
     assert snapshot.warnings == (
-        "head not visible - sit facing the camera, 1.0-1.5 m away",
+        "head not visible - sit facing the camera, 0.6-1.2 m away",
     )
     # Pure-function fallback: no landmarks at all still names the generic fix.
     assert low_visibility_warning(None, pipeline._config.scoring) == (
-        "person not fully in frame - sit facing the camera, 1.0-1.5 m away"
+        "person not fully in frame - sit facing the camera, 0.6-1.2 m away"
     )
 
 
@@ -390,38 +396,19 @@ def test_threaded_pipeline_runs_against_synthetic_source() -> None:
 # -- placement_warnings unit coverage -------------------------------------------
 
 
-def test_usb2_connection_surfaces_bandwidth_warning() -> None:
-    camera = SourceStatus(connected=True, usb_type="2.1")
-    score = score_pose(make_pose(), 1.4, ScoringConfig())
-
-    warnings = placement_warnings(score, 1.4, camera, ScoringConfig())
-
-    assert warnings == ("USB 2.1 connection - depth may be unstable; use a USB 3 port",)
 
 
-def test_unreadable_depth_surfaces_warning() -> None:
-    camera = SourceStatus(connected=True)
-    result = Unreliable(UnreliableReason.DEPTH_UNREADABLE)
-
-    warnings = placement_warnings(result, None, camera, ScoringConfig())
-
-    assert warnings == ("depth unreadable - check the camera view",)
 
 
 def test_disconnected_camera_surfaces_error() -> None:
     camera = SourceStatus(connected=False, error="camera unavailable: boom")
-    score = score_pose(make_pose(), 1.4, ScoringConfig())
+    score = score_pose(make_pose(), ScoringConfig())
 
-    warnings = placement_warnings(score, 1.4, camera, ScoringConfig())
+    warnings = placement_warnings(score, camera, ScoringConfig())
 
     assert warnings == ("camera unavailable: camera unavailable: boom",)
 
 
-def test_center_depth_median_ignores_invalid_values() -> None:
-    depth = np.full((480, 640), 1400, dtype=np.uint16)
-    depth[200:280, 240:400] = 0  # invalid zeros inside the center box
-
-    assert center_depth_m(depth) == pytest.approx(1.4)
 
 
 def _positive_pipeline(mode: FeedbackMode) -> tuple[PosturePipeline, DashboardHub, RecordingAudio]:
@@ -471,58 +458,63 @@ def test_silent_mode_mutes_positive_chime_but_records_event() -> None:
 
 def test_root_cause_flags_head_clipped_by_top_edge() -> None:
     pose = make_pose({LEFT_EAR: SimpleLandmark(x=0.46, y=0.05)})
-    score = score_pose(pose, 1.4, ScoringConfig())
-    cause = root_cause(score, 1.4, ScoringConfig(), pose)
+    score = score_pose(pose, ScoringConfig())
+    cause = root_cause(score, pose)
     assert cause == {"title": "top edge clipped", "action": "tilt camera up", "edge": "top"}
 
 
 def test_root_cause_none_for_scored_in_frame_person() -> None:
     pose = make_pose()
-    score = score_pose(pose, 1.4, ScoringConfig())
-    assert root_cause(score, 1.4, ScoringConfig(), pose) is None
+    score = score_pose(pose, ScoringConfig())
+    assert root_cause(score, pose) is None
 
 
 def test_root_cause_low_visibility_reason() -> None:
     pose = make_pose(
         {LEFT_EAR: SimpleLandmark(x=0.46, y=0.45, visibility=0.1)}
     )
-    result = score_pose(pose, 1.4, ScoringConfig())
+    result = score_pose(pose, ScoringConfig())
     assert isinstance(result, Unreliable)
-    cause = root_cause(result, 1.4, ScoringConfig(), pose)
+    cause = root_cause(result, pose)
     assert cause["title"] == "low confidence"
     assert cause["action"] == "sit facing the camera"
 
 
-def test_root_cause_depth_out_of_band_names_direction() -> None:
-    pose = make_pose()
-    too_far = score_pose(pose, 3.0, ScoringConfig())
-    cause = root_cause(too_far, 3.0, ScoringConfig(), pose)
+def test_root_cause_framing_out_of_band_names_direction() -> None:
+    far = _far_pose()
+    cause = root_cause(score_pose(far, ScoringConfig()), far)
     assert cause["title"] == "person too far"
-    assert cause["action"] == "step closer"
-    too_close = score_pose(pose, 0.2, ScoringConfig())
-    cause = root_cause(too_close, 0.2, ScoringConfig(), pose)
+    assert cause["action"] == "move closer"
+    close = make_pose(
+        {
+            LEFT_SHOULDER: SimpleLandmark(x=0.10, y=0.60),
+            RIGHT_SHOULDER: SimpleLandmark(x=0.90, y=0.60),
+        }
+    )
+    cause = root_cause(score_pose(close, ScoringConfig()), close)
     assert cause["title"] == "person too close"
-    assert cause["action"] == "step back"
+    assert cause["action"] == "move back"
 
 
 def test_root_cause_no_pose() -> None:
-    result = score_pose(None, 1.4, ScoringConfig())
-    cause = root_cause(result, 1.4, ScoringConfig(), None)
+    result = score_pose(None, ScoringConfig())
+    cause = root_cause(result, None)
     assert cause["title"] == "no person seen"
     assert cause["edge"] is None
 
 
-def test_root_cause_boundary_check_beats_depth_reason() -> None:
-    pose = make_pose({RIGHT_EAR: SimpleLandmark(x=0.54, y=0.04)})
-    result = score_pose(pose, 3.0, ScoringConfig())
-    cause = root_cause(result, 3.0, ScoringConfig(), pose)
+def test_root_cause_boundary_check_beats_unreliable_reason() -> None:
+    pose = make_pose({RIGHT_EAR: SimpleLandmark(x=0.54, y=0.04, visibility=0.1)})
+    result = score_pose(pose, ScoringConfig())
+    assert isinstance(result, Unreliable)
+    cause = root_cause(result, pose)
     assert cause["title"] == "top edge clipped"
 
 
 def test_wire_color_follows_state_before_angles() -> None:
     slouched = ScoredPosture(
         head_forward_deg=25.0, trunk_lean_deg=0.0, head_tilt_deg=0.0,
-        shoulder_level_deg=0.0, depth_m=1.4,
+        shoulder_level_deg=0.0,
     )
     upright = replace(slouched, head_forward_deg=2.0)
     # Confirmed breach outranks the raw angle: crimson, not amber.
@@ -561,50 +553,23 @@ def _slouch() -> list[SimpleLandmark]:
     )
 
 
-class WebcamDetector(MutableDetector):
-    """Detector over color-only frames: no depth reading at all."""
-
-    def __call__(self, frame: ColorDepth) -> PoseDetection:
-        return PoseDetection(self.pose, None)
-
-
-def webcam_frame(index: int) -> ColorDepth:
-    return ColorDepth(color=np.zeros((480, 640, 3), dtype=np.uint8), depth=None,
-                      timestamp_s=index / 30.0)
-
-
-def feed_webcam(pipeline: PosturePipeline, seconds: float, index: int) -> int:
-    for _ in range(int(seconds * 30)):
-        pipeline.process_once(webcam_frame(index))
-        index += 1
-    return index
-
-
-def test_webcam_frames_score_without_depth_and_nudge() -> None:
-    detector = WebcamDetector(make_pose())
+def test_webcam_frames_score_and_nudge() -> None:
+    detector = MutableDetector(make_pose())
     pipeline, hub, audio = build_pipeline(detector)
-    index = feed_webcam(pipeline, 2.0, 0)
+    index = feed(pipeline, detector, 2.0, 0)
     snapshot = hub.latest_metrics()[0]
     assert snapshot.state == "good"
-    assert snapshot.depth_m is None
 
     detector.pose = _slouch()
-    feed_webcam(pipeline, 2.5, index)
+    feed(pipeline, detector, 2.5, index)
     assert hub.latest_metrics()[0].state == "bad_chime"
     assert audio.enqueued == [Nudge.CHIME]
 
 
-def test_webcam_too_far_is_a_framing_warning() -> None:
-    far = make_pose(
-        {
-            LEFT_SHOULDER: SimpleLandmark(x=0.47, y=0.60),
-            RIGHT_SHOULDER: SimpleLandmark(x=0.53, y=0.60),
-            LEFT_EAR: SimpleLandmark(x=0.49, y=0.55),
-            RIGHT_EAR: SimpleLandmark(x=0.51, y=0.55),
-        }
-    )
-    pipeline, hub, _ = build_pipeline(WebcamDetector(far))
-    feed_webcam(pipeline, 0.5, 0)
+def test_too_far_carries_root_cause() -> None:
+    detector = MutableDetector(_far_pose())
+    pipeline, hub, _ = build_pipeline(detector)
+    feed(pipeline, detector, 0.5, 0)
     snapshot = hub.latest_metrics()[0]
     assert snapshot.state == "unreliable"
     assert any(w.startswith("person too far") for w in snapshot.warnings)

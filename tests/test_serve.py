@@ -13,7 +13,7 @@ import logging
 import pytest
 
 from posture_guard.camera import SyntheticFrameSource
-from posture_guard.config import AppConfig, CameraConfig
+from posture_guard.config import AppConfig, CameraConfig, ConfigError, validate
 from posture_guard.dashboard.serve import apply_cli, build_detector, build_source
 from posture_guard.pose import SyntheticPoseDetector
 
@@ -32,7 +32,6 @@ def _config(source: str) -> AppConfig:
 def no_backoff(monkeypatch):
     """Skip the open-retry sleeps so failure paths run instantly."""
     monkeypatch.setattr("posture_guard.webcam.time.sleep", lambda s: None)
-    monkeypatch.setattr("posture_guard.camera.time.sleep", lambda s: None)
 
 
 class FakeCapture:
@@ -82,35 +81,9 @@ def test_webcam_failure_falls_back_to_synthetic(log_source_selection, monkeypatc
     assert source.status.kind == "synthetic"
 
 
-def test_realsense_start_logs_active_source_with_usb(log_source_selection, monkeypatch):
-    def usb3_device(width, height, fps):
-        return object(), object(), "3.2"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", usb3_device)
-    source = build_source(_config("realsense"))
-    try:
-        assert isinstance(source, SyntheticFrameSource) is False
-        assert "RealSense source active (usb 3.2)" in log_source_selection.text
-    finally:
-        source.close()
-
-
-def test_synthetic_fallback_logs_reason(log_source_selection, monkeypatch, no_backoff):
-    def no_device(width, height, fps):
-        raise RuntimeError("No device connected")
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", no_device)
-    source = build_source(_config("realsense"))
-
-    assert isinstance(source, SyntheticFrameSource)
-    text = log_source_selection.text
-    assert "synthetic source (reason:" in text
-    # The reason names the exhausted retry budget and the SDK's last error.
-    assert "camera unavailable after 3 attempts: No device connected" in text
-    # The fallback source itself carries the reason, so it reaches the
-    # dashboard status too, not just the log.
-    assert "No device connected" in (source.status.error or "")
-    assert source.status.kind == "synthetic"
+def test_realsense_is_no_longer_a_camera_source():
+    with pytest.raises(ConfigError, match="camera.source"):
+        validate(_config("realsense"))
 
 
 def test_synthetic_selected_explicitly_has_no_error(log_source_selection):
@@ -132,7 +105,7 @@ def test_synthetic_source_gets_the_scripted_demo_detector():
 
 
 def test_cli_flags_override_config_camera():
-    config = apply_cli(AppConfig(), "realsense", 2)
-    assert config.camera.source == "realsense"
+    config = apply_cli(AppConfig(camera=CameraConfig(source="synthetic")), "webcam", 2)
+    assert config.camera.source == "webcam"
     assert config.camera.device == 2
     assert apply_cli(AppConfig(), None, None) == AppConfig()

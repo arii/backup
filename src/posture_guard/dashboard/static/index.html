@@ -189,7 +189,6 @@
   <span id="state-badge" class="badge no_person">waiting</span>
   <span id="nudge-event">nudge</span>
   <span class="stat"><b id="fps">-</b> fps</span>
-  <span class="stat">depth <b id="depth">-</b></span>
   <button id="pip-toggle" class="secondary" title="Collapse the video into a 120x120 corner HUD (status ring + inclinometer dot)" style="margin-left:auto">&#9788; Mini HUD</button>
 </header>
 <main>
@@ -260,12 +259,12 @@
            setup; the JS auto-expands on first launch until tracking is
            confirmed, and again whenever tracking stays UNRELIABLE > 5s. -->
       <details class="guide-details" id="placement-guide">
-        <summary>Placement guide &amp; diagrams (top view and side view)</summary>
+        <summary>Placement guide &amp; diagram (top view)</summary>
         <ul class="guide">
           <li>Person fully in frame, facing the camera</li>
-          <li>Mount the camera HIGH — on a shelf or wall mount roughly 0.4&ndash;0.5&nbsp;m above head height — and tilt it down about 45&deg; at your mid-torso. At the normal ~0.6&ndash;0.8&nbsp;m working distance this fits head and hips in frame</li>
-          <li>Alternative for deep desks: sit 1.0&ndash;1.5&nbsp;m away with the camera at chest/neck height aimed at mid-torso</li>
-          <li>USB 3 port for stable depth</li>
+          <li>Camera at about eye height, 0.6&ndash;1.2&nbsp;m away, facing you</li>
+          <li>Head and both shoulders in frame; hips help but are optional</li>
+          <li>Even, front lighting: a bright window behind you makes tracking unreliable</li>
         </ul>
         <svg class="scene" id="placement-guide-top" viewBox="0 0 880 300" role="img" aria-label="Top view: camera positions by angle from the user's facing direction">
           <!-- desk edge -->
@@ -292,52 +291,14 @@
           <circle cx="588" cy="66" r="4" fill="#0b0e13" stroke="#4cc36a" stroke-width="1.5"/>
           <line x1="585" y1="70" x2="462" y2="192" stroke="#4cc36a" stroke-width="1.5" stroke-dasharray="4 4"/>
           <text x="600" y="52" class="lbl" fill="#4cc36a">here: ~40&deg; &#8212; works</text>
-          <text x="600" y="70" class="lbl-sm">mount it HIGH (shelf / wall),</text>
-          <text x="600" y="86" class="lbl-sm">aimed down at your torso</text>
+          <text x="600" y="70" class="lbl-sm">straight ahead is best;</text>
+          <text x="600" y="86" class="lbl-sm">a little off-center still works</text>
           <!-- bad camera -->
           <rect x="680" y="120" width="26" height="18" rx="4" fill="#ff5c5c" transform="rotate(75 693 129)"/>
           <line x1="678" y1="140" x2="468" y2="196" stroke="#ff5c5c" stroke-width="1.5" stroke-dasharray="4 4"/>
           <text x="712" y="136" class="lbl" fill="#ff5c5c">fully side-on: ~85&deg;</text>
           <text x="712" y="154" class="lbl-sm">shoulder-level and head-tilt</text>
           <text x="712" y="170" class="lbl-sm">stop working &#8212; UNRELIABLE</text>
-        </svg>
-        <svg class="scene" id="placement-guide-side" viewBox="0 0 880 340" role="img" aria-label="Side view: camera above and beside the monitor, tilted down at the torso">
-          <line x1="20" y1="322" x2="860" y2="322" stroke="#2c333e" stroke-width="2"/>
-          <!-- desk -->
-          <rect x="60" y="188" width="170" height="9" rx="2" fill="#232a34"/>
-          <rect x="70" y="197" width="8" height="123" fill="#232a34"/>
-          <rect x="212" y="197" width="8" height="123" fill="#232a34"/>
-          <rect x="190" y="180" width="36" height="7" rx="2" fill="#2c333e"/>
-          <!-- monitor -->
-          <rect x="104" y="66" width="66" height="114" rx="4" fill="#10141a" stroke="#2c333e" stroke-width="1.5"/>
-          <text x="96" y="56" class="lbl-sm">screen &#8212; nothing blocks it</text>
-          <!-- camera high right -->
-          <rect x="196" y="26" width="20" height="14" rx="3" fill="#4cc36a" transform="rotate(40 206 33)"/>
-          <circle cx="216" cy="46" r="4" fill="#0b0e13" stroke="#4cc36a" stroke-width="1.5"/>
-          <text x="238" y="30" class="lbl" fill="#4cc36a">shelf / wall mount, above and beside the monitor</text>
-          <text x="238" y="48" class="lbl-sm">tilt down ~45&deg; and slightly inward, at your mid-torso</text>
-          <!-- sightline cone -->
-          <polygon points="219,49 420,180 470,300" fill="rgba(76,195,106,.10)" stroke="#4cc36a" stroke-width="1" stroke-dasharray="4 4"/>
-          <!-- person -->
-          <g stroke="#8b95a3" fill="none" stroke-linecap="round">
-            <circle cx="312" cy="96" r="22" fill="#8b95a3" stroke="none"/>
-            <line x1="306" y1="120" x2="309" y2="130" stroke-width="11"/>
-            <line x1="306" y1="134" x2="314" y2="236" stroke-width="32"/>
-            <line x1="300" y1="140" x2="264" y2="174" stroke-width="12"/>
-            <line x1="264" y1="174" x2="228" y2="190" stroke-width="10"/>
-            <line x1="312" y1="242" x2="252" y2="248" stroke-width="24"/>
-            <line x1="254" y1="254" x2="252" y2="310" stroke-width="13"/>
-            <line x1="252" y1="314" x2="236" y2="318" stroke-width="8"/>
-          </g>
-          <g stroke="#2c333e" stroke-width="8" stroke-linecap="round">
-            <line x1="312" y1="248" x2="384" y2="248"/>
-            <line x1="378" y1="136" x2="382" y2="244"/>
-            <line x1="342" y1="254" x2="344" y2="300"/>
-            <line x1="344" y1="300" x2="324" y2="320" stroke-width="6"/>
-            <line x1="344" y1="300" x2="364" y2="320" stroke-width="6"/>
-          </g>
-          <circle cx="314" cy="240" r="7" fill="none" stroke="#4cc36a" stroke-width="2" stroke-dasharray="3 3"/>
-          <text x="470" y="240" class="lbl-sm">head &#10003; shoulders &#10003; hips &#10003;</text>
         </svg>
       </details>
       <!-- One test control for the current mode: chime_and_voice plays both,
@@ -489,7 +450,7 @@ function drawTargetVectors(ctx, pts, w, h) {
   // Item 8: pulsing correction arrows at breaching vertices. Direction comes
   // from geometry where the wireframe has it (head tilt sinks the higher ear,
   // shoulder level raises the lower shoulder, trunk lean mirrors the
-  // shoulders-vs-hips offset); head forward is a depth metric, so it follows
+  // shoulders-vs-hips offset); head forward has no clean 2D arrow, so it follows
   // the mini-HUD's 2-axis convention (+ = drifts down → correction points
   // up-screen). Arrow length scales with severity on the same 1.5x-limit
   // scale as the bullet bars. Crimson like the confirmed-breach wire.
@@ -603,8 +564,6 @@ function apply(payload) {
   last.metrics = payload.metrics;
   last.cause = cause || null;
   document.getElementById("fps").textContent = payload.fps;
-  document.getElementById("depth").textContent =
-    payload.depth_m === null ? "-" : payload.depth_m.toFixed(1) + " m";
   thresholds = payload.thresholds || null;
   Object.entries(payload.metrics).forEach(([k, v]) => metric(k, v));
   document.getElementById("unreliable-detail").textContent =
@@ -616,10 +575,6 @@ function apply(payload) {
   const camEl = document.getElementById("camera");
   if (cam.source === "webcam") {
     camEl.textContent = cam.connected ? "webcam" : "webcam unavailable";
-  } else if (cam.source === "realsense") {
-    camEl.textContent = cam.connected
-      ? (cam.usb_type ? "RealSense (USB " + cam.usb_type + ")" : "RealSense")
-      : "RealSense unavailable";
   } else if (cam.source === "synthetic") {
     camEl.textContent = "synthetic";
   } else {

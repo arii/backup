@@ -2,9 +2,8 @@
 # Posture Guard setup for a clean Ubuntu/Debian-family Linux desktop.
 #
 # 1. Installs system packages (PulseAudio/PipeWire client tools, TTS, ffmpeg).
-# 2. Creates a Python venv and installs posture-guard with the hardware extra.
-# 3. Prints a hardware preflight report: camera, USB type, depth stream,
-#    audio sinks, TTS renderability.
+# 2. Creates a Python venv and installs posture-guard with the webcam extra.
+# 3. Prints a preflight report: webcam, audio sinks, TTS renderability.
 #
 # Re-run at any time; every step is idempotent.
 
@@ -31,41 +30,21 @@ $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     || $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     libpulse0 pulseaudio-utils ffmpeg espeak-ng
 
-# --- 1b. RealSense udev rules ------------------------------------------------
-# The rules file grants non-root access to the RealSense USB device. Installing
-# it is best-effort: without root we print the manual command instead of failing.
-RULES_SRC="99-realsense-libusb.rules"
-RULES_DST="/etc/udev/rules.d/99-realsense-libusb.rules"
-if [[ -f "$RULES_SRC" ]]; then
-    if [[ -f "$RULES_DST" ]] && cmp -s "$RULES_SRC" "$RULES_DST"; then
-        echo "==> RealSense udev rules already installed"
-    elif [[ "$(id -u)" -eq 0 ]]; then
-        echo "==> Installing RealSense udev rules"
-        cp "$RULES_SRC" "$RULES_DST"
-        udevadm control --reload-rules && udevadm trigger
-    else
-        echo "==> Skipping udev rule install (not root) — to install manually run:"
-        echo "      sudo cp \"$(pwd)/$RULES_SRC\" $RULES_DST"
-        echo "      sudo udevadm control --reload-rules && sudo udevadm trigger"
-    fi
-fi
-
 # --- 2. Python environment ---------------------------------------------------
 echo "==> Creating venv and installing Python dependencies"
 python3 -m venv .venv
 # shellcheck disable=SC1091  # venv activate only exists after setup runs
 . .venv/bin/activate
 pip install --quiet --upgrade pip
-# hardware extra pulls opencv-python + mediapipe (webcam, the default input)
-# and pyrealsense2 (optional RealSense); dev adds pytest/ruff/hypothesis so
+# webcam extra pulls opencv-python + mediapipe; dev adds pytest/ruff/hypothesis so
 # `make test` works on the same box.
-pip install --quiet -e '.[hardware,dev]'
+pip install --quiet -e '.[webcam,dev]'
 
 # --- 3. Hardware preflight report -------------------------------------------
 echo
-echo "==> Hardware preflight report"
+echo "==> Preflight report"
 .venv/bin/python - <<'PY'
-"""Preflight checks: camera, USB type, depth stream, audio sinks, TTS."""
+"""Preflight checks: webcam, audio sinks, TTS."""
 
 import shutil
 import subprocess
@@ -98,46 +77,7 @@ try:
         cap.release()
 except Exception as exc:  # noqa: BLE001 — report, never crash, the preflight
     webcam_note = str(exc).strip().splitlines()[0] if str(exc).strip() else "unknown error"
-print(f"webcam (default input) ....... {mark(webcam_ok)}   ({webcam_note})")
-print("RealSense (optional, --camera realsense):")
-
-# Camera + USB type + depth stream (one pipeline probe covers all three).
-camera_ok, usb, depth_ok = False, "n/a", False
-try:
-    import pyrealsense2 as rs
-
-    ctx = rs.context()
-    devices = list(ctx.query_devices())
-    if devices:
-        camera_ok = True
-        dev = devices[0]
-        usb = dev.get_info(rs.camera_info.usb_type_descriptor)
-        pipe = rs.pipeline()
-        cfg = rs.config()
-        cfg.enable_device(dev.get_info(rs.camera_info.serial_number))
-        cfg.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        cfg.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        try:
-            profile = pipe.start(cfg)
-            for _ in range(15):  # a few frames; depth needs time to settle
-                frames = pipe.wait_for_frames(timeout_ms=5000)
-                if frames.get_depth_frame() is not None:
-                    depth_ok = True
-                    break
-        finally:
-            try:
-                pipe.stop()
-            except RuntimeError:
-                pass
-except Exception as exc:  # noqa: BLE001 — report, never crash, the preflight
-    camera_note = str(exc).strip().splitlines()[0] if str(exc).strip() else "unknown error"
-else:
-    camera_note = f"{len(list(rs.context().query_devices()))} device(s)"
-
-print(f"camera detected .............. {mark(camera_ok)}   ({camera_note})")
-print(f"USB connection type .......... {'PASS' if usb.startswith('3') else 'WARN'}   ({usb})"
-      + ("" if usb.startswith("3") else "  — USB 2 may drop frames on depth streams"))
-print(f"depth stream readable ........ {mark(depth_ok)}")
+print(f"webcam ....................... {mark(webcam_ok)}   ({webcam_note})")
 
 # Audio sinks via pactl (PulseAudio or PipeWire's pipewire-pulse).
 sinks: list[str] = []
@@ -174,7 +114,7 @@ else:
     print(f"TTS renderable ............... {mark(tts_ok)}   ({Path(tts_engine).name})")
 
 print("-" * 62)
-print("Next: open the README 'Hardware runbook' section and follow it step by step.")
+print("Next: open the README 'Desktop runbook' section and follow it step by step.")
 PY
 
 echo

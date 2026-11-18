@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "posture-guard"
 version = "0.1.0"
-description = "RealSense posture corrector with live verification dashboard"
+description = "Webcam posture coach with a live verification dashboard"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -26,12 +26,7 @@ dev = [
     "hypothesis>=6.100",  # property-based tests (tests/test_properties.py)
 ]
 # Heavy camera/pose deps are optional so CI and dev machines install fast.
-# The OpenCV, RealSense and MediaPipe imports are lazy (webcam.py, camera.py,
-# pose.py). webcam: the default input (any USB/laptop camera). realsense:
-# the optional Intel RealSense D400. hardware: both.
-realsense = [
-    "pyrealsense2>=2.56",
-]
+# The OpenCV and MediaPipe imports are lazy (webcam.py, pose.py).
 webcam = [
     # Pinned to the mp.solutions.pose legacy API the pose worker uses. That
     # API was removed from pip packages in 0.10.30+ (google-ai-edge/mediapipe
@@ -40,9 +35,6 @@ webcam = [
     # tighten to ==0.10.21 (verified working per #6261).
     "mediapipe>=0.10.14,<0.10.30",
     "opencv-python>=4.8",
-]
-hardware = [
-    "posture-guard[webcam,realsense]",
 ]
 
 [tool.setuptools.packages.find]

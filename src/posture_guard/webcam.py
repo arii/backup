@@ -1,10 +1,9 @@
 # Author: Ariel Anders
 # Copyright (c) 2026 Ariel Anders. All rights reserved.
-"""Standard webcam frame source: cv2.VideoCapture, color only, no depth.
+"""Standard webcam frame source: cv2.VideoCapture.
 
-The default input (camera.source: webcam). Frames carry depth=None; the
-pipeline then scores with depth_sensor=False, which swaps the depth band for
-the shoulder-width framing gate (scoring.shoulder_width_min/max).
+The default input (camera.source: webcam). Distance is judged from the frame
+itself by the shoulder-width framing gate (scoring.shoulder_width_min/max).
 
 OpenCV is imported lazily so CI and headless machines can import this module.
 read() never raises: open and read failures become SourceStatus states, and a
@@ -17,7 +16,7 @@ import time
 from collections.abc import Callable
 from typing import Protocol
 
-from posture_guard.camera import ColorDepth, SourceStatus
+from posture_guard.camera import Frame, SourceStatus
 
 
 class Capture(Protocol):
@@ -103,7 +102,7 @@ class WebcamFrameSource:
         )
         return False
 
-    def read(self) -> ColorDepth | None:
+    def read(self) -> Frame | None:
         if not self._started:
             return None
         if self._capture is None and not self.start():
@@ -128,7 +127,7 @@ class WebcamFrameSource:
         self._read_failures = 0
         if not self._status.connected:
             self._status = SourceStatus(connected=True, kind="webcam")
-        return ColorDepth(color=frame, depth=None, timestamp_s=self._clock())  # type: ignore[arg-type]
+        return Frame(color=frame, timestamp_s=self._clock())  # type: ignore[arg-type]
 
     @property
     def status(self) -> SourceStatus:

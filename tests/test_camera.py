@@ -7,14 +7,13 @@ import pytest
 
 from posture_guard.camera import (
     CameraWorker,
-    ColorDepth,
+    Frame,
     FrameSource,
-    RealSenseFrameSource,
     SourceStatus,
     SyntheticFrameSource,
     open_frame_source,
-    usb_bandwidth_warning,
 )
+from posture_guard.webcam import WebcamFrameSource
 
 
 def wait_until(predicate, timeout_s: float = 5.0) -> bool:
@@ -32,21 +31,12 @@ def test_synthetic_source_satisfies_frame_source_protocol():
     assert isinstance(source, FrameSource)
 
 
-def test_synthetic_source_emits_aligned_color_and_depth():
+def test_synthetic_source_emits_color_frames():
     source = SyntheticFrameSource(width=320, height=240)
     frame = source.read()
     assert frame is not None
     assert frame.color.shape == (240, 320, 3)
     assert frame.color.dtype == np.uint8
-    assert frame.depth.shape == (240, 320)
-    assert frame.depth.dtype == np.uint16
-
-
-def test_synthetic_source_depth_is_inside_scoring_band():
-    source = SyntheticFrameSource(depth_m=1.4)
-    frame = source.read()
-    assert frame is not None
-    assert frame.depth[0, 0] == pytest.approx(1400)  # millimetres, Z16
 
 
 def test_synthetic_source_timestamps_advance_at_30fps():
@@ -78,228 +68,18 @@ def test_open_frame_source_closes_on_exit():
     # exit does not raise and the source remains usable-by-contract.
 
 
-def test_realsense_source_reads_none_before_start():
-    source = RealSenseFrameSource()
-    assert source.read() is None
-    assert not source.status.connected
-
-
-# -- missing-camera and USB states (no SDK import needed: _open_pipeline is stubbed) --
-
-
-def test_missing_camera_surfaces_as_state_not_exception(monkeypatch):
-    def no_device(width, height, fps):
-        raise RuntimeError("No device connected")
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", no_device)
-    source = RealSenseFrameSource(open_backoff_s=0.0)
-    assert source.start() is False  # returns a state, never raises
-    assert not source.status.connected
-    assert "No device connected" in (source.status.error or "")
-    assert source.read() is None
-
-
-def test_failed_open_names_attempt_count_and_reason(monkeypatch):
-    """The failed-open reason string is readable and names the last error."""
-
-    def no_device(width, height, fps):
-        raise RuntimeError("No device connected")
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", no_device)
-    source = RealSenseFrameSource(open_backoff_s=0.0)
-    assert source.start() is False
-    assert source.status.error == (
-        "camera unavailable after 3 attempts: No device connected"
-    )
-    assert source.status.kind == "realsense"
-
-
-def test_open_retries_bounded_then_succeeds(monkeypatch):
-    """A flaky open (transient failure) recovers within the attempt budget."""
-    attempts = {"count": 0}
-
-    def flaky_device(width, height, fps):
-        attempts["count"] += 1
-        if attempts["count"] < 3:
-            raise RuntimeError("USB transfer error")
-        return object(), object(), "3.2"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", flaky_device)
-    source = RealSenseFrameSource(open_attempts=3, open_backoff_s=0.0)
-    assert source.start() is True
-    assert attempts["count"] == 3  # two failures, then success on attempt 3
-    assert source.status.connected
-    assert source.status.usb_type == "3.2"
-    assert source.status.error is None
-
-
-def test_open_gives_up_after_attempt_budget(monkeypatch):
-    attempts = {"count": 0}
-
-    def always_fails(width, height, fps):
-        attempts["count"] += 1
-        raise RuntimeError("No device connected")
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", always_fails)
-    source = RealSenseFrameSource(open_attempts=3, open_backoff_s=0.0)
-    assert source.start() is False
-    assert attempts["count"] == 3  # bounded: no endless open loop
-
-
-def test_usb2_connection_is_reported_with_bandwidth_warning(monkeypatch):
-    def usb2_device(width, height, fps):
-        return object(), object(), "2.1"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", usb2_device)
-    source = RealSenseFrameSource()
-    assert source.start() is True
-    assert source.status.connected
-    assert source.status.usb_type == "2.1"
-    warning = usb_bandwidth_warning(source.status.usb_type)
-    assert warning is not None
-    assert "USB 2.1" in warning
-
-
-def test_usb3_connection_has_no_bandwidth_warning(monkeypatch):
-    def usb3_device(width, height, fps):
-        return object(), object(), "3.2"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", usb3_device)
-    source = RealSenseFrameSource()
-    assert source.start() is True
-    assert usb_bandwidth_warning(source.status.usb_type) is None
-
-
-def test_usb_bandwidth_warning_handles_unknown_type():
-    assert usb_bandwidth_warning(None) is None
-
-
-# -- reopen on wait_for_frames timeout (no SDK import needed: stubbed) --
-
-
-class _HangingPipeline:
-    """Fake pipeline whose wait_for_frames always times out (RuntimeError)."""
-
-    def __init__(self) -> None:
-        self.stopped = False
-        self.wait_calls = 0
-
-    def wait_for_frames(self, timeout_ms: int) -> object:
-        self.wait_calls += 1
-        raise RuntimeError(f"Frame didn't arrived within {timeout_ms}")
-
-    def stop(self) -> None:
-        self.stopped = True
-
-
-class _StubAlign:
-    def process(self, frames: object) -> object:  # pragma: no cover - unused here
-        raise AssertionError("aligned frames are unreachable while frames time out")
-
-
-class _WorkingAlign:
-    """Fake align: hands back one preloaded color+depth pair per process()."""
-
-    def __init__(self) -> None:
-        self.color = np.zeros((2, 2, 3), dtype=np.uint8)
-        self.depth = np.zeros((2, 2), dtype=np.uint16)
-
-    def process(self, frames: object) -> object:
-        return self
-
-    def get_color_frame(self) -> object:
-        return _FakeFrame(self.color, timestamp_ms=1000.0)
-
-    def get_depth_frame(self) -> object:
-        return _FakeFrame(self.depth)
-
-
-class _FakeFrame:
-    def __init__(self, data, timestamp_ms: float = 0.0):
-        self._data = data
-        self._timestamp_ms = timestamp_ms
-
-    def get_timestamp(self) -> float:
-        return self._timestamp_ms
-
-    def get_data(self):
-        return self._data
-
-
-class _DeliveringPipeline:
-    """Fake pipeline that returns a frameset (never times out)."""
-
-    def __init__(self) -> None:
-        self.wait_calls = 0
-
-    def wait_for_frames(self, timeout_ms: int) -> object:
-        self.wait_calls += 1
-        return object()
-
-    def stop(self) -> None: ...
-
-
-def test_frame_timeout_sets_readable_error_and_reopens(monkeypatch):
-    """Repeated wait_for_frames timeouts become a status error and a reopen,
-    never a permanent stall inside read()."""
-    opens = {"count": 0}
-    pipelines: list[_HangingPipeline] = []
-
-    def hanging_device(width, height, fps):
-        opens["count"] += 1
-        pipeline = _HangingPipeline()
-        pipelines.append(pipeline)
-        return pipeline, _StubAlign(), "3.2"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", hanging_device)
-    source = RealSenseFrameSource(frame_timeout_ms=50)
-    assert source.start() is True
-    assert source.read() is None  # open ok, then the first wait times out
-    assert not source.status.connected
-    assert "frame timeout" in (source.status.error or "")
-    assert pipelines[0].stopped  # the stalled pipeline was closed, not leaked
-
-    assert source.read() is None  # next read retries the open, then times out
-    assert opens["count"] == 2
-    assert pipelines[1] is not pipelines[0]  # a fresh pipeline was opened
-
-
-def test_frame_timeout_recovers_when_frames_return(monkeypatch):
-    """After a timeout, a successful reopen serves frames again and clears
-    the error."""
-    opens = {"count": 0}
-
-    def recovering_device(width, height, fps):
-        opens["count"] += 1
-        if opens["count"] == 1:
-            return _HangingPipeline(), _StubAlign(), "3.2"
-        return _DeliveringPipeline(), _WorkingAlign(), "3.2"
-
-    monkeypatch.setattr("posture_guard.camera._open_pipeline", recovering_device)
-    source = RealSenseFrameSource(frame_timeout_ms=50)
-    assert source.start() is True
-    assert source.read() is None  # first open succeeds, then the wait times out
-    assert "frame timeout" in (source.status.error or "")
-
-    frame = source.read()  # second open delivers frames again
-    assert frame is not None
-    assert source.status.connected
-    assert source.status.error is None
-    assert opens["count"] == 2
-
-
 # -- CameraWorker: bounded latest-frame buffer over any FrameSource --
 
 
 class _ScriptedSource:
     """Emits a fixed frame sequence, then None — for buffer-boundary tests."""
 
-    def __init__(self, frames: list[ColorDepth]):
+    def __init__(self, frames: list[Frame]):
         self._frames = list(frames)
         self._status = SourceStatus(connected=True)
         self.closed = False
 
-    def read(self) -> ColorDepth | None:
+    def read(self) -> Frame | None:
         if self._frames:
             return self._frames.pop(0)
         return None
@@ -312,10 +92,9 @@ class _ScriptedSource:
         self.closed = True
 
 
-def _frame(timestamp_s: float) -> ColorDepth:
+def _frame(timestamp_s: float) -> Frame:
     color = np.zeros((2, 2, 3), dtype=np.uint8)
-    depth = np.zeros((2, 2), dtype=np.uint16)
-    return ColorDepth(color=color, depth=depth, timestamp_s=timestamp_s)
+    return Frame(color=color, timestamp_s=timestamp_s)
 
 
 def test_camera_worker_satisfies_frame_source_protocol():
@@ -366,7 +145,7 @@ def test_camera_worker_capture_error_surfaces_as_state():
 
         @property
         def status(self) -> SourceStatus:
-            return SourceStatus(connected=False, error=None, kind="realsense")
+            return SourceStatus(connected=False, error=None, kind="webcam")
 
         def close(self) -> None:
             return None
@@ -377,7 +156,7 @@ def test_camera_worker_capture_error_surfaces_as_state():
         assert wait_until(lambda: worker.status.error is not None)
         assert "device disconnected" in worker.status.error
         assert not worker.status.connected
-        assert worker.status.kind == "realsense"  # source kind survives the error
+        assert worker.status.kind == "webcam"  # source kind survives the error
         assert worker.read() is None
     finally:
         worker.close()
@@ -387,7 +166,7 @@ def test_source_kinds_identify_the_active_implementation():
     """Each source reports its kind, so the dashboard can never show a bare
     status without naming what is active."""
     assert SyntheticFrameSource().status.kind == "synthetic"
-    assert RealSenseFrameSource().status.kind == "realsense"
+    assert WebcamFrameSource().status.kind == "webcam"
     assert CameraWorker(SyntheticFrameSource()).status.kind == "synthetic"
 
 

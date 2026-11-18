@@ -43,7 +43,6 @@ def make_snapshot(**overrides: object) -> MetricsSnapshot:
     defaults: dict[str, object] = {
         "state": "good",
         "fps": 30.0,
-        "depth_m": 1.4,
         "head_forward_deg": 0.0,
         "trunk_lean_deg": 0.0,
         "head_tilt_deg": 0.0,
@@ -189,7 +188,7 @@ def test_ws_pushes_metrics_json_schema() -> None:
     assert payload["type"] == "metrics"
     assert payload["state"] == "good"
     assert payload["fps"] == 30.0
-    assert payload["depth_m"] == 1.4
+    assert "depth_m" not in payload
     assert set(payload["metrics"]) == {
         "head_forward_deg",
         "trunk_lean_deg",
@@ -208,7 +207,6 @@ def test_ws_pushes_metrics_json_schema() -> None:
     }
     assert payload["camera"] == {
         "connected": True,
-        "usb_type": None,
         "error": None,
         "source": None,
     }
@@ -262,7 +260,7 @@ def test_ws_unreliable_detail_rides_the_payload() -> None:
 
 
 def test_index_serves_placement_guide_diagrams() -> None:
-    """The placement card embeds both guide SVGs inline (collapsed by default)."""
+    """The placement card embeds the top-view guide SVG inline (collapsed by default)."""
     hub = DashboardHub()
     client = TestClient(create_app(hub, RecordingAudio()))
 
@@ -272,14 +270,13 @@ def test_index_serves_placement_guide_diagrams() -> None:
     page = response.text
     assert 'id="placement-guide"' in page
     assert "<details" in page  # collapsed so video/metrics stay above the fold
-    # Both scenes from the angled placement guide, as inline SVG.
+    # The top-view angle guide, as inline SVG, with the webcam placement text.
     assert 'id="placement-guide-top"' in page
-    assert 'id="placement-guide-side"' in page
     assert "aria-label=\"Top view: camera positions by angle" in page
-    assert "aria-label=\"Side view: camera above and beside the monitor" in page
-    # High-mount-first text (PR #5) stays alongside the diagrams.
-    assert "Mount the camera HIGH" in page
-    assert "Alternative for deep desks" in page
+    assert "Camera at about eye height" in page
+    # The RealSense high-mount guidance is gone.
+    assert 'id="placement-guide-side"' not in page
+    assert "Mount the camera HIGH" not in page
 
 
 def test_dead_ws_client_is_dropped() -> None:

@@ -375,7 +375,7 @@ function step() {
     // Some tasks-vision builds omit visibility; absent means "detected".
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
-  const out = engine.process(landmarks, now, { depthSensor: false });
+  const out = engine.process(landmarks, now);
   for (const nudge of out.nudges) fire(nudge);
   account(out.transition.state, now);
   if (lastFrameT !== null) {

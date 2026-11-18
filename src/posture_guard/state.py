@@ -5,11 +5,12 @@ reads the wall clock and never sleeps, so timelines are reproducible in tests.
 States per the spec: NO_PERSON, GOOD, BAD_CHIME, BAD_VOICE, UNRELIABLE.
 
 Mapping of unreliable reasons is deliberate: no pose detected means "no person
-to nudge" (it feeds the no-person timer); depth out of band, low visibility and
-unreadable depth mean "do not trust this frame" (UNRELIABLE, immediate, silent,
-resets any bad-posture streak so bad data can never escalate). A person whose
-range reading fails the band or whose landmarks fall below the visibility floor
-is present but unscoreable — never reported as absent.
+to nudge" (it feeds the no-person timer); low visibility and out-of-band
+framing mean "do not trust this frame" (UNRELIABLE, immediate, silent, resets
+any bad-posture streak so bad data can never escalate); NaN/inf landmarks are a
+glitch and hold the current state. A person who sits too far or too close, or
+whose landmarks fall below the visibility floor, is present but unscoreable —
+never reported as absent.
 """
 
 from __future__ import annotations
@@ -51,15 +52,10 @@ class Nudge(Enum):
     RECOVERY = "recovery"
 
 
+# Only a missing pose means absence. FRAMING_OUT_OF_BAND requires a detected
+# pose, so the person is visibly present: it is UNRELIABLE (unscoreable frame,
+# placement warning still fires), never NO_PERSON.
 _ABSENT_REASONS = (UnreliableReason.NO_POSE,)
-# DEPTH_OUT_OF_BAND is deliberately NOT an absence reason: it can only occur
-# when a pose IS detected (score_pose returns NO_POSE first when landmarks are
-# missing), so the person is visibly present and the center-box depth heuristic
-# merely missed them (high-mount framing puts the box on desk/wall background).
-# Mapping it to absence made the header flap to NO PERSON while the wireframe
-# rendered and metrics showed the last in-band reading. Out-of-band depth with
-# a detected pose is UNRELIABLE — unscoreable frame, placement warning still
-# fires; NO_PERSON means no pose detected, sustained.
 
 
 class VoiceTimings(Protocol):
@@ -86,7 +82,7 @@ class PostureStateMachine:
     - spoken prompt repeats at most every voice_repeat_cooldown_s
     - GOOD after good_confirm_s of in-threshold posture; recovery from a bad
       state needs recovery_good_s of good posture
-    - NO_PERSON after no_person_timeout_s of no pose / out-of-band depth
+    - NO_PERSON after no_person_timeout_s with no pose detected
     """
 
     def __init__(
@@ -199,7 +195,7 @@ class PostureStateMachine:
                 self._enter_no_person()
                 return Transition(PostureState.NO_PERSON, Nudge.NONE)
             return Transition(self._state, Nudge.NONE)
-        # LOW_VISIBILITY / DEPTH_UNREADABLE: untrustworthy frame — go silent
+        # LOW_VISIBILITY / FRAMING_OUT_OF_BAND: untrustworthy frame — go silent
         # and drop the bad streak so it cannot escalate on data we do not trust.
         self._absent_since = None
         self._state = PostureState.UNRELIABLE

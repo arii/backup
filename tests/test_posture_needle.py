@@ -25,7 +25,7 @@ CFG = ScoringConfig()
 
 
 def metrics(head=0.0, trunk=0.0, tilt=0.0, level=0.0, trunk_ok=True) -> ScoredPosture:
-    return ScoredPosture(head, trunk, tilt, level, depth_m=None, trunk_lean_available=trunk_ok)
+    return ScoredPosture(head, trunk, tilt, level, trunk_lean_available=trunk_ok)
 
 
 class TestThresholdNeedle:

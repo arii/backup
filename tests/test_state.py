@@ -41,7 +41,7 @@ from posture_guard.state import Nudge, PostureState, PostureStateMachine
 CFG = ScoringConfig()
 TIMINGS = StateConfig()
 
-GOOD = score_pose(make_pose(), 1.4, CFG)
+GOOD = score_pose(make_pose(), CFG)
 
 
 def _bad_pose_score() -> ScoredPosture:
@@ -52,11 +52,11 @@ def _bad_pose_score() -> ScoredPosture:
             RIGHT_EAR: SimpleLandmark(x=0.56, y=0.54),
         }
     )
-    return score_pose(pose, 1.4, CFG)
+    return score_pose(pose, CFG)
 
 
 NO_POSE = Unreliable(UnreliableReason.NO_POSE)
-TOO_FAR = Unreliable(UnreliableReason.DEPTH_OUT_OF_BAND)
+TOO_FAR = Unreliable(UnreliableReason.FRAMING_OUT_OF_BAND, "too far: shoulder width 0.05")
 LOW_VIS = Unreliable(UnreliableReason.LOW_VISIBILITY)
 
 
@@ -273,7 +273,7 @@ class TestSmoothingAndHysteresis:
         """Uneven shoulders (~5.7 deg) sits between exit (3) and enter (6):
         neither recovered nor re-entered, so BAD_CHIME holds through 21.9 —
         silent, with voice escalation due only at 22.0."""
-        neutral = score_pose(make_pose({RIGHT_SHOULDER: SimpleLandmark(x=0.60, y=0.62)}), 1.4, CFG)
+        neutral = score_pose(make_pose({RIGHT_SHOULDER: SimpleLandmark(x=0.60, y=0.62)}), CFG)
         sm = PostureStateMachine(TIMINGS, CFG)
         run(sm, grid(0.0, 9.9, 0.1, GOOD))
         run(sm, grid(10.0, 12.0, 0.1, _bad_pose_score()))
@@ -297,9 +297,9 @@ class TestUnreliableAndAbsent:
         transitions = run(sm, samples)
         assert all(tr.nudge is not Nudge.CHIME for tr in transitions)
 
-    def test_depth_unreadable_is_unreliable(self):
+    def test_framing_out_of_band_is_unreliable(self):
         sm = PostureStateMachine(TIMINGS, CFG)
-        tr = sm.update(Unreliable(UnreliableReason.DEPTH_UNREADABLE), 5.0)
+        tr = sm.update(TOO_FAR, 5.0)
         assert tr.state is PostureState.UNRELIABLE
 
     def test_no_pose_times_out_to_no_person(self):
@@ -331,10 +331,10 @@ class TestUnreliableAndAbsent:
         transitions = run(sm, grid(5.1, 8.0, 0.1, NO_POSE))
         assert transitions[-1].state is PostureState.NO_PERSON
 
-    def test_out_of_band_depth_with_tracked_pose_is_unreliable_not_absent(self):
-        """Regression (NO PERSON flap): the pose is detected, so an out-of-band
-        center-box depth reading (background in high-mount framing) is an
-        unscoreable frame — it must never feed the no-person timer."""
+    def test_out_of_band_framing_with_tracked_pose_is_unreliable_not_absent(self):
+        """Regression (NO PERSON flap): the pose is detected, so sitting too far
+        or too close is an unscoreable frame — it must never feed the
+        no-person timer."""
         sm = PostureStateMachine(TIMINGS, CFG)
         run(sm, grid(0.0, 5.0, 0.1, GOOD))
         transitions = run(sm, grid(5.1, 8.0, 0.1, TOO_FAR))
@@ -356,7 +356,6 @@ def _scored(head_forward: float, trunk: float = 0.0) -> ScoredPosture:
         trunk_lean_deg=trunk,
         head_tilt_deg=0.0,
         shoulder_level_deg=0.0,
-        depth_m=1.4,
     )
 
 
@@ -416,9 +415,8 @@ class TestBaselineDeviation:
         machine = PostureStateMachine(TIMINGS, CFG)
         run(machine, grid(0.0, 30.0, 0.1, _scored(-4.0)))
         assert machine.state is PostureState.GOOD
-        # Lose the pose long enough to enter NO_PERSON (absence now means no
-        # pose detected — an out-of-band depth reading with a tracked pose is
-        # UNRELIABLE, never absent).
+        # Lose the pose long enough to enter NO_PERSON (absence means no pose
+        # detected — sitting too far with a tracked pose is UNRELIABLE).
         run(machine, grid(30.0, 32.5, 0.1, NO_POSE))
         assert machine.state is PostureState.NO_PERSON
 
@@ -514,12 +512,11 @@ class TestSustainHysteresis:
 
 
 class TestNoPersonFlap:
-    """Regression: NO PERSON must require no pose detected. A person whose
-    depth reading fails the band or whose landmarks fall below the visibility
+    """Regression: NO PERSON must require no pose detected. A person who sits
+    out of the framing band or whose landmarks fall below the visibility
     floor is present but unscoreable (UNRELIABLE) — never absent. The field
     flap showed the header on NO PERSON for seconds while the wireframe
-    rendered and the metrics displayed the last in-band reading (high-mount
-    framing puts the center-box depth on desk/wall background)."""
+    rendered and the metrics displayed the last reading."""
 
     LOWVIS = score_pose(
         make_pose(
@@ -528,22 +525,18 @@ class TestNoPersonFlap:
                 RIGHT_HIP: SimpleLandmark(x=0.56, y=0.90, visibility=0.2),
             }
         ),
-        0.9,
         ScoringConfig(degraded_feedback=False),
     )
 
-    def test_tracked_pose_with_out_of_band_depth_never_reaches_no_person(self):
+    def test_tracked_pose_out_of_framing_band_never_reaches_no_person(self):
         machine = PostureStateMachine(TIMINGS, CFG)
-        oob = Unreliable(
-            UnreliableReason.DEPTH_OUT_OF_BAND, "depth 3.00 m outside 0.6-2.5 m"
-        )
-        transitions = run(machine, grid(0.0, 6.0, 0.1, oob))
+        transitions = run(machine, grid(0.0, 6.0, 0.1, TOO_FAR))
         states = {t.state for t in transitions}
         assert states == {PostureState.UNRELIABLE}
 
-    def test_low_visibility_with_in_band_depth_never_reaches_no_person(self):
-        """Healthy pose, in-band depth (0.9 m), hips below the visibility
-        floor: UNRELIABLE, not NO PERSON."""
+    def test_low_visibility_never_reaches_no_person(self):
+        """Healthy pose in frame, hips below the visibility floor:
+        UNRELIABLE, not NO PERSON."""
         assert isinstance(self.LOWVIS, Unreliable)  # gated before the machine
         machine = PostureStateMachine(TIMINGS, CFG)
         transitions = run(machine, grid(0.0, 6.0, 0.1, self.LOWVIS))
@@ -569,7 +562,7 @@ class TestDegradedFeedbackFiring:
                 RIGHT_EAR: SimpleLandmark(x=0.56, y=0.54),
             }
         )
-        result = score_pose(pose, 0.9, CFG)
+        result = score_pose(pose, CFG)
         assert isinstance(result, ScoredPosture)
         assert result.trunk_lean_available is False
         return result
@@ -584,7 +577,7 @@ class TestDegradedFeedbackFiring:
         pose = make_pose(
             {LEFT_EAR: SimpleLandmark(x=0.46, y=0.45, visibility=0.2)}
         )
-        gated = score_pose(pose, 0.9, CFG)
+        gated = score_pose(pose, CFG)
         assert isinstance(gated, Unreliable)
         machine = self._machine(CFG)
         transitions = run(machine, grid(0.0, 4.0, 0.1, gated))
@@ -601,7 +594,7 @@ class TestDegradedFeedbackFiring:
                 RIGHT_EAR: SimpleLandmark(x=0.56, y=0.54),
             }
         )
-        gated = score_pose(pose, 0.9, cfg)
+        gated = score_pose(pose, cfg)
         assert isinstance(gated, Unreliable)
         machine = self._machine(cfg)
         transitions = run(machine, grid(0.0, 4.0, 0.1, gated))
@@ -694,7 +687,7 @@ class TestRecoveryAndAnchor:
 
     def test_baseline_anchor_survives_no_person(self):
         machine = PostureStateMachine(TIMINGS, CFG)
-        anchor = ScoredPosture(1.0, 0.0, 0.0, 0.0, depth_m=None)
+        anchor = ScoredPosture(1.0, 0.0, 0.0, 0.0)
         machine.set_baseline_anchor(anchor)
         run(machine, grid(0.0, 2.0, 0.1, GOOD))
         run(machine, grid(2.1, 6.0, 0.1, NO_POSE))

@@ -3,9 +3,9 @@
 """Property-based tests (hypothesis) for the correctness properties in
 .kiro/specs/posture-guard/design.md:
 
-P1 Bounded needle: for any landmarks (NaN, inf, extreme), any depth, either
-   camera mode and any calibration, score_pose never raises and the needle is
-   None or a finite float in [-1, 1]; the smoother stays bounded.
+P1 Bounded needle: for any landmarks (NaN, inf, extreme), any visibility and
+   any calibration, score_pose never raises and the needle is None or a
+   finite float in [-1, 1]; the smoother stays bounded.
 P2 Scale invariance: scaling every landmark by k > 0 leaves the angle metrics
    (and the threshold needle) unchanged within 1e-5.
 P3 Anti-chatter / dwell: neutral-band and good noise, and bad runs shorter
@@ -22,13 +22,14 @@ P6 Time safety: update() never raises for non-decreasing timestamps.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import numpy as np
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from conftest import make_pose
-from posture_guard.camera import ColorDepth, SyntheticFrameSource
+from posture_guard.camera import Frame, SyntheticFrameSource
 from posture_guard.config import (
     AppConfig,
     FeedbackConfig,
@@ -63,10 +64,10 @@ BAD_STATES = (PostureState.BAD_CHIME, PostureState.BAD_VOICE)
 REMINDERS = (Nudge.CHIME, Nudge.VOICE)
 SLACK = 1e-6
 
-GOOD = ScoredPosture(0.0, 0.0, 0.0, 0.0, depth_m=1.4)
-BAD = ScoredPosture(18.0, 0.0, 0.0, 0.0, depth_m=1.4)
+GOOD = ScoredPosture(0.0, 0.0, 0.0, 0.0)
+BAD = ScoredPosture(18.0, 0.0, 0.0, 0.0)
 # Shoulder level 2.5 deg: past the exit threshold (4 - 3 = 1), below enter (4).
-NEUTRAL = ScoredPosture(0.0, 0.0, 0.0, 2.5, depth_m=1.4)
+NEUTRAL = ScoredPosture(0.0, 0.0, 0.0, 2.5)
 NO_POSE = Unreliable(UnreliableReason.NO_POSE)
 LOW_VIS = Unreliable(UnreliableReason.LOW_VISIBILITY)
 GLITCH = Unreliable(UnreliableReason.NON_FINITE)
@@ -83,7 +84,6 @@ any_posture = st.builds(
     trunk_lean_deg=any_float,
     head_tilt_deg=any_float,
     shoulder_level_deg=any_float,
-    depth_m=st.none() | any_float,
     trunk_lean_available=st.booleans(),
 )
 frame_dt = st.floats(min_value=0.01, max_value=0.5)
@@ -109,14 +109,10 @@ def bounded(value: float | None) -> bool:
 @given(
     coords=st.lists(st.tuples(any_float, any_float), min_size=6, max_size=6),
     visibility=st.floats(allow_nan=True, allow_infinity=False),
-    depth=st.none() | any_float,
-    depth_sensor=st.booleans(),
     calibration=st.none() | st.builds(Calibration, good=any_posture, bad=any_posture),
 )
-def test_p1_needle_is_bounded_for_any_landmarks(
-    coords, visibility, depth, depth_sensor, calibration
-):
-    result = score_pose(pose_from(coords, visibility), depth, CFG, depth_sensor=depth_sensor)
+def test_p1_needle_is_bounded_for_any_landmarks(coords, visibility, calibration):
+    result = score_pose(pose_from(coords, visibility), CFG)
     if isinstance(result, ScoredPosture):
         for name in ("head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"):
             assert math.isfinite(getattr(result, name)), name
@@ -148,6 +144,9 @@ def test_p1_smoother_output_is_bounded(samples, tau):
 # Small perturbations keep every body vector well away from zero length
 # (atan2(0, 0) has no meaningful angle to be invariant).
 jitter = st.floats(min_value=-0.03, max_value=0.03)
+# The framing gate measures shoulder width in the frame, i.e. distance, so it
+# is deliberately NOT scale invariant; open it all the way to test the angles.
+OPEN_FRAMING = replace(CFG, shoulder_width_min=1e-9, shoulder_width_max=1e9)
 
 
 @PROPS
@@ -160,8 +159,8 @@ def test_p2_angles_and_needle_are_scale_invariant(deltas, k):
     pairs = zip(TRACKED, deltas, strict=True)
     coords = [(base[i].x + dx, base[i].y + dy) for i, (dx, dy) in pairs]
     scaled = [(x * k, y * k) for x, y in coords]
-    a = score_pose(pose_from(coords), 1.4, CFG)
-    b = score_pose(pose_from(scaled), 1.4, CFG)
+    a = score_pose(pose_from(coords), OPEN_FRAMING)
+    b = score_pose(pose_from(scaled), OPEN_FRAMING)
     assert isinstance(a, ScoredPosture) and isinstance(b, ScoredPosture)
     for name in ("head_forward_deg", "trunk_lean_deg", "head_tilt_deg", "shoulder_level_deg"):
         assert math.isclose(getattr(a, name), getattr(b, name), abs_tol=1e-5), name
@@ -274,8 +273,8 @@ class ScriptDetector:
     def __init__(self) -> None:
         self.pose: list[SimpleLandmark] | None = make_pose()
 
-    def __call__(self, frame: ColorDepth) -> PoseDetection:
-        return PoseDetection(self.pose, 1.4)
+    def __call__(self, frame: Frame) -> PoseDetection:
+        return PoseDetection(self.pose)
 
 
 SLOUCH_POSE = make_pose(
@@ -303,13 +302,12 @@ def test_p4_pipeline_enqueues_one_recovery_per_recovery(segments, fps):
     audio, detector = RecordingAudio(), ScriptDetector()
     pipeline = PosturePipeline(SyntheticFrameSource(), config, audio=audio, detector=detector)
     color = np.zeros((4, 4, 3), dtype=np.uint8)
-    depth = np.full((4, 4), 1400, dtype=np.uint16)
     poses = {"good": make_pose(), "bad": SLOUCH_POSE, "none": None}
     index, recoveries = 0, 0
     for kind, seconds in segments:
         detector.pose = poses[kind]
         for _ in range(int(seconds * fps)):
-            tr = pipeline.process_once(ColorDepth(color, depth, index / fps))
+            tr = pipeline.process_once(Frame(color, index / fps))
             recoveries += tr.recovered
             index += 1
     assert audio.enqueued.count(Nudge.RECOVERY) == recoveries
