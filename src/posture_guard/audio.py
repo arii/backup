@@ -111,11 +111,12 @@ class AudioWorker:
         self._aplay = aplay_cmd
         self._player: str | None = None  # set once a play succeeds
         self._warnings: list[str] = []
+        self._cue_voices: dict[str, Path] = {}  # spoken cue sentence -> rendered WAV
         self._pactl = pactl_cmd
         self._which = which
         self._runner: Runner = runner or self._run_subprocess
         self._sound_dir = Path(sound_dir or tempfile.mkdtemp(prefix="posture-guard-audio-"))
-        self._queue: queue.Queue[tuple[Nudge, Path] | None] = queue.Queue()
+        self._queue: queue.Queue[tuple[Nudge, Path, str | None] | None] = queue.Queue()
         self._pending: set[Nudge] = set()
         self._pending_lock = threading.Lock()
         self._sounds: dict[Nudge, Path] = {}
@@ -157,9 +158,14 @@ class AudioWorker:
 
     # -- public API (caller-side, never blocks on playback) -------------------------
 
-    def enqueue(self, nudge: Nudge, *, force: bool = False) -> None:
+    def enqueue(self, nudge: Nudge, *, force: bool = False, text: str | None = None) -> None:
         """Queue a nudge for playback. Returns immediately; a duplicate of a
-        nudge that is queued or currently playing is dropped."""
+        nudge that is queued or currently playing is dropped.
+
+        text (voice only) speaks that sentence instead of the configured
+        prompt, e.g. a specific posture cue. It is rendered with TTS on the
+        playback thread (cached per sentence), so enqueue never blocks; if the
+        render fails the configured prompt plays instead."""
         with self._sounds_lock:
             path = self._sounds.get(nudge)
         if path is None:
@@ -168,7 +174,7 @@ class AudioWorker:
             if not force and nudge in self._pending:
                 return
             self._pending.add(nudge)
-        self._queue.put((nudge, path))
+        self._queue.put((nudge, path, text if nudge is Nudge.VOICE else None))
 
     def test_nudge(self) -> None:
         """Dashboard hook: force-play chime then voice, bypassing dedupe."""
@@ -250,6 +256,19 @@ class AudioWorker:
             self._sounds[Nudge.VOICE] = voice_path
             self._tts_backend = backend
 
+    def _cue_voice(self, text: str) -> Path | None:
+        """WAV for a specific spoken cue, rendered once per sentence (playback
+        thread only). None when no TTS backend can render it."""
+        cached = self._cue_voices.get(text)
+        if cached is not None:
+            return cached
+        path = self._sound_dir / f"cue-{len(self._cue_voices) + 1}.wav"
+        if self._render_voice(text, path) is None:
+            path.unlink(missing_ok=True)
+            return None
+        self._cue_voices[text] = path
+        return path
+
     def _custom_sound(self, key: str, value: str | None) -> Path | None:
         """Validated path for a configured custom sound, or None (with a logged
         warning when one was configured but is not a readable file)."""
@@ -294,8 +313,10 @@ class AudioWorker:
             item = self._queue.get()
             if item is None:
                 return
-            nudge, path = item
+            nudge, path, text = item
             try:
+                if text:
+                    path = self._cue_voice(text) or path
                 self._playing_path = path
                 self._play(path)
             finally:

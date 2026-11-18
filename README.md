@@ -15,6 +15,13 @@ behavior, for running offline or on a machine of your own.
 
 Press *Start with webcam*, leave the tab open, and it chimes when you slouch.
 
+- **Tells you what to fix.** Reminders name the problem and the fix, on screen and
+  out loud: "Head forward: tuck your chin and bring your ears back over your
+  shoulders", "Right shoulder dropped: lift your right shoulder and take your
+  weight off that elbow", "Head tilted toward your left shoulder", "Leaning to your
+  right". Sides are your own left and right, whether or not the camera image is
+  mirrored. The *What to fix* box under the needle shows the same advice live.
+
 - **Everything in the tab.** MediaPipe Pose Landmarker and a JavaScript port of the
   scoring, reminder state machine, posture needle and calibration
   (`docs/app/posture-core.js`). Only the model and its WASM runtime are downloaded
@@ -205,6 +212,7 @@ everything else keeps running.
 | Needle too jumpy / too sluggish | `needle.tau_s` (EMA time constant) |
 | Calibration fails ("N scored frames") | sit fully in frame; `calibration.window_s`, `calibration.min_samples` |
 | Sound on recovery | `feedback.recovery_chime.enabled` |
+| Spoken prompt says what to fix (or not) | `audio.specific_cues` (fallback wording: `audio.voice_text`) |
 | Custom sounds | `audio.bad_sound`, `audio.good_sound` |
 | Wrong speakers | `audio.sink` (set your sink name from the preflight report) |
 
@@ -251,6 +259,7 @@ check the correctness properties in `.kiro/specs/posture-guard/design.md`:
 | P4 idempotent reminders | one chime per bad episode, voice delay and cooldown respected, one recovery sound per recovery (also end to end through the pipeline) |
 | P5 glitch transparency | inserting NaN frames anywhere changes nothing on the other frames |
 | P6 time safety | `update()` never raises for non-decreasing time |
+| P7 cue mirror invariance | mirroring the image never changes the cue (same problem, same side of you); cues only name metrics past their band |
 
 ## Built with Kiro
 
@@ -262,7 +271,7 @@ history. The `.kiro/` directory is committed so judges can read it:
   camera modes, frame hardening, smoothing, needle, calibration, sounds, config and
   the browser version.
 - `.kiro/specs/posture-guard/design.md`: module design, the smoothing-window fix,
-  and the six correctness properties the hypothesis suite checks.
+  and the seven correctness properties the hypothesis suite checks.
 - `.kiro/specs/posture-guard/tasks.md`: the implementation plan, checked off.
 - `.kiro/steering/architecture.md`: standing rules for the agent (config.yaml as the
   single source of truth, injected timestamps, frame-rate-independent EMAs, lazy

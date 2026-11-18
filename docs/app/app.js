@@ -39,12 +39,18 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const settings = {
   mode: store.mode || "chime_and_voice",
   voiceText: store.voiceText || "Please fix your posture",
+  specificCues: store.specificCues !== false, // default on
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
   el.addEventListener("change", () => { settings.mode = el.value; store.mode = el.value; save(); });
+});
+$("specific-cues").checked = settings.specificCues;
+$("specific-cues").addEventListener("change", (e) => {
+  settings.specificCues = e.target.checked;
+  store.specificCues = settings.specificCues; save();
 });
 $("voice-text").value = settings.voiceText;
 $("voice-text").addEventListener("change", (e) => {
@@ -160,28 +166,35 @@ $("notify").addEventListener("click", async () => {
 });
 
 const BANNERS = {
-  [Nudge.CHIME]: "Reminder: sit up",
-  [Nudge.VOICE]: null, // filled with the prompt text
   [Nudge.POSITIVE_CHIME]: "Nice posture!",
   [Nudge.RECOVERY]: "Back to good posture",
 };
 let reminderCount = 0;
 let bannerTimer = null;
 
-function fire(nudge) {
-  if (nudge === Nudge.CHIME || nudge === Nudge.VOICE) reminderCount += 1;
-  const text = nudge === Nudge.VOICE ? `Reminder: ${settings.voiceText}` : BANNERS[nudge];
+/** Banner text for a reminder: what is off and how to fix it when the engine
+ *  has a cue for this frame, the generic wording otherwise. */
+function reminderText(nudge, cue) {
+  if (nudge === Nudge.CHIME) return cue ? `${cue.title}: ${cue.fix}` : "Reminder: sit up";
+  if (nudge === Nudge.VOICE) return cue ? `${cue.title}: ${cue.fix}` : `Reminder: ${settings.voiceText}`;
+  return BANNERS[nudge];
+}
+
+function fire(nudge, cue) {
+  const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
+  if (reminder) reminderCount += 1;
+  const text = reminderText(nudge, cue);
   const banner = $("banner");
   banner.textContent = text;
-  banner.classList.toggle("positive", nudge === Nudge.POSITIVE_CHIME || nudge === Nudge.RECOVERY);
+  banner.classList.toggle("positive", !reminder);
   banner.classList.add("show");
   clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => banner.classList.remove("show"), 2500);
+  bannerTimer = setTimeout(() => banner.classList.remove("show"), cue ? 5000 : 2500);
   if (!allowed(nudge)) return; // silent / chime-only: still a visible event
-  if (nudge === Nudge.VOICE) speak(settings.voiceText);
+  if (nudge === Nudge.VOICE) speak(settings.specificCues && cue ? cue.say : settings.voiceText);
   else if (nudge === Nudge.CHIME) playBad();
   else playGood();
-  if (notifyEnabled && document.hidden && (nudge === Nudge.CHIME || nudge === Nudge.VOICE)) {
+  if (notifyEnabled && document.hidden && reminder) {
     new Notification("Posture Guard", { body: text, silent: true });
   }
 }
@@ -308,8 +321,33 @@ function causeFor(result, landmarks) {
   }
 }
 
+/** The "what to fix" box: shown while a reminder is active or a metric is past
+ *  its threshold; quiet (and green) when posture is good. */
+function renderFix(state, result, cue) {
+  const box = $("fix-box");
+  const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
+  const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
+  let title, how = "", cls = "";
+  if ((bad || drifting) && cue) {
+    title = cue.title; how = cue.fix; cls = "active";
+  } else if (bad) {
+    title = "Almost there"; how = "Hold that position for a few seconds."; cls = "active";
+  } else if (state === State.GOOD) {
+    title = "Looking good"; cls = "ok";
+  } else {
+    title = "What to fix shows up here";
+  }
+  $("fix-title").textContent = title;
+  $("fix-how").textContent = how;
+  box.className = `fix ${cls}`;
+  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
+    $(`t-${metric}`).classList.toggle("focus", cls === "active" && cue !== null && cue.metric === metric);
+  }
+}
+
 function render(out, landmarks) {
-  const { result, transition, needle } = out;
+  const { result, transition, needle, cue } = out;
+  renderFix(transition.state, result, cue);
   const badge = $("state-badge");
   badge.textContent = STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
@@ -376,7 +414,7 @@ function step() {
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
   const out = engine.process(landmarks, now);
-  for (const nudge of out.nudges) fire(nudge);
+  for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);

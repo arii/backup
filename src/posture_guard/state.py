@@ -115,6 +115,12 @@ class PostureStateMachine:
     def state(self) -> PostureState:
         return self._state
 
+    @property
+    def baseline_metrics(self) -> ScoredPosture | None:
+        """The slow deviation baseline's current reference (None when the
+        deviation check is off or nothing has been scored yet)."""
+        return None if self._baseline is None else self._baseline.metrics
+
     def set_baseline_anchor(self, metrics: ScoredPosture | None) -> None:
         """Anchor the deviation baseline to a recorded good posture. The anchor
         survives NO_PERSON resets; None returns to the free-running baseline."""

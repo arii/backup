@@ -41,9 +41,11 @@ class RecordingAudio:
 
     def __init__(self) -> None:
         self.enqueued: list[Nudge] = []
+        self.texts: list[str | None] = []
 
-    def enqueue(self, nudge: Nudge, *, force: bool = False) -> None:
+    def enqueue(self, nudge: Nudge, *, force: bool = False, text: str | None = None) -> None:
         self.enqueued.append(nudge)
+        self.texts.append(text)
 
 
 def fake_jpeg(
@@ -273,7 +275,8 @@ def test_silent_mode_drops_audio_but_state_and_events_continue() -> None:
     assert hub.latest_metrics()[0].state == "bad_chime"  # state logic unchanged
     assert audio.enqueued == []
     event = hub.latest_metrics()[0].nudge_event
-    assert event == {"kind": "chime", "seq": 1, "muted": True}
+    # The chime event names what to fix (the slouch here is head forward).
+    assert event == {"kind": "chime", "seq": 1, "muted": True, "text": "Head forward"}
     assert hub.latest_metrics()[0].feedback is not None
     assert hub.latest_metrics()[0].feedback["mode"] == "silent"
 
@@ -289,8 +292,10 @@ def test_chime_only_mode_drops_voice_only() -> None:
 
     assert hub.latest_metrics()[0].state == "bad_voice"
     assert audio.enqueued == [Nudge.CHIME]  # voice never reaches the sink
+    # The voice event carries the specific spoken cue, not the generic prompt.
     assert hub.latest_metrics()[0].nudge_event == {
-        "kind": "voice", "seq": 2, "muted": True, "text": "fix your posture",
+        "kind": "voice", "seq": 2, "muted": True,
+        "text": "Head forward. Tuck your chin and bring your ears back over your shoulders.",
     }
 
 
@@ -663,3 +668,48 @@ def test_nan_glitch_frames_hold_state_and_warn() -> None:
     snapshot = hub.latest_metrics()[0]
     assert snapshot.state == "good"
     assert any("tracking glitch" in w for w in snapshot.warnings)
+
+
+# -- specific posture cues ------------------------------------------------------------
+
+
+def test_cue_is_published_and_spoken_with_the_voice_reminder() -> None:
+    detector = MutableDetector(make_pose())
+    pipeline, hub, audio = build_pipeline(detector)
+    index = feed(pipeline, detector, 2.0, 0)
+    assert hub.latest_metrics()[0].cue is None  # upright: nothing to fix
+
+    detector.pose = _slouch()
+    feed(pipeline, detector, 12.5, index)  # chime at ~2 s, voice 10 s later
+    snapshot = hub.latest_metrics()[0]
+    assert snapshot.cue["title"] == "Head forward"
+    assert snapshot.to_payload()["cue"]["id"] == "head_forward:-"
+    assert audio.enqueued == [Nudge.CHIME, Nudge.VOICE]
+    assert audio.texts == [None, snapshot.cue["say"]]  # the voice says what to fix
+
+
+def test_specific_cues_off_keeps_the_configured_prompt() -> None:
+    from posture_guard.config import AudioConfig
+
+    detector = MutableDetector(make_pose())
+    hub, audio = DashboardHub(), RecordingAudio()
+    config = AppConfig(audio=AudioConfig(specific_cues=False))
+    pipeline = PosturePipeline(
+        SyntheticFrameSource(), config, hub=hub, audio=audio,
+        detector=detector, renderer=fake_jpeg,
+    )
+    index = feed(pipeline, detector, 2.0, 0)
+    detector.pose = _slouch()
+    feed(pipeline, detector, 12.5, index)
+    assert audio.enqueued == [Nudge.CHIME, Nudge.VOICE]
+    assert audio.texts == [None, None]
+
+
+def test_cue_clears_on_unscoreable_frames() -> None:
+    detector = MutableDetector(_slouch())
+    pipeline, _, _ = build_pipeline(detector)
+    index = feed(pipeline, detector, 1.0, 0)
+    assert pipeline.cue is not None
+    detector.pose = None
+    feed(pipeline, detector, 0.5, index)
+    assert pipeline.cue is None

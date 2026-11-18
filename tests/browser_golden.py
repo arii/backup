@@ -65,8 +65,8 @@ POSES: dict[str, list[tuple[float, float, float]] | None] = {
     "good": GOOD,
     "slouch": _variant(le=(0.48, 0.54, 0.99), re=(0.56, 0.54, 0.99)),
     "tilt": _variant(le=(0.45, 0.47, 0.99), re=(0.55, 0.43, 0.99)),
-    # shoulder level ~2.9 deg: between exit (1) and enter (4) -> neutral band
-    "neutral": _variant(rs=(0.60, 0.61, 0.99)),
+    # shoulder level ~4.6 deg: between exit (3) and enter (6) -> neutral band
+    "neutral": _variant(rs=(0.60, 0.616, 0.99)),
     "low_vis": _variant(le=(0.46, 0.45, 0.2)),
     "hips_hidden": _variant(lh=(0.44, 0.90, 0.1), rh=(0.56, 0.90, 0.1)),
     "far": [(0.49, 0.55, 0.99), (0.51, 0.55, 0.99), (0.47, 0.60, 0.99),
@@ -122,9 +122,12 @@ def _landmarks(tracked: list[tuple[float, float, float]] | None, rng: random.Ran
 class _Audio:
     def __init__(self) -> None:
         self.enqueued: list[str] = []
+        self.spoken: list[str] = []
 
-    def enqueue(self, nudge: Nudge, *, force: bool = False) -> None:
+    def enqueue(self, nudge: Nudge, *, force: bool = False, text: str | None = None) -> None:
         self.enqueued.append(nudge.value)
+        if text:
+            self.spoken.append(text)
 
 
 class _Detector:
@@ -173,6 +176,7 @@ def build_golden() -> dict[str, object]:
             pose, encoded = _landmarks(POSES[name], rng)
             detector.pose = pose
             before = len(audio.enqueued)
+            spoken_before = len(audio.spoken)
             tr = pipeline.process_once(Frame(color=None, timestamp_s=now))  # type: ignore[arg-type]
             frames.append({
                 "t": now,
@@ -185,6 +189,11 @@ def build_golden() -> dict[str, object]:
                     "recovered": tr.recovered,
                     "needle": pipeline.needle,
                     "nudges": audio.enqueued[before:],
+                    "cue": None if pipeline.cue is None else {
+                        "id": pipeline.cue.id, "title": pipeline.cue.title,
+                        "fix": pipeline.cue.fix, "say": pipeline.cue.say,
+                    },
+                    "spoken": audio.spoken[spoken_before:],
                 },
             })
             now = round(now + 1.0 / FPS + rng.uniform(-0.015, 0.015), 4)

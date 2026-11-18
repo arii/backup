@@ -487,3 +487,23 @@ def test_index_has_calibration_and_sound_controls() -> None:
         "/calibrate/bad", "/sound/test/good", "/sound/test/bad", "payload.needle",
     ):
         assert fragment in html
+
+
+def test_ws_payload_and_index_carry_the_posture_cue() -> None:
+    cue = {
+        "id": "shoulder_level:right", "metric": "shoulder_level", "side": "right",
+        "title": "Right shoulder dropped",
+        "fix": "Lift your right shoulder and take your weight off that elbow.",
+        "say": "Your right shoulder is low. Level your shoulders.",
+    }
+    hub = DashboardHub()
+    hub.publish_metrics(make_snapshot(cue=cue))
+    client = TestClient(create_app(hub, RecordingAudio()))
+
+    with client.websocket_connect("/ws") as ws:
+        payload = ws.receive_json()
+    assert payload["cue"] == cue
+
+    html = client.get("/").text
+    assert 'id="posture-cue"' in html
+    assert "applyCue(payload)" in html

@@ -177,6 +177,9 @@
   .mode-group input { accent-color: var(--good); }
   .session-note { color: var(--muted); font-size: 11.5px; margin-top: 10px; }
   #feedback-error { color: var(--bad); font-size: 12.5px; margin-top: 8px; }
+  #posture-cue { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--warn); border-radius: 6px; }
+  #posture-cue[hidden] { display: none; }
+  #posture-cue b { color: var(--warn); }
   #feedback-error:empty { display: none; }
   #calib-error { color: var(--bad); font-size: 12.5px; margin-top: 8px; }
   #calib-error:empty { display: none; }
@@ -213,6 +216,7 @@
         <span class="stat">audio <b id="audio">-</b><span id="audio-detail" class="stat"></span><span id="audio-error" class="stat"></span></span>
         <span id="unreliable-detail" class="stat"></span>
       </div>
+      <div id="posture-cue" hidden aria-live="polite"><b id="posture-cue-title"></b> <span id="posture-cue-fix"></span></div>
     </div>
     <!-- Posture needle + reminder countdown: display-only, additive block
          (feat/posture-needle). Math mirrors src/posture_guard/dashboard/needle.py. -->
@@ -534,10 +538,27 @@ function applyNudgeEvent(event) {
   }, 2000);
 }
 
+// "What to fix": the server's cue (cues.py) while a reminder is active or any
+// metric is past its threshold; hidden when posture is fine.
+function applyCue(payload) {
+  const el = document.getElementById("posture-cue");
+  if (!el) return;
+  const cue = payload.cue;
+  const bad = payload.state === "bad_chime" || payload.state === "bad_voice";
+  const th = payload.thresholds || {};
+  const m = payload.metrics || {};
+  const drifting = Object.keys(m).some(
+    (k) => m[k] !== null && th[k] !== undefined && Math.abs(m[k]) > th[k]);
+  el.hidden = !(cue && (bad || drifting));
+  if (el.hidden) return;
+  document.getElementById("posture-cue-title").textContent = cue.title + ".";
+  document.getElementById("posture-cue-fix").textContent = cue.fix;
+}
+
 function reminderLabel(event) {
   // Plain language: every reminder names itself. Voice shows the spoken text.
   if (event.kind === "voice") return "Reminder: " + (event.text || "spoken prompt");
-  if (event.kind === "chime") return "Reminder: chime";
+  if (event.kind === "chime") return event.text ? "Sit up: " + event.text : "Reminder: chime";
   if (event.kind === "positive_chime") return "Nice posture!";
   if (event.kind === "recovery") return "Back to good posture";
   return "Reminder: " + (event.text || event.kind);
@@ -598,6 +619,7 @@ function apply(payload) {
   applyFeedback(payload.feedback);
   applyNudgeEvent(payload.nudge_event);
   applyCalibration(payload.calibration);
+  applyCue(payload);
   // Trunk-lean-optional mode: the tile shows "-" with the reason instead of a
   // garbage angle (overwrites the healthy-band label for that tile).
   if (payload.trunk_note) {
