@@ -24,6 +24,18 @@ jobs:
       - name: Test
         run: pytest
 
+  browser-core:
+    # docs/app/posture-core.js (the GitHub Pages app) must match the Python
+    # pipeline frame-for-frame on tests/fixtures/browser_golden.json.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser core parity + properties
+        run: node --test "tests/js/*.test.mjs"
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

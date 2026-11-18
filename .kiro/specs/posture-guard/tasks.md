@@ -37,3 +37,9 @@
   - `tests/test_properties.py`: P1-P6 from design.md, plus mutation checks.
 - [x] 9. Kiro hook, CI and docs
   - `.kiro/hooks/pytest-on-change.json`; CI runs on branches with `/`; README.
+- [x] 10. Browser version on GitHub Pages (`docs/app/`)
+  - `posture-core.js` port, `app.js` shell (webcam, MediaPipe tasks-vision, Web Audio,
+    speech, hidden-tab worker ticks, localStorage), landing-page link.
+  - Golden parity: `tests/browser_golden.py` -> `tests/fixtures/browser_golden.json`,
+    `tests/js/posture-core.test.mjs`, `tests/test_browser_golden.py`; CI `browser-core` job.
+  - _Requirements: 8_

@@ -75,3 +75,14 @@ and the deviation check fit my desk.
 1. Unknown keys and wrong-typed values in `config.yaml` SHALL raise `ConfigError` naming the full key path.
 2. `camera.source` SHALL be one of `webcam`, `realsense`, `synthetic`; invalid ranges (`shoulder_width_min >= shoulder_width_max`, `calibration.window_s <= 0`, ...) SHALL be rejected.
 3. CLI flags `--camera` and `--device` SHALL override `config.yaml`.
+
+### Requirement 8: Browser version (GitHub Pages)
+**User Story:** As a user, I want to open a web page, leave the tab open, and be
+coached to better posture with nothing to install.
+
+#### Acceptance Criteria
+1. `docs/app/` SHALL run on GitHub Pages: webcam via `getUserMedia`, MediaPipe Pose Landmarker (tasks-vision, VIDEO mode), and a demo mode with no camera.
+2. Scoring, the state machine, the needle and calibration SHALL be a port of the Python modules (`docs/app/posture-core.js`) and SHALL match the Python pipeline frame-for-frame on the golden timeline (states, reminders, reasons exactly; numbers within 1e-9).
+3. WHEN the tab is hidden, THE page SHALL keep tracking (worker-driven ticks, about 5 fps) and keep reminding.
+4. Audio SHALL start only inside a user gesture; chimes use Web Audio, the prompt uses speech synthesis; custom good/bad sounds can be picked from files.
+5. Video and landmarks SHALL never leave the browser; calibration, settings and daily totals persist in `localStorage`.

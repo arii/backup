@@ -10,6 +10,21 @@ Single person at a desk, front-facing camera, real-time feedback, everything on
 your machine (no frame or landmark leaves it). All thresholds, timings, smoothing
 constants and sound paths live in [`config.yaml`](config.yaml).
 
+## In your browser (no install)
+
+**<https://arii.github.io/posture-guard/app/>**: press *Start with webcam*, leave
+the tab open, and it chimes when you slouch. *Try the demo* runs without a camera.
+
+The page runs MediaPipe Pose Landmarker and a JavaScript port of this repo's
+scoring, state machine, needle and calibration (`docs/app/posture-core.js`) in the
+tab. Video and landmarks never leave your computer; only the model and its WASM
+runtime are downloaded (from jsDelivr and Google's model bucket). It keeps tracking at
+about 5 fps when the tab is in the background, plays the chimes with Web Audio and
+speaks the prompt with the browser's speech synthesis. Calibration, settings, custom
+sounds (under 1.5 MB) and daily good/slouch totals persist in `localStorage`. The
+port is checked frame-by-frame against the Python pipeline (see *Development*).
+GitHub Pages serves `docs/` from `main`, so the app updates when this branch merges.
+
 ## Quick start
 
 ```bash
@@ -214,8 +229,19 @@ a default.
 ```bash
 . .venv/bin/activate
 ruff check .
-pytest
+pytest                              # Python: unit, timeline, hypothesis properties
+node --test "tests/js/*.test.mjs"   # browser core: golden parity + properties
+python tests/browser_golden.py      # regenerate the golden timeline after a Python change
 ```
+
+The browser port is held to the Python behavior by a golden timeline:
+`tests/browser_golden.py` drives the real `PosturePipeline` through a scripted
+session (slouch to chime and voice, recovery, tilt, neutral wobble, hidden hips,
+NaN glitches, leaving, sitting too far, calibration, mirrored framing) and
+records every frame. `tests/js/` replays it through `posture-core.js` and requires
+identical states, reminders and reasons, and metrics and needle within 1e-9.
+`tests/test_browser_golden.py` fails when the committed fixture no longer matches
+the Python code.
 
 The full test suite (scoring, state machine timelines, webcam/RealSense/synthetic
 sources, audio queueing, calibration, dashboard API) runs with no camera, SDK or
@@ -248,6 +274,8 @@ directory is committed so judges can read it:
   hardware imports, headers on new files).
 - `.kiro/hooks/pytest-on-change.json`: runs `pytest` whenever a file under
   `src/posture_guard/` or `tests/` is saved.
+- `.kiro/hooks/browser-parity-on-change.json`: runs the browser parity tests when
+  `docs/app/posture-core.js` or the golden fixture changes.
 
 The property tests found two real problems: the original smoothing window never
 confirmed at low frame rates or with jittered webcam timestamps (fixed), and a
@@ -262,7 +290,10 @@ period, October 30 to December 4, 2026; this repository's first commit is
 2026-11-13. Check the Devpost page for the current category list, judging criteria
 and submission checklist before submitting.
 
-Judging quick path, no hardware needed:
+Fastest path: open <https://arii.github.io/posture-guard/app/> and press
+*Try the demo*, or *Start with webcam*.
+
+Local path, no hardware needed:
 
 ```bash
 pip install -e '.[dev]'

@@ -45,6 +45,14 @@
 - Custom sounds (`audio.bad_sound`, `audio.good_sound`) fall back to the built-in
   chimes with a logged warning when the file is missing.
 
+## Browser port
+- `docs/app/posture-core.js` mirrors the Python core. Any behavior change in
+  `scoring.py`, `state.py`, `posture_needle.py`, `calibration.py` or the pipeline frame
+  path must be made in both, then `python tests/browser_golden.py` regenerates the
+  golden timeline and `node --test "tests/js/*.test.mjs"` must pass.
+- New `config.yaml` defaults must be copied into `DEFAULTS` in `posture-core.js`
+  (the JS test compares them).
+
 ## Privacy
 - Frames and landmarks never leave the machine. The dashboard binds to
   `127.0.0.1` by default. Calibration lives in memory only.
