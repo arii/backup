@@ -1,0 +1,26 @@
+# Implementation Plan: Posture Guard
+
+- [ ] 1. Audit config wiring
+  - Confirm no thresholds or timings are hardcoded outside `config.yaml` / `config.py`. Add `hypothesis` to the `dev` extra in `pyproject.toml`.
+  - _Requirements: 1, 2_
+- [ ] 2. Harden `scoring.py` against non-finite input
+  - Treat `NaN`/`inf` landmark coordinates as `Unreliable` (new reason, or reuse `NO_POSE`). Add unit tests.
+  - _Requirements: 1.3, 1.4_
+- [ ] 3. Add `needle.py` with EMA smoothing and config section
+  - New file with header. Pure functions plus a small stateful smoother taking `now`.
+  - _Requirements: 3_
+  - [ ]* 3.1 Property tests for bounded output and scale invariance in `tests/test_properties.py` (Properties 1, 2)
+- [ ] 4. Property tests for `state.py`
+  - Anti-chatter, idempotent nudges, and no-raise (Properties 3, 4, 5). Use injected timestamps.
+  - _Requirements: 2_
+- [ ] 5. Few-shot calibration
+  - `calibration.py`, endpoints, needle projection with calibration, fallback to config thresholds.
+  - _Requirements: 4_
+- [ ] 6. Custom good and bad sounds
+  - Config keys, path validation with fallback, good sound on recovery, test endpoints.
+  - _Requirements: 5_
+- [ ] 7. Dashboard
+  - Needle gauge, calibrate and test buttons, source indicator in `static/index.html` and `/ws` payload.
+  - _Requirements: 3.3, 4, 5.4_
+- [ ] 8. Docs
+  - Document Kiro usage (spec, steering, hook) in `README.md`.

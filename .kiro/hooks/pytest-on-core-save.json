@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run pytest when scoring or state changes",
+      "trigger": "PostFileSave",
+      "description": "Runs the scoring and state tests whenever scoring.py or state.py is saved.",
+      "matcher": "posture_guard/(scoring|state)\\.py$",
+      "action": {
+        "type": "command",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && . .venv/bin/activate 2>/dev/null; pytest -q tests/test_scoring.py tests/test_state.py"
+      }
+    }
+  ]
+}
