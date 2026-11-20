@@ -2,14 +2,20 @@ name: ci
 
 on:
   push:
-    # "**" (not "*") so branches with a slash, e.g. feat/webcam-v2, run CI too.
-    branches: ["**"]
+    # main only; PR branches are covered by the pull_request trigger below.
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel only superseded PR runs; main-branch runs always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   browser-core:
     # Unit, property and golden-timeline tests for the GitHub Pages app.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +30,7 @@ jobs:
     # The app is self-hosted (issue #45): vendored MediaPipe files must exist
     # and match the sha256 values recorded in docs/app/vendor/README.md.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Verify vendored files and checksums
@@ -49,6 +56,7 @@ jobs:
     # Serve docs/ locally and run the browser e2e (CSP, vendored files, reflow,
     # first run) before merge, not only after deploy.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -76,6 +84,7 @@ jobs:
 
   shellcheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck
