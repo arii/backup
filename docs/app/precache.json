@@ -1,6 +1,6 @@
 {
-  "version": "ed35cd643478409b",
-  "totalBytes": 25863759,
+  "version": "252d12fb0f91d90b",
+  "totalBytes": 26228013,
   "files": [
     {
       "url": "app.js",
@@ -125,37 +125,82 @@
     {
       "url": "voice/af_heart/and-breathe-out-let-your-shoulders-drop-51e2dd.mp3",
       "size": 12908,
-      "sha256": "e31a5b415519db735a9e56a8eb18818476ac863e4d609d0a66c30cc9e238188b"
+      "sha256": "97080d0fe32acad7a8c8c24c5861507215131ac6b6a1b20047c930a8946b0506"
+    },
+    {
+      "url": "voice/af_heart/and-out-nice-and-easy-08c9b6.mp3",
+      "size": 8588,
+      "sha256": "3614885445ba159bbc4c4c4364a32ea6212f0889750dcff5402cba303a364f36"
     },
     {
       "url": "voice/af_heart/breath-check-take-a-slow-deep-breath-in-ca1d2b.mp3",
       "size": 13484,
-      "sha256": "dfd0f95e279b580d0a5dfeef7f01ae60186ebd23b7a91636799269c8969a846c"
+      "sha256": "1c1c31461847a74a40bc39efa81915ef0c4b4fb17112d83f26a7c051e832a908"
+    },
+    {
+      "url": "voice/af_heart/breathe-in-4d9c64.mp3",
+      "size": 4556,
+      "sha256": "a2b96ba03280f0693bf98ba51712f2a4c1b5a4eb0c5644889d5e5741e161854b"
+    },
+    {
+      "url": "voice/af_heart/breathe-in-through-your-nose-then-let-it-ccb89b.mp3",
+      "size": 14636,
+      "sha256": "15b92dfea8d2c99fea6d71fdf6e0936a1507c96ce039af4731adf4b5bcf93970"
+    },
+    {
+      "url": "voice/af_heart/breathe-with-me-for-one-minute-stop-if-y-60ac0b.mp3",
+      "size": 17660,
+      "sha256": "7808e526634e6eddc95f28f61d3cea5216d93a5c5cbd3809c5e904b8e90fb4e6"
     },
     {
       "url": "voice/af_heart/easy-does-it-looking-good-b2adac.mp3",
       "size": 9884,
-      "sha256": "2ccdfe1b1ed8b9c6a9c83e0640795a86f4d993ad7028cf53edf22ba415cd074c"
+      "sha256": "47810bab581e5819bc09b9d45bc1f060f06393509d46f7ae1edc485cb80105b5"
+    },
+    {
+      "url": "voice/af_heart/easy-now-a-breath-check-1569c2.mp3",
+      "size": 9308,
+      "sha256": "15a3d564471067ba6a495d3aa2dcefa02aeb051d16a02610d35a18a866d6922f"
+    },
+    {
+      "url": "voice/af_heart/easy-now-let-your-jaw-go-soft-and-breath-09f814.mp3",
+      "size": 19100,
+      "sha256": "0dc2e2d1d14e4e8fade06012ac97c6ea1f67adcb8abb4d906d65a065de50b9dc"
     },
     {
       "url": "voice/af_heart/great-keep-it-up-ee7635.mp3",
       "size": 7004,
-      "sha256": "bcf7ab230eb1d6ad716a1dd8d4e4cba4dbbff0f2b0d0d53dfd0aef5df7efcbee"
+      "sha256": "6c9b5a4ae177bbef922f755481d4f345f56de50c3397cb6bbce18e0c90ede053"
     },
     {
       "url": "voice/af_heart/head-forward-tuck-your-chin-and-bring-yo-c02a3b.mp3",
       "size": 23132,
-      "sha256": "2d0b822919ed70b87ecbbec1cd55b9268758d708dbdbcc28901b901951fd1911"
+      "sha256": "e900543690197607cfd7f1811e01a4f31ba21cde8304877acf643513a4a290aa"
     },
     {
       "url": "voice/af_heart/hi-i-ll-let-you-know-when-you-slouch-a0cd4c.mp3",
       "size": 11900,
-      "sha256": "afa5f9c22f747aeecd8f1f86c50d6f0412005c55c6b97fe7159468943d941788"
+      "sha256": "667c260e6bcf98f8a1e3ddc49a66ee46d026bac21e2c310784d34da22d47c495"
     },
     {
       "url": "voice/af_heart/i-couldn-t-see-your-shoulders-clearly-tr-548c74.mp3",
       "size": 21116,
-      "sha256": "79f5e133b051002c384a59ef99ca045283bb756ddfd4c6dd418bc4d9456fab6b"
+      "sha256": "d5b9dd3bfd5a7cbbae05f8b349b697b84e97694366bc8e50df8b012412519f66"
+    },
+    {
+      "url": "voice/af_heart/let-your-arms-feel-heavy-and-breathe-out-e0611a.mp3",
+      "size": 14060,
+      "sha256": "dd4c16dcd9e38a272eeb68090647e06ebe01ba45a1810b8731f655918ba8529a"
+    },
+    {
+      "url": "voice/af_heart/long-breath-out-let-your-shoulders-drop-e44aa4.mp3",
+      "size": 13916,
+      "sha256": "cec727833a41d4d0c18a626cde8bab31c45a8d16641490fc779df6b54051e847"
+    },
+    {
+      "url": "voice/af_heart/look-at-something-20-feet-away-for-20-se-0cff26.mp3",
+      "size": 16220,
+      "sha256": "d4b70197c006bd88ad5d562c898caf03cf1f96faa00970f1e8b7cb99256900bb"
     },
     {
       "url": "voice/af_heart/looking-good-c91019.mp3",
@@ -170,32 +215,42 @@
     {
       "url": "voice/af_heart/nice-posture-8113a7.mp3",
       "size": 6428,
-      "sha256": "46f6f30d73240341b3071b2f8b0f0d06f73a43019a9790c8b4ba3b7c33e57249"
+      "sha256": "2e191ce2d2019f2d15889dea23a5612636f42138d7136a08e4824280bf128d23"
     },
     {
       "url": "voice/af_heart/nice-relaxed-and-stacked-fe3bba.mp3",
       "size": 10028,
-      "sha256": "587de708d96e52ce112575695517985147c7b83c68f75d359ffeb3da8e5249f8"
+      "sha256": "e05926eda03edadcdc06e701ff2712b59b0eadf4f37898ab4b5390abf96bedd1"
+    },
+    {
+      "url": "voice/af_heart/nice-your-eyes-had-a-rest-acd274.mp3",
+      "size": 10028,
+      "sha256": "23d816d0529d5f58042035a0a7920c102c278cbbca2deeb0e7eac5f669e8c072"
+    },
+    {
+      "url": "voice/af_heart/pause-for-one-slow-breath-let-go-on-the--0a87ba.mp3",
+      "size": 17804,
+      "sha256": "725fdbe7061c129dc7dd4755b22d6bb5bd374950bf0d3c71be1e142b684aceb0"
     },
     {
       "url": "voice/af_heart/please-fix-your-posture-465eb4.mp3",
       "size": 8156,
-      "sha256": "5f5ce4e743e3c64c66e2c177e000df70d60c1101ef7514149d309fa1c96e9158"
+      "sha256": "e386612dfc26ef3cfcb53d8c87217d67ad40a56ce17c4822eca8f179077ba3df"
     },
     {
       "url": "voice/af_heart/posture-to-die-for-7ae0ad.mp3",
       "size": 7436,
-      "sha256": "192c70b8a66dd587cdd9f940db144cf89835a176f5d73f93dc569dc1875a95dc"
+      "sha256": "bb04df5ba8e71f934a4c0f216ff431c0908f0027459ffd60f10bec4c59f67ea5"
     },
     {
       "url": "voice/af_heart/shoulders-creeping-up-breathe-out-and-le-1ea84d.mp3",
       "size": 17228,
-      "sha256": "21f8efc7e7b2e9d55fa74bcf4143249d635844dde462166bfdde6408ee2ec2a9"
+      "sha256": "a0fb63d62d8249a7b90573f3216f6b41f67fa07cf1c1081c074c4ef5389bf2c0"
     },
     {
       "url": "voice/af_heart/spine-of-a-champion-39c35b.mp3",
       "size": 7724,
-      "sha256": "2428f84a94debd6a7efdab58db5614fa297bff8a127c5e2d8b42f83557fc74a0"
+      "sha256": "4eed7b4fed83d657f3edbfbb1f76eff02a3e0260b5f8891d93766e5efc5301da"
     },
     {
       "url": "voice/af_heart/that-s-better-11cffb.mp3",
@@ -208,69 +263,124 @@
       "sha256": "c9927853cb3173b7d4fc1d3679c382a18366c4eb346486b565eb8de9bfdabafb"
     },
     {
+      "url": "voice/af_heart/time-to-stand-up-and-move-for-a-couple-o-f5212f.mp3",
+      "size": 15644,
+      "sha256": "c2fbf472651a9309508d92bc24c4ffc5c853d1f8bf719a99908e406e38ab5861"
+    },
+    {
+      "url": "voice/af_heart/want-a-minute-to-breathe-out-with-me-51465f.mp3",
+      "size": 9308,
+      "sha256": "f26089985d3aa51e17bd84ce559d6cfbc15cc9c6b1ece3a14848ebb00fe670c3"
+    },
+    {
       "url": "voice/af_heart/you-re-leaning-to-one-side-sit-up-straig-aef210.mp3",
       "size": 13916,
-      "sha256": "6a345f761b9ceacf7f531e3c6dc4679da8e5f03abf0c1951d7b46953ffee2911"
+      "sha256": "41a5f1c46ad791e54bfee0fc7b99fb04f67cc8fdf0e6b1de7d73c70d9c5a927c"
     },
     {
       "url": "voice/af_heart/you-re-looking-good-21a0ef.mp3",
       "size": 5852,
-      "sha256": "48001989340c1d5098af5ec0c4e2e65ab5d2a9e236d019613f1a16451a8cfb88"
+      "sha256": "fa3ff14c9870c9b41b919c8be9fe79c883d400f19876a7613dc15b836640fbf7"
     },
     {
       "url": "voice/af_heart/your-head-is-tilted-straighten-your-neck-bd8293.mp3",
       "size": 13340,
-      "sha256": "36633b3df0ae9e9623ab78bce0229397450ce589036dee36272f4dc242022eb8"
+      "sha256": "f623b39cb30e67350533b91814ced080d8588fd46d496a44d2b3b99562d91da1"
     },
     {
       "url": "voice/af_heart/your-shoulders-are-uneven-level-them-out-440a8b.mp3",
       "size": 14492,
-      "sha256": "a1046f19e49649c5fd8881383beeb39a6dbdabcc9d7833f286d9996d07c6d6ac"
+      "sha256": "14c7540a2e013202a68ddb7224162f2434659b15d70ef6e4b7a95c14e27c9764"
     },
     {
       "url": "voice/af_heart/your-shoulders-dropped-when-you-let-go-s-e4dec5.mp3",
       "size": 25292,
-      "sha256": "77398df32741bca3c71526ea122317dc412a25597a295c91b26c18d799589ad7"
+      "sha256": "dd30d6d675c43bf682b7e8738610e3194e2f0c5cffe45082a4e067dd3549c991"
     },
     {
       "url": "voice/af_heart/your-shoulders-rose-as-you-breathed-in-l-cde5ca.mp3",
       "size": 27596,
-      "sha256": "c6e5abeedcf66bcb8c94022c9bf0e6efbc3aa391d2949618f665d65d4c4f07fd"
+      "sha256": "2e3f5c2c527cd192961720613ca4e038a4ea812f0d5180dad7733b0c19bfb51a"
     },
     {
       "url": "voice/am_michael/and-breathe-out-let-your-shoulders-drop-51e2dd.mp3",
       "size": 14492,
-      "sha256": "d64cd85e7d01fb99553325eee02c67fd83d66572aa873641c325d2c5e5893ec8"
+      "sha256": "e9ba2c7bd19f4638f796196004610dffd7aca2bc478babd1ab391131b498764e"
+    },
+    {
+      "url": "voice/am_michael/and-out-nice-and-easy-08c9b6.mp3",
+      "size": 9308,
+      "sha256": "932be3136db5f118e446b4f193bec9be067a2573146609c8e5c2338d7f76453d"
     },
     {
       "url": "voice/am_michael/breath-check-take-a-slow-deep-breath-in-ca1d2b.mp3",
       "size": 14636,
-      "sha256": "e9fdc4823cbb55ea5f0b7c246334ea9dfe21fd5e58111f61d9e40bad54f75cdd"
+      "sha256": "5a5d7fd99397a69746fdeb17ddb34dc074c76c255face92da7dcb258b482a8cd"
+    },
+    {
+      "url": "voice/am_michael/breathe-in-4d9c64.mp3",
+      "size": 4988,
+      "sha256": "5a38676f24ca2438a94e2bf7dfd1bf8c78a05d38ef9256dcb19779575404e2b9"
+    },
+    {
+      "url": "voice/am_michael/breathe-in-through-your-nose-then-let-it-ccb89b.mp3",
+      "size": 17516,
+      "sha256": "a6cf49b26efc2eb0f4b7d81cf02bc617d45cf8b99be5a0dc3fe1574873081664"
+    },
+    {
+      "url": "voice/am_michael/breathe-with-me-for-one-minute-stop-if-y-60ac0b.mp3",
+      "size": 20828,
+      "sha256": "5ed1545e62b620c8a752f81430527bea07f31febc17d8b5741b872e45a9cb7b3"
     },
     {
       "url": "voice/am_michael/easy-does-it-looking-good-b2adac.mp3",
       "size": 9452,
-      "sha256": "76ced2cf4472355df6b089f4248611c87b1e3b119364a8d310f77d137124b3b5"
+      "sha256": "de1ae102ac05e3dcc15e34b52b5278eef6c66994be3ef47f7b5fcd193d914d1f"
+    },
+    {
+      "url": "voice/am_michael/easy-now-a-breath-check-1569c2.mp3",
+      "size": 9452,
+      "sha256": "24d78619be542262bf7cea7a17584ac0134d51e0abf9d56f91117cf62a5d7b6c"
+    },
+    {
+      "url": "voice/am_michael/easy-now-let-your-jaw-go-soft-and-breath-09f814.mp3",
+      "size": 21692,
+      "sha256": "225758e1e9e6452ddb6fa1ffa1feb49256aa0eeb02edb4562820e0aff3860aa9"
     },
     {
       "url": "voice/am_michael/great-keep-it-up-ee7635.mp3",
       "size": 7580,
-      "sha256": "851dfcc8d0ef687b4139453ddf5321ebd73da948c70bf44e6313844dfd6f4c32"
+      "sha256": "a5cb68d4a12ef93897b9ed3f400bd27f209b7e4407f4237908e7592e513e521f"
     },
     {
       "url": "voice/am_michael/head-forward-tuck-your-chin-and-bring-yo-c02a3b.mp3",
       "size": 26156,
-      "sha256": "e9b54b3e70d8b0c76df74c762c3686fdecb11fdc01d914735c21eff8e748c370"
+      "sha256": "7f7fc8d7c1500d35a9980c0cd7dd44513b869c13a217be6b40ebfae8c8cbee8f"
     },
     {
       "url": "voice/am_michael/hi-i-ll-let-you-know-when-you-slouch-a0cd4c.mp3",
       "size": 12476,
-      "sha256": "f80b7720f135a89d7802b1d7fa947a5259efaff4d5900265549325b731610ad6"
+      "sha256": "2df1f80e689108e5e119f9ceb9220e35c234070c851a46149098a13088caf17b"
     },
     {
       "url": "voice/am_michael/i-couldn-t-see-your-shoulders-clearly-tr-548c74.mp3",
       "size": 23564,
-      "sha256": "916b176718ebc12da00077d4f135121cd2aae977a6dcc4c4bb42038a4c2336be"
+      "sha256": "166b823af05fafa14be224a390f48b992077feda62116f2b4bf7be6525b5b3ae"
+    },
+    {
+      "url": "voice/am_michael/let-your-arms-feel-heavy-and-breathe-out-e0611a.mp3",
+      "size": 15788,
+      "sha256": "353aa19996df119c4acdbbe90a700df7e0532ab00dbfc6434c76f3b5649ac4e7"
+    },
+    {
+      "url": "voice/am_michael/long-breath-out-let-your-shoulders-drop-e44aa4.mp3",
+      "size": 15788,
+      "sha256": "4b2af4ec83a27ffe39f63bf35a765ef983844ee2a5ef6f52df52adc5280b0909"
+    },
+    {
+      "url": "voice/am_michael/look-at-something-20-feet-away-for-20-se-0cff26.mp3",
+      "size": 17948,
+      "sha256": "cee2f687cb9d970c2cfafe375156ce2bc147fd2c2c0cde6b1a1ba274c99e4304"
     },
     {
       "url": "voice/am_michael/looking-good-c91019.mp3",
@@ -280,7 +390,7 @@
     {
       "url": "voice/am_michael/much-better-f78898.mp3",
       "size": 5708,
-      "sha256": "d8e22d5d35efe9b8559cd3b43dcb5ef074e28af8b3a958e08f51e0430e070c3f"
+      "sha256": "88b87f5820f4c676562a38ba6976474793411646f3be0abd58a9ed3c92f60989"
     },
     {
       "url": "voice/am_michael/nice-posture-8113a7.mp3",
@@ -290,72 +400,92 @@
     {
       "url": "voice/am_michael/nice-relaxed-and-stacked-fe3bba.mp3",
       "size": 10460,
-      "sha256": "56066db6af0c99c4d9371414d8fe7f7214eb91af57572f60ba533e8dc9e7c93a"
+      "sha256": "81021f56f05bc6b3b0a10c2d80b27055ad52ad9121e6df888b11f0570596e237"
+    },
+    {
+      "url": "voice/am_michael/nice-your-eyes-had-a-rest-acd274.mp3",
+      "size": 10748,
+      "sha256": "27104e1208a77299e2d807dd85df3671e26cab7e76034cfae916af3849a11acf"
+    },
+    {
+      "url": "voice/am_michael/pause-for-one-slow-breath-let-go-on-the--0a87ba.mp3",
+      "size": 19388,
+      "sha256": "b2588efd59e36cab3eb8412f32bb360e2dc12f64703cddf57edc3bc462eff90c"
     },
     {
       "url": "voice/am_michael/please-fix-your-posture-465eb4.mp3",
       "size": 8876,
-      "sha256": "5484763ea2df4da63a2fd8e39ce4e3475b2fc0b83780882fe3c9bc526a55e56f"
+      "sha256": "84b058c2a90e652df47cbd112202576fee7cf1d40755a17a00e28627eb91ba36"
     },
     {
       "url": "voice/am_michael/posture-to-die-for-7ae0ad.mp3",
       "size": 8444,
-      "sha256": "dbd5cf439a2f642f72d5ee75c22a4da223cdc4e414de15907865b9ebefc4be33"
+      "sha256": "0b54d0657c344b4a9eeb320436fe7cdda90b009978cc77e69822dbe91bbd20ec"
     },
     {
       "url": "voice/am_michael/shoulders-creeping-up-breathe-out-and-le-1ea84d.mp3",
       "size": 19100,
-      "sha256": "c9b898bcf98be2811d1bae43aaa4744b62a9bdf26394274eb1ac295abc0c4a03"
+      "sha256": "653ca3ad696150e319c04e46565a9eeab5ece606014b636119b702340b02bb57"
     },
     {
       "url": "voice/am_michael/spine-of-a-champion-39c35b.mp3",
       "size": 8156,
-      "sha256": "eca63b2970c9389a935752c0ad120f55e940d2b62a8c1672e2d8e2f62f59246e"
+      "sha256": "4466f1b8a77da6fb85d69b614ab70ab36e1dfb5a169b8bbc2b789afc40970575"
     },
     {
       "url": "voice/am_michael/that-s-better-11cffb.mp3",
       "size": 5564,
-      "sha256": "4c05ca8b190237e2ec968db38442415f548bb4b2a1252b0127c5cbbbe1461e25"
+      "sha256": "38bfe154d8490efb4392e22d04a7a393aaac694df6af7a1c4c8c2ab03668f1a2"
     },
     {
       "url": "voice/am_michael/there-you-go-19b809.mp3",
       "size": 5852,
-      "sha256": "41aa5b706d69ec5b372e73f5f521662bc29d137bd7942ca77ad7aa5cf932cfec"
+      "sha256": "7a2f98f6e0db56f699e270b788e6d01b04ed48c8da55a366f73fe5311422407e"
+    },
+    {
+      "url": "voice/am_michael/time-to-stand-up-and-move-for-a-couple-o-f5212f.mp3",
+      "size": 16076,
+      "sha256": "eed1c8d11b40b2c13b20a9fcc2e8d1088ee27c0ce226f4339d0f93343bdde8f9"
+    },
+    {
+      "url": "voice/am_michael/want-a-minute-to-breathe-out-with-me-51465f.mp3",
+      "size": 11180,
+      "sha256": "b1b9aab6f65331735809e1cc9fe7b6a199050f2a5978f3b2d27d5841f310db81"
     },
     {
       "url": "voice/am_michael/you-re-leaning-to-one-side-sit-up-straig-aef210.mp3",
       "size": 14780,
-      "sha256": "9c87d82f258072364d9627f7c6be5b3b492ca5f640ebf24fdf60ddafe7302596"
+      "sha256": "53421d2abf5edf0fd2e0c59581dc29bdc493765c37bea4b2a95aa05fe622be40"
     },
     {
       "url": "voice/am_michael/you-re-looking-good-21a0ef.mp3",
       "size": 6428,
-      "sha256": "1ed26e2a34cbbcb5547abf4470f2e4f475dab6a8228158a80cb596433ad28e5d"
+      "sha256": "39a4d8316c3069563748ff8c1052b33807de43ce239237df8ca6b944158f3e13"
     },
     {
       "url": "voice/am_michael/your-head-is-tilted-straighten-your-neck-bd8293.mp3",
       "size": 14780,
-      "sha256": "1f5caf45b484fd5fa7ef080740c0112ae1bf87c26ea9611f09eebf5e88b0f682"
+      "sha256": "5c43532033d020eb1c543a93512494b3776085ec26d1da85f3e3f0a5883b9376"
     },
     {
       "url": "voice/am_michael/your-shoulders-are-uneven-level-them-out-440a8b.mp3",
       "size": 17084,
-      "sha256": "5ff1447030d3e6e525b0e66b6a5213714cbaed3f07df8e449a6eb6154261df82"
+      "sha256": "c0349a41eb14d9982363d9a2ef4ff356eb06cd3525f179f4ee01a5d14db2e23b"
     },
     {
       "url": "voice/am_michael/your-shoulders-dropped-when-you-let-go-s-e4dec5.mp3",
       "size": 27740,
-      "sha256": "f9b64a538e09a90eb1ed0cde8609cd0d2f3d5bdd89d2df20f4b737c83f28688b"
+      "sha256": "b40beed8b3fc687efbe2188ae4f2d5048100a1af97df1eb74a2516aa86f89889"
     },
     {
       "url": "voice/am_michael/your-shoulders-rose-as-you-breathed-in-l-cde5ca.mp3",
       "size": 29900,
-      "sha256": "78001eea2378a01bcc3107e591fb432d28f892569c7d28c02ad7e3f1b571e2e0"
+      "sha256": "997666b5bef90207246eff3825c7926e3d474d13b1285bd01479fc69661b501b"
     },
     {
       "url": "voice/manifest.json",
-      "size": 4530,
-      "sha256": "83d1ec07ea353bbcd3ca72e57e7e3acbd9067c26bf04ae943c69da895e4428b3"
+      "size": 7256,
+      "sha256": "b93e1056e5764e3e7f78441e44e79bd1884e951ede5af33ac3e3454d3742e968"
     },
     {
       "url": "voice-lines.js",
