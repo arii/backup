@@ -839,7 +839,25 @@ try {
   // 3. Webcam mode: real model from app/vendor/ on a fake camera.
   {
     const { page, errors } = await newPage(browser);
+    const modelFetches = {};
+    page.on("request", (r) => {
+      const m = r.url().match(/(pose_landmarker_lite\.task|vision_wasm(?:_nosimd)?_internal\.wasm)/);
+      if (m) modelFetches[m[1]] = (modelFetches[m[1]] || 0) + 1;
+    });
     await page.goto(`${base}app/${bust}`);
+    await page.evaluate(() => {
+      // Record every state each start-up step goes through.
+      window.__steps = new Set();
+      const seen = window.__steps;
+      const note = () => {
+        for (const li of document.querySelectorAll("#load-steps li")) seen.add(`${li.dataset.step}:${li.className}`);
+        if (!document.getElementById("load-steps").hidden) seen.add("list:shown");
+        const detail = document.querySelector('#load-steps [data-step="download"] .load-detail').textContent;
+        if (/of \d+(\.\d)? MB/.test(detail)) seen.add("download:bytes");
+      };
+      const opts = { subtree: true, attributes: true, childList: true, characterData: true };
+      new MutationObserver(note).observe(document.getElementById("start-overlay"), opts);
+    });
     const t0 = Date.now();
     await page.click("#start-camera");
     await page.waitForFunction(
@@ -850,6 +868,21 @@ try {
       { timeout: 90000 },
     );
     const loaded = await ui(page);
+    const steps = await page.evaluate(() => ({
+      seen: [...window.__steps],
+      hiddenAfter: document.getElementById("load-steps").hidden,
+    }));
+    const wanted = ["list:shown", "camera:active", "download:active", "download:bytes", "start:active"];
+    check(
+      "start-up: shows camera, download (with MB progress) and start steps, then hides them",
+      wanted.every((k) => steps.seen.includes(k)) && steps.hiddenAfter,
+      steps,
+    );
+    check(
+      "start-up: the model and WASM are downloaded once, not twice",
+      Object.keys(modelFetches).length === 2 && Object.values(modelFetches).every((n) => n === 1),
+      modelFetches,
+    );
     check(
       "webcam mode starts (vendored bundle, WASM and model load)",
       loaded.overlay === "none" && loaded.source === "webcam",
