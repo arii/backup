@@ -413,7 +413,13 @@ function step() {
     // detectForVideo needs strictly increasing timestamps.
     const ts = Math.max(nowMs, lastVideoMs + 1);
     lastVideoMs = ts;
-    const res = poseLandmarker.detectForVideo(video, ts);
+    let res;
+    try {
+      res = poseLandmarker.detectForVideo(video, ts);
+    } catch (err) {
+      stopCamera(err); // e.g. the GPU context was lost: stop instead of throwing every frame
+      return;
+    }
     const first = res.landmarks && res.landmarks[0];
     // Some tasks-vision builds omit visibility; absent means "detected".
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
@@ -447,13 +453,39 @@ function startHiddenTicker() {
   worker.onmessage = () => { if (document.hidden) step(); };
 }
 
-async function loadModel() {
+// MediaPipe's web runtime uploads every camera frame through WebGL, even with
+// the CPU delegate, so without WebGL it cannot run at all (it fails later, on
+// the first frame, with "Cannot read properties of undefined (reading
+// 'activeTexture')"). Probe first, on a throwaway canvas, and hand MediaPipe
+// a fresh canvas of the kind that worked: OffscreenCanvas first (what it uses
+// by default), then a regular canvas. null means no WebGL at all.
+function webglCanvas() {
+  const works = (canvas) => {
+    try {
+      return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+    } catch {
+      return false;
+    }
+  };
+  if (typeof OffscreenCanvas !== "undefined" && works(new OffscreenCanvas(1, 1))) {
+    return new OffscreenCanvas(1, 1);
+  }
+  if (works(document.createElement("canvas"))) return document.createElement("canvas");
+  return null;
+}
+
+class NoWebGLError extends Error {}
+
+function showWebGLHelp(show) { $("webgl-help").classList.toggle("show", show); }
+
+async function loadModel(canvas) {
   const { FilesetResolver, PoseLandmarker } = await import(`${TASKS_VISION}/vision_bundle.mjs`);
   const fileset = await FilesetResolver.forVisionTasks(`${TASKS_VISION}/wasm`);
   const options = (delegate) => ({
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: "VIDEO",
     numPoses: 1,
+    canvas,
   });
   try {
     return await PoseLandmarker.createFromOptions(fileset, options("GPU"));
@@ -464,10 +496,30 @@ async function loadModel() {
 
 function showError(message) { $("start-error").textContent = message; }
 
+/** Tracking failed after it started: release the camera, bring the start
+ *  screen back with the reason, and leave the demo available. */
+function stopCamera(err) {
+  poseLandmarker = null;
+  const stream = video.srcObject;
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  video.srcObject = null;
+  const noGL = !webglCanvas();
+  showWebGLHelp(noGL);
+  showError(noGL ? "" : `Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
+  $("start-status").textContent = "";
+  $("start-overlay").style.display = "";
+  $("start-camera").disabled = $("start-demo").disabled = false;
+}
+
+let loopsStarted = false;
+
 function begin(source) {
   $("source").textContent = source;
   $("start-overlay").style.display = "none";
+  showWebGLHelp(false);
   restoreSound("bad"); restoreSound("good");
+  if (loopsStarted) return; // a retry after stopCamera reuses the running loops
+  loopsStarted = true;
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
 }
@@ -476,7 +528,12 @@ $("start-camera").addEventListener("click", async () => {
   ensureAudio(); // inside the click: browsers only allow audio after a gesture
   $("start-camera").disabled = $("start-demo").disabled = true;
   showError("");
+  showWebGLHelp(false);
   try {
+    // Check before asking for the camera: no point in a permission prompt
+    // for a model that cannot run.
+    const canvas = webglCanvas();
+    if (!canvas) throw new NoWebGLError("WebGL unavailable");
     $("start-status").textContent = "Asking for camera access...";
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false,
@@ -484,11 +541,18 @@ $("start-camera").addEventListener("click", async () => {
     video.srcObject = stream;
     await video.play();
     $("start-status").textContent = "Loading the pose model (about 6 MB, cached after the first visit)...";
-    poseLandmarker = await loadModel();
+    poseLandmarker = await loadModel(canvas);
     begin("webcam");
   } catch (err) {
     $("start-status").textContent = "";
-    showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
+    const stream = video.srcObject;
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    video.srcObject = null;
+    if (err instanceof NoWebGLError) {
+      showWebGLHelp(true);
+    } else {
+      showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
+    }
     $("start-camera").disabled = $("start-demo").disabled = false;
   }
 });

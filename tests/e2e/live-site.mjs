@@ -13,6 +13,8 @@
 //    the real tasks-vision bundle, WASM and pose model load from the CDN and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
+// 4. Webcam mode in a browser with WebGL off (--disable-3d-apis): the app must
+//    explain how to turn it on, not ask for the camera, and not throw.
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
@@ -117,6 +119,31 @@ try {
     }
     check("webcam mode has no errors", errors.length === 0, errors);
     await page.close();
+  }
+  // 4. No WebGL: a separate browser, since the flag is per launch.
+  {
+    const noGL = await chromium.launch({
+      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+    });
+    try {
+      const { page, errors } = await newPage(noGL);
+      await page.goto(`${base}app/${bust}`);
+      const gl = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl")));
+      await page.click("#start-camera");
+      await page.waitForTimeout(1500);
+      const s = await page.evaluate(() => ({
+        help: getComputedStyle(document.getElementById("webgl-help")).display,
+        overlay: getComputedStyle(document.getElementById("start-overlay")).display,
+        streams: document.getElementById("video").srcObject === null ? 0 : 1,
+      }));
+      await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
+      check("no WebGL: explains how to turn it on", !gl && s.help === "block" && s.overlay !== "none", { gl, ...s });
+      check("no WebGL: camera not opened", s.streams === 0, s);
+      check("no WebGL: no page errors", errors.length === 0, errors);
+      await page.close();
+    } finally {
+      await noGL.close();
+    }
   }
 } finally {
   await browser.close();
