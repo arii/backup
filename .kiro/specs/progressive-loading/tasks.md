@@ -1,0 +1,92 @@
+# Implementation Plan: Progressive Loading and Progressive Disclosure
+
+Checked items are built.
+Unchecked items are **spec only**.
+
+Already shipped by PR #70, not repeated here: three-step start list, byte progress,
+slow hints, single download as buffers, MoveNet fallback, warm-up under a spinner
+(`docs/app/loading.js`, `tests/js/loading.test.mjs`).
+
+- [ ] 1. Measure and add load marks
+  - Add `performance.now()` marks (click, stream playing, download done, warm-up done,
+    first scored frame, settled) to `window.__loadMarks` and `bugReportUrl()` diagnostics.
+  - Keep the measurement script from this spec's baseline as `tests/e2e/measure-load.mjs`
+    (optional, not run in CI).
+  - _Requirements: 10_
+- [ ] 2. Parallel camera and model start, live preview
+  - `app.js` `#start-camera` handler: start `loadModel` or `loadMoveNet` before awaiting
+    `getUserMedia`; cache the result for retry; show the video as soon as frames play.
+  - `loading.js`: `LoadSteps.start/done` for two active steps; `overallPercent`; throttle
+    progress to 250 ms; keep `#load-steps`, `#load-bar`, `#load-hint` ids.
+  - `index.html` and CSS: `.overlay-msg.compact` strip over the live video (below the
+    video at 320 px), solid background, reduced-motion spinner.
+  - Per-step explanation sentences, warm-up elapsed counter, Retry and "Try the demo" on
+    failure, `<noscript>` message.
+  - Tests: extend `tests/js/loading.test.mjs`; e2e: video visible within 1.5 s with the
+    model route held.
+  - _Requirements: 1, 2, 3.4, 9.2, 10.2, 11_
+- [ ] 3. Staged reveal of panels and settings
+  - New `docs/app/reveal.js` and `tests/js/reveal.test.mjs` (properties R1 to R5).
+  - `index.html`: `data-stage` wrappers (ids unchanged), closed `<details>` for settings
+    groups, `#reveal-note`, `#reveal-all` button. `app.js`: call `reveal.update` per frame
+    with the scaled clock; persist `store.revealAll`.
+  - Check at 320 px, in the demo, on the MoveNet fallback and after `stopCamera`.
+  - _Requirements: 3.1, 4, 11_
+- [ ] 4. Progressive setup with "Skip all"
+  - Extend `FIRST_RUN` with style, voice, breaks and shoulders steps; delay to stage 2;
+    Skip this step, Skip all, header "Set up" button; `store.setup`, `store.setupDone`.
+  - Pure helpers and tests in `onboarding.js` and `tests/js/onboarding.test.mjs`
+    (skip all grants no consent, enables nothing off by default).
+  - Update "Delete my data" to clear `store.setup`, `store.water`, `store.breathIntroShown`.
+  - _Requirements: 5, 9.3_
+- [ ] 5. Automatic breath check intro after tracking has settled
+  - `prompts.js`: `breath_intro` id with one-time quiet exemption; tests in
+    `tests/js/prompts.test.mjs`.
+  - `app.js`: enqueue after stage 2 plus 60 s good posture; consent via `requireConsent`;
+    reset `goodSinceBreath`; skip when `lowAccuracy`.
+  - e2e: intro asks for consent, declining stores nothing, accepting runs the check.
+  - _Requirements: 6_
+- [ ] 6. Intent prefetch on the landing page (decision needed)
+  - `docs/prefetch.js`, linked from `docs/index.html`; skips on Save-Data and 2g.
+  - Privacy wording in `docs/privacy.html` (line 50) and `docs/index.html` (line 412).
+  - e2e: one request per vendor file across landing then app.
+  - Only build after the user confirms option B (see open questions).
+  - _Requirements: 8.2 to 8.4, 9.1_
+- [ ] 7. Wellness menu: stretch and water (spec only)
+  - "Take a break" menu consolidating Stretch, Breathe with me, Breath check, Look away,
+    Stand and move, Drink water; guided demos in `#prompt-card`; `stretch` and `water`
+    scheduler ids; local water count in "Your progress".
+  - Build on `wellness-tools` Requirement 5 (stretch). Water camera detection is not
+    planned.
+  - _Requirements: 7_
+- [ ] 8. Update e2e and capture scripts
+  - `tests/e2e/live-site.mjs`: seed `setupDone` and `revealAll` next to `onboarded`,
+    `ackVersion`, `firstRunDone` (init script around lines 98 to 105); keep clicks on
+    `#start-demo` and `#start-camera`; adjust the places that open `#setup-panel summary`
+    (lines 599, 648); add the scenarios listed in design.md.
+  - `video/scripts/capture.mjs`: add the same seeds (lines 41 to 43), wait for the compact
+    card to go after the clicks on `#start-demo` (line 72) and `#start-camera` (line 108).
+  - _Requirements: 10, 12.3_
+- [ ] 9. Docs and checks
+  - Run `node scripts/gen-precache.mjs` after `docs/app` changes.
+  - Update README/landing screenshots if the first view changes (`video/scripts/capture.mjs`).
+  - Mark `onboarding-and-setup` tasks 8 and 9 as superseded or merged where overlapping.
+  - Run `npm run check`.
+  - _Requirements: 12_
+
+## Order and parallelism
+Tasks 1 and 2 first (2 delivers most of the "looks alive" value). Task 3 depends on 2 for
+the compact card. Tasks 4 and 5 depend on 3 and can be done in parallel. Task 6 is
+independent. Task 7 is independent and spec only. Task 8 follows each of 2 to 5 and is
+finished last; do not leave e2e red between tasks.
+
+## Open questions for the user
+1. Camera on page load, or only after the click? Recommended: only after the click.
+2. Prefetch the 15 MB model: never, on intent (hover or focus on "Open the app"), or for
+   every visitor on idle? Recommended: on intent, plus parallel start on click.
+3. Should the first breath check ignore the 5 minute quiet start once, or wait for it?
+4. Water: reminder and "I drank" tap only, or also camera-based detection later (new
+   consent text, false positives with eating and phone calls)?
+5. How strict should staging be: reveal by time and tracking state as designed, or let
+   people open everything with one click from the start (design has both)?
+6. Show a sample looping demo in the stage before the click (small asset), or keep it text?
