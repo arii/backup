@@ -16,13 +16,24 @@ jobs:
     # Unit, property and golden-timeline tests for the GitHub Pages app.
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      prose_only: ${{ steps.scope.outputs.prose_only }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Unit, property and golden-timeline tests
         run: node --test "tests/js/*.test.mjs"
+      - name: Classify browser E2E inputs
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci-prose-only.mjs
       - name: Offline precache list is current
         run: node scripts/gen-precache.mjs --check
 
@@ -53,6 +64,9 @@ jobs:
           fi
 
   e2e-local:
+    needs: browser-core
+    # Unknown/failed classification runs E2E; only explicit prose-only PRs skip.
+    if: ${{ always() && needs.browser-core.outputs.prose_only != 'true' }}
     # Serve docs/ locally and run the browser e2e (CSP, vendored files, reflow,
     # first run) before merge, not only after deploy.
     runs-on: ubuntu-latest
