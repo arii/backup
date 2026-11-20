@@ -1,6 +1,6 @@
 # Implementation Plan: Progress Review and Leaderboard
 
-Checked items are implemented in FEAT-003 on branch `feat/onboarding-specs-feedback`.
+Checked items are built.
 Unchecked items are **spec only**. The social leaderboard is spec only.
 
 - [x] 1. `progress.js` aggregation

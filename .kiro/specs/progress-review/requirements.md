@@ -15,11 +15,11 @@ Design stance and evidence: `docs/research/feedback-and-habit-formation.md`.
 - Upright "perfect" posture is not proven to prevent pain (Slater et al. 2019), so no
   ranking may push people to hold still.
 
-Scope markers: **(FEAT-003)** implemented on this branch. **(spec only)** designed, not built.
+Scope markers: Untagged items are built. **(spec only)** designed, not built.
 
 ## Requirements
 
-### Requirement 1: Personal progress panel (FEAT-003)
+### Requirement 1: Personal progress panel
 **User Story:** As a user, I want to see my posture over time, so I can tell whether I
 am improving.
 
@@ -32,12 +32,12 @@ am improving.
 6. THE panel SHALL NOT show streak-loss, "you broke your streak", or comparison-to-others text.
 7. THE aggregation SHALL be a pure function in `docs/app/progress.js` with node tests, taking `(store, now)` and returning plain data.
 
-### Requirement 2: Data control (FEAT-003)
+### Requirement 2: Data control
 1. THE panel SHALL offer "Export JSON" that downloads the stored progress data (`days`, `tests`, `version`), without audio data URLs or calibration.
 2. THE panel SHALL offer "Delete my data" that, after a confirm dialog, removes the `posture-guard:v1` key and reloads the app state.
 3. Export and delete SHALL work without a network connection.
 
-### Requirement 3: Honest numbers (FEAT-003)
+### Requirement 3: Honest numbers
 1. Good % SHALL be computed only from tracked time (`good + bad` seconds). Time in `UNRELIABLE` or paused states SHALL NOT count as good or bad.
 2. A day with fewer than `PROGRESS.min_tracked_s` (default 60) tracked seconds SHALL be shown as "too little to score" and excluded from trend lines.
 3. Silent tests below 30 tracked seconds are already not stored; the panel SHALL NOT display any test that is missing `good` and `bad`.

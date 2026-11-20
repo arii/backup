@@ -1,4 +1,4 @@
-# Requirements Document: Posture Guard
+# Requirements Document: BackUp
 
 > **History note (Nov 2026).** This spec was written while a Python desktop app
 > (`src/posture_guard`, FastAPI dashboard, `config.yaml`) existed next to the browser
@@ -8,7 +8,7 @@
 > `DEFAULTS`) and is tested by `tests/js/`.
 
 ## Introduction
-Posture Guard is a local posture monitor. It reads a standard webcam (or a synthetic
+BackUp is a local posture monitor. It reads a standard webcam (or a synthetic
 demo stream), runs MediaPipe Pose, scores head and shoulder geometry, and reminds the
 user with a chime and then a spoken prompt. It ships as a browser app on GitHub Pages
 (Requirement 8) and as a Linux desktop app whose FastAPI dashboard on `127.0.0.1`
@@ -18,7 +18,7 @@ controls.
 ## Requirements
 
 ### Requirement 1: Camera input
-**User Story:** As a user or judge, I want Posture Guard to run with the laptop
+**User Story:** As a user or judge, I want BackUp to run with the laptop
 webcam I already have, with a no-camera demo as a fallback.
 
 #### Acceptance Criteria

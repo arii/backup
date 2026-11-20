@@ -152,6 +152,9 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   shows no score number.
 - **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
   speech synthesis as a fallback.
+- **Share.** The Share dialog has plain links (no third-party scripts) and a
+  *Share your score* PNG card drawn in the tab from this session's good-posture
+  percentage and best streak. It never contains a camera frame.
 - **Silent *Test me*, breath check and relax reminder, hold-to-fill progress bar,
   pause, and *Report a bug*** (a public GitHub issue, so keep private details out).
 
@@ -223,10 +226,10 @@ validated.** Spec: [`.kiro/specs/feedback-design`](.kiro/specs/feedback-design/r
 The default stays a personal review. Backend options and anti-gaming rules are in
 [`.kiro/specs/progress-review`](.kiro/specs/progress-review/requirements.md).
 
-## Planned wellness tools
+## Wellness tools (what is built, what is planned)
 
-All spec only, opt-in, off by default, no medical claims, and counted against the
-same per-hour prompt cap. See [`.kiro/specs/wellness-tools`](.kiro/specs/wellness-tools/requirements.md).
+Opt-in, no medical claims, and every prompt goes through one scheduler (at most one
+non-posture prompt every 10 minutes). Items marked spec only are designed, not built. See [`.kiro/specs/wellness-tools`](.kiro/specs/wellness-tools/requirements.md).
 
 | Tool | Status |
 |---|---|
@@ -240,6 +243,11 @@ same per-hour prompt cap. See [`.kiro/specs/wellness-tools`](.kiro/specs/wellnes
 **Red line:** breathing, tension and posture data are never sent to a server (no accounts,
 sync, analytics or leaderboards) without redoing the legal review in
 [`docs/legal-checklist.md`](docs/legal-checklist.md).
+
+## Audit
+
+[`docs/audit-2026-11.md`](docs/audit-2026-11.md) lists every request and open issue
+with its status, the evidence, and what was overstated and corrected.
 
 ## Layout
 

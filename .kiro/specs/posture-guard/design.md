@@ -1,4 +1,4 @@
-# Design Document: Posture Guard
+# Design Document: BackUp
 
 > **History note (Nov 2026).** This spec was written while a Python desktop app
 > (`src/posture_guard`, FastAPI dashboard, `config.yaml`) existed next to the browser

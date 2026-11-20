@@ -1,4 +1,4 @@
-# Implementation Plan: Posture Guard
+# Implementation Plan: BackUp
 
 > **History note (Nov 2026).** This spec was written while a Python desktop app
 > (`src/posture_guard`, FastAPI dashboard, `config.yaml`) existed next to the browser
@@ -68,8 +68,7 @@
   - _Requirements: 9_
 
 ## Follow-on specs
-These specs extend the work above. Items marked `[x]` in them are implemented on branch
-`feat/onboarding-specs-feedback`; unchecked items are spec only.
+These specs extend the work above. Items marked `[x]` in them are built; unchecked items are spec only.
 - `.kiro/specs/onboarding-and-setup/`: first-run walkthrough, setup check, troubleshooting.
 - `.kiro/specs/safety-and-disclaimers/`: safety notice, acknowledgement, claims discipline.
 - `.kiro/specs/feedback-design/`: cue, praise, reminder and sound rules from the research.

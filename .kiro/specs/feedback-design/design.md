@@ -11,7 +11,7 @@
 | Alarm fatigue (Sendelbach & Funk 2013) | Hourly reminder cap with a visible note | `feedback.js` |
 | Sounds carry urgency (Hellier & Edworthy 1999) | Low-urgency tones for posture | `tones()` in `app.js` |
 
-## Module: `docs/app/feedback.js` (FEAT-003)
+## Module: `docs/app/feedback.js`
 Pure, injected time, unit-tested in `tests/js/feedback.test.mjs`. It decides *whether* a
 feedback action is allowed. `app.js` still plays sounds and shows banners.
 
@@ -54,7 +54,7 @@ Decision details:
 
 ## Sounds
 Positive: rising major arpeggio (existing `playGood`). Corrective: short falling two-tone
-(existing `playBad`). Peak gain 0.5 with exponential decay. No new sounds in FEAT-003.
+(existing `playBad`). Peak gain 0.5 with exponential decay. No new sounds.
 No spoken text is added (`docs/app/voice-lines.js` is not modified; new lines would have
 no rendered clip and fall back to robotic speech).
 

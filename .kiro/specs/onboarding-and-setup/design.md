@@ -1,7 +1,7 @@
 # Design Document: Onboarding and Setup
 
 ## Modules
-- `docs/app/onboarding.js` (FEAT-003): pure, no DOM, injected time, unit-tested in
+- `docs/app/onboarding.js`: pure, no DOM, injected time, unit-tested in
   `tests/js/onboarding.test.mjs`. Same pattern as `relax.js`.
 - `docs/app/app.js`: wires the card, the Help button, the panel and practice mode, and
   owns `store`/`save()`.

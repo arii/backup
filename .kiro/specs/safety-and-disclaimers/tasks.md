@@ -1,6 +1,6 @@
 # Implementation Plan: Safety and Disclaimers
 
-Checked items are implemented in FEAT-003 on branch `feat/onboarding-specs-feedback`.
+Checked items are built.
 Unchecked items are **spec only**.
 
 - [x] 1. Safety text constants in `onboarding.js`
