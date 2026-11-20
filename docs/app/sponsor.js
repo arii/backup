@@ -32,7 +32,8 @@ const num = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0)
 
 /** Call when a tracking session starts (webcam or demo). Records the first-seen day. */
 export function recordSession(store, nowMs) {
-  const u = (store.usage && typeof store.usage === "object") ? store.usage : (store.usage = {});
+  if (!(store.usage && typeof store.usage === "object")) store.usage = {};
+  const u = store.usage;
   if (!DATE_KEY.test(u.firstSeen || "")) u.firstSeen = dayKey(nowMs);
   u.sessions = num(u.sessions) + 1;
   return store;
@@ -42,13 +43,13 @@ export function recordSession(store, nowMs) {
 export function usageTotals(store) {
   let days = 0;
   let seconds = 0;
-  for (const [key, d] of Object.entries((store && store.days) || {})) {
+  for (const [key, d] of Object.entries(store?.days || {})) {
     if (!DATE_KEY.test(key) || !d || typeof d !== "object") continue;
     const s = num(d.good) + num(d.bad);
     seconds += s;
     if (s > 0) days += 1;
   }
-  return { sessions: num(store && store.usage && store.usage.sessions), days, seconds };
+  return { sessions: num(store?.usage?.sessions), days, seconds };
 }
 
 /** Text for the card, with the tracked hours rounded to a whole number (at least 2). */
@@ -62,12 +63,12 @@ export function sponsorText(store) {
 export function shouldOfferSponsor(store, ctx, cfg = SPONSOR) {
   const { nowMs, good = false, silent = false } = ctx;
   if (!good || silent) return false;
-  const sp = (store && store.sponsor) || {};
+  const sp = store?.sponsor || {};
   if (sp.never === true) return false;
   if (num(sp.shown) >= cfg.max_shown) return false;
   const t = usageTotals(store);
   if (t.sessions < cfg.min_sessions || t.days < cfg.min_days || t.seconds < cfg.min_tracked_s) return false;
-  const first = store.usage && store.usage.firstSeen;
+  const first = store.usage?.firstSeen;
   if (!DATE_KEY.test(first || "") || nowMs - dayMs(first) < cfg.first_week_days * DAY_MS) return false;
   if (DATE_KEY.test(sp.laterOn || "") && nowMs - dayMs(sp.laterOn) < cfg.later_days * DAY_MS) return false;
   return true;
@@ -75,21 +76,24 @@ export function shouldOfferSponsor(store, ctx, cfg = SPONSOR) {
 
 /** The card went on screen: counts toward the lifetime maximum. */
 export function markSponsorShown(store) {
-  const sp = (store.sponsor = store.sponsor && typeof store.sponsor === "object" ? store.sponsor : {});
+  if (!(store.sponsor && typeof store.sponsor === "object")) store.sponsor = {};
+  const sp = store.sponsor;
   sp.shown = num(sp.shown) + 1;
   return store;
 }
 
 /** The card was hidden before the user could answer (they left the frame): give the show back. */
 export function refundSponsorShown(store) {
-  const sp = (store.sponsor = store.sponsor && typeof store.sponsor === "object" ? store.sponsor : {});
+  if (!(store.sponsor && typeof store.sponsor === "object")) store.sponsor = {};
+  const sp = store.sponsor;
   sp.shown = Math.max(0, num(sp.shown) - 1);
   return store;
 }
 
 /** The user's answer: "later" (comes back after later_days), "never" (permanent). */
 export function answerSponsor(store, how, nowMs) {
-  const sp = (store.sponsor = store.sponsor && typeof store.sponsor === "object" ? store.sponsor : {});
+  if (!(store.sponsor && typeof store.sponsor === "object")) store.sponsor = {};
+  const sp = store.sponsor;
   if (how === "never") sp.never = true;
   else if (how === "later") sp.laterOn = dayKey(nowMs);
   return store;

@@ -36,18 +36,37 @@ export function sanitizeError(message, max = 200) {
 /** WebGL result without the GPU model: only whether it works, and which version. */
 export function webglSummary(gl) {
   if (!gl) return "unavailable";
-  return typeof gl.createVertexArray === "function" && typeof gl.texStorage2D === "function" ? "WebGL2 ok" : "WebGL1 ok";
+  return typeof gl.createVertexArray === "function" && typeof gl.texStorage2D === "function"
+    ? "WebGL2 ok"
+    : "WebGL1 ok";
 }
 
 /** @param {{diag: string, problems: string[]}} parts */
 export function buildBugReportBody({ diag, problems }) {
   const errs = problems.length ? problems.join("\n") : "(none)";
   return [
-    PUBLIC_WARNING, "",
-    "**What happened?**", "", "", "",
-    "**What did you expect?**", "", "", "",
-    "**Steps to reproduce** (webcam or demo? what posture?)", "", "1. ", "",
-    "<details open><summary>Diagnostics (filled in by the app, no video or images)</summary>", "",
-    diag, "", "Recent errors:", "```", errs, "```", "</details>",
+    PUBLIC_WARNING,
+    "",
+    "**What happened?**",
+    "",
+    "",
+    "",
+    "**What did you expect?**",
+    "",
+    "",
+    "",
+    "**Steps to reproduce** (webcam or demo? what posture?)",
+    "",
+    "1. ",
+    "",
+    "<details open><summary>Diagnostics (filled in by the app, no video or images)</summary>",
+    "",
+    diag,
+    "",
+    "Recent errors:",
+    "```",
+    errs,
+    "```",
+    "</details>",
   ].join("\n");
 }

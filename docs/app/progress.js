@@ -13,7 +13,7 @@ export const PROGRESS = Object.freeze({
   max_tests: 10,
 });
 
-export const EXPORT_SCHEMA = 1;
+const EXPORT_SCHEMA = 1;
 const DAY_MS = 86400000;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -29,7 +29,12 @@ function validTests(store) {
   const list = Array.isArray(store?.tests) ? store.tests : [];
   return list
     .filter((t) => t && typeof t === "object")
-    .map((t) => ({ at: typeof t.at === "string" ? t.at : "", minutes: secs(t.minutes), good: secs(t.good), bad: secs(t.bad) }))
+    .map((t) => ({
+      at: typeof t.at === "string" ? t.at : "",
+      minutes: secs(t.minutes),
+      good: secs(t.good),
+      bad: secs(t.bad),
+    }))
     .filter((t) => t.good + t.bad > 0);
 }
 
@@ -41,10 +46,13 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
   for (let i = cfg.window_days - 1; i >= 0; i--) {
     const date = dateKey(end - i * DAY_MS);
     const d = stored[date] && typeof stored[date] === "object" ? stored[date] : {};
-    const good = secs(d.good), bad = secs(d.bad);
+    const good = secs(d.good),
+      bad = secs(d.bad);
     const tracked = good + bad;
     days.push({
-      date, tracked_s: tracked, good_s: good,
+      date,
+      tracked_s: tracked,
+      good_s: good,
       pct: tracked >= cfg.min_tracked_s ? pctOf(good, bad) : null,
     });
   }
@@ -54,11 +62,18 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
   }
   const withData = days.filter((d) => d.pct !== null);
   const coached = withData.length
-    ? pctOf(withData.reduce((a, d) => a + d.good_s, 0), withData.reduce((a, d) => a + (d.tracked_s - d.good_s), 0))
+    ? pctOf(
+        withData.reduce((a, d) => a + d.good_s, 0),
+        withData.reduce((a, d) => a + (d.tracked_s - d.good_s), 0),
+      )
     : null;
-  const tests = validTests(store).slice(-cfg.max_tests).map((t) => ({
-    at: t.at, minutes: t.minutes, pct: pctOf(t.good, t.bad),
-  }));
+  const tests = validTests(store)
+    .slice(-cfg.max_tests)
+    .map((t) => ({
+      at: t.at,
+      minutes: t.minutes,
+      pct: pctOf(t.good, t.bad),
+    }));
   const latest = tests[tests.length - 1];
   return {
     days,
@@ -80,7 +95,10 @@ export function exportJson(store, now = Date.now()) {
     }
   }
   const tests = validTests(store).map((t) => ({
-    at: t.at, minutes: t.minutes, good: Math.round(t.good), bad: Math.round(t.bad),
+    at: t.at,
+    minutes: t.minutes,
+    good: Math.round(t.good),
+    bad: Math.round(t.bad),
   }));
   return JSON.stringify({ schema: EXPORT_SCHEMA, exportedAt: new Date(toMs(now)).toISOString(), days, tests }, null, 2);
 }

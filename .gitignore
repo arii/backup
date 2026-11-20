@@ -9,3 +9,4 @@ video/public/footage/
 video/public/audio/
 video/public/capture.json
 video/person.y4m
+node_modules/

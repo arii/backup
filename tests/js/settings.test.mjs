@@ -60,7 +60,10 @@ test("breaks and prompts defaults: eye breaks on, move break 60, breathing momen
 
 test("breaks and prompts choices persist, and bad stored values fall back", () => {
   const s = resolveSettings({
-    eyeBreaks: false, moveBreakMinutes: 0, breathingMoments: true, breatheCues: true,
+    eyeBreaks: false,
+    moveBreakMinutes: 0,
+    breathingMoments: true,
+    breatheCues: true,
     promptsDismissed: { eye: true, move: false, bogus: true },
   });
   assert.equal(s.eyeBreaks, false);

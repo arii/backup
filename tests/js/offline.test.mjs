@@ -7,7 +7,13 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  READY_TEXT, formatSize, isOfflineReady, missingFiles, offlineMessage, offlineState, progressPercent,
+  READY_TEXT,
+  formatSize,
+  isOfflineReady,
+  missingFiles,
+  offlineMessage,
+  offlineState,
+  progressPercent,
 } from "../../docs/app/offline.js";
 import { buildPrecache, checkPrecache, withVersion } from "../../scripts/gen-precache.mjs";
 
@@ -72,8 +78,16 @@ test("sw.js version line is rewritten", () => {
 
 test("precache covers the vendored runtime, model and voices", () => {
   const urls = buildPrecache().files.map((f) => f.url);
-  for (const u of ["index.html", "app.js", "offline.js", "vendor/vision_bundle.mjs", "vendor/pose_landmarker_lite.task",
-    "vendor/wasm/vision_wasm_internal.wasm", "voice/manifest.json"]) assert.ok(urls.includes(u), u);
+  for (const u of [
+    "index.html",
+    "app.js",
+    "offline.js",
+    "vendor/vision_bundle.mjs",
+    "vendor/pose_landmarker_lite.task",
+    "vendor/wasm/vision_wasm_internal.wasm",
+    "voice/manifest.json",
+  ])
+    assert.ok(urls.includes(u), u);
   assert.ok(!urls.includes("sw.js") && !urls.includes("precache.json"));
 });
 

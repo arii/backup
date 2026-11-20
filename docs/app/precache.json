@@ -1,31 +1,31 @@
 {
-  "version": "b8aee19be9d1e152",
-  "totalBytes": 32842883,
+  "version": "3518cf66d1f96959",
+  "totalBytes": 32845209,
   "files": [
     {
       "url": "app.js",
-      "size": 92522,
-      "sha256": "e070b6a94c120d165a140558f940923c5e9ac757b48f86724eac1ab8f30f251c"
+      "size": 94408,
+      "sha256": "fbe177671359758b125c0d8d2fb0f7a7a79a0051fcc72ec9a49a99829c5c28a3"
     },
     {
       "url": "breaks.js",
-      "size": 2896,
-      "sha256": "7a0e0d972e6b59cf26fefd5b5175baef15511a4168ff753772d71fa380ddd24e"
+      "size": 2877,
+      "sha256": "390a50586d8895257b3ce021a3532f36749a967e13578000f0fe80a275248fbd"
     },
     {
       "url": "breathing.js",
-      "size": 2684,
-      "sha256": "522ef7dc4c46b269515557f6e5ddf0ad8d6f7608adecae6094061ec9a5e12a6a"
+      "size": 2719,
+      "sha256": "80986e72c5f58952c9d96991b514a605487dfa5f298dbc02003465f53a57a7e9"
     },
     {
       "url": "consent.js",
-      "size": 2328,
-      "sha256": "e71d7eeeb12074e4d880e3db6e4b25c05aa70d5f05cf7861a0195c299608f088"
+      "size": 2320,
+      "sha256": "5de5f0063c83cbef4ee0be22ea4a9c203c436bdf5d55d34b2284bc49a8b5275c"
     },
     {
       "url": "feedback.js",
-      "size": 3841,
-      "sha256": "34585f9d009698b548849c28d741c1ef045205bafaf5e778ccc48450e1f6cfd1"
+      "size": 3852,
+      "sha256": "3f28e696321b6ebc6c88e4f6f96dba77527fb814f9f5a6e0710117ff1fd94c37"
     },
     {
       "url": "index.html",
@@ -39,8 +39,8 @@
     },
     {
       "url": "movenet-adapter.js",
-      "size": 3457,
-      "sha256": "e83c42ffcd6889b381c0581b00a0c17422740e01607cfbc25b67b81e69febe87"
+      "size": 3555,
+      "sha256": "a89fc1e704b373212769572a32cff1cfb12ec66ad86c6cd7ce356c020264572c"
     },
     {
       "url": "offline.js",
@@ -49,53 +49,53 @@
     },
     {
       "url": "onboarding.js",
-      "size": 8833,
-      "sha256": "3f6c6e2c99b01217230b6db108d8772e1630292225b4ef574d2c4d8a664ec831"
+      "size": 8844,
+      "sha256": "c05e6fcd46551b7fb5d6ad74e58d83eed10393882e26ad8fb29a87ffd4ad3a76"
     },
     {
       "url": "posture-core.js",
-      "size": 30796,
-      "sha256": "dbc261b6f13890e68fba814e84ec024cfb3fd4032b59f4f95131b4615beaf61d"
+      "size": 30817,
+      "sha256": "bfa3f5e9bcc9397b3fcf02da076619f638ba28f73bd79d402e8099ad8fdabc3b"
     },
     {
       "url": "privacy.js",
-      "size": 2215,
-      "sha256": "b78f07a5fc5bb9cab5eeff437f4240ce6e3d9deb83a7d89dda0ad064001a9dca"
+      "size": 2291,
+      "sha256": "32e39fd4d74d367f7e26860bc956aba9d314057e00c9aaad6bbc17928b3193b9"
     },
     {
       "url": "progress.js",
-      "size": 3558,
-      "sha256": "b0c3b3d3e1a07a82a1498d2323fee52f9cdb1f1b9feb1b6ea38cb54c339c0997"
+      "size": 3661,
+      "sha256": "74ab8e3436301473f155e5f2a83808283501a5700732b4753da9d3629889dfdd"
     },
     {
       "url": "prompts.js",
-      "size": 5060,
-      "sha256": "13fc7d9d605472da738e72d7dcf8e4ecb648b4a559246aeea86e576955371c4f"
+      "size": 5019,
+      "sha256": "b49198638695c490b980955f9b16a55dcbc37b903bc92f60460119ccc19f5c11"
     },
     {
       "url": "relax.js",
-      "size": 7159,
-      "sha256": "6e6e272b723e7ddecdffb01d0b4027117618ca6474930c53fe70f6a221fe1d98"
+      "size": 7271,
+      "sha256": "f0a2d01a04cd51d1657dceadc33c72c8b6c01deeafbefad44b12414669a1a75b"
     },
     {
       "url": "settings.js",
-      "size": 2659,
-      "sha256": "3abe7601171450557b08d1c02e8e556a314c152af40f5ddb8b20063cc8637fdd"
+      "size": 2658,
+      "sha256": "696503de0544fe210dda760ba13c597405d9a1140de64e11c0ef5239aa6ce875"
     },
     {
       "url": "share.js",
-      "size": 4047,
-      "sha256": "bb477fcfba9013fe1f2c434083255c25c908549e346faee324ea2dd29ffc7168"
+      "size": 4068,
+      "sha256": "3a2f5596fa1a2647357ec036b94b19a4d454a9a4274eb5fdfe7aff333094eb00"
     },
     {
       "url": "sound-packs.js",
-      "size": 2870,
-      "sha256": "dac232730e131b845b102259f6e14274960633a5575a808eb0159511c294acf0"
+      "size": 2897,
+      "sha256": "73e3c774d27b223f18ee1c9077854cedfe55fdedd87efd3d9cc744c578e8e7f5"
     },
     {
       "url": "sponsor.js",
-      "size": 4205,
-      "sha256": "2ae4e72b0133b61a49981b73242f13a2b34ded8c4cd39d5f1b7b0fafbc9ca7f8"
+      "size": 4167,
+      "sha256": "9007007de520172fca44cfae169e123f92e36869c08668ebf8010fc4af969435"
     },
     {
       "url": "vendor/LICENSE",
@@ -529,8 +529,8 @@
     },
     {
       "url": "voice-lines.js",
-      "size": 3220,
-      "sha256": "39eb3485b7b657ea81646e26f83259de9b6592dac291f633873385c93f40efd1"
+      "size": 3252,
+      "sha256": "55fd3d9ffe90f4bbe7b0cd96fc91a292e2ff6a3efe0493beef3016a8167f0628"
     }
   ]
 }

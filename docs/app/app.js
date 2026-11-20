@@ -7,11 +7,16 @@
 // chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
 
+import { DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED } from "./posture-core.js";
 import {
-  DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED,
-} from "./posture-core.js";
-import {
-  BREAK_LINES, BREATHE_LINES, DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES,
+  BREAK_LINES,
+  BREATHE_LINES,
+  DEFAULT_PROMPT,
+  PRAISE,
+  RECOVERY_PRAISE,
+  RELAX_LINES,
+  TEST_LINE,
+  VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
 import { createMoveNetDetector } from "./movenet-adapter.js";
@@ -21,23 +26,58 @@ import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
 import { PromptScheduler } from "./prompts.js";
 import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
 import {
-  DIAGNOSIS_TEXT, Diagnosis, markOnboarded, needsAckOnly, ONBOARDING_STEPS, PRACTICE_STEPS,
-  RELAX_SAFETY, SAFETY_POINTS, SAFETY_SHORT, SetupCheck, shouldShowOnboarding,
+  DIAGNOSIS_TEXT,
+  Diagnosis,
+  markOnboarded,
+  needsAckOnly,
+  ONBOARDING_STEPS,
+  PRACTICE_STEPS,
+  RELAX_SAFETY,
+  SAFETY_POINTS,
+  SAFETY_SHORT,
+  SetupCheck,
+  shouldShowOnboarding,
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
 import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
-  BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
-} from "./privacy.js";
-import {
-  META_URL, CACHE_PREFIX, cacheNameFor, isOfflineReady, offlineMessage, offlineState, progressPercent,
+  META_URL,
+  CACHE_PREFIX,
+  cacheNameFor,
+  isOfflineReady,
+  offlineMessage,
+  offlineState,
+  progressPercent,
 } from "./offline.js";
 import {
-  CONSENT_CHECKBOX, CONSENT_POINTS, CONSENT_TITLE, consentStatus, hasConsent, recordConsent, withdrawConsent,
+  CONSENT_CHECKBOX,
+  CONSENT_POINTS,
+  CONSENT_TITLE,
+  consentStatus,
+  hasConsent,
+  recordConsent,
+  withdrawConsent,
 } from "./consent.js";
-import { SHARE_TEXT, cardAltText, drawScoreCard, nativeSharePayload, scoreCardData, normalizeInstance, shareLinks, shareUrl } from "./share.js";
 import {
-  SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, refundSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
+  SHARE_TEXT,
+  cardAltText,
+  drawScoreCard,
+  nativeSharePayload,
+  scoreCardData,
+  normalizeInstance,
+  shareLinks,
+  shareUrl,
+} from "./share.js";
+import {
+  SPONSOR,
+  SPONSOR_URL,
+  answerSponsor,
+  markSponsorShown,
+  refundSponsorShown,
+  recordSession,
+  shouldOfferSponsor,
+  sponsorText,
 } from "./sponsor.js";
 import { COACH_INTRO, DONE_INTRO } from "./onboarding.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
@@ -60,13 +100,21 @@ const ctx = canvas.getContext("2d");
 // -- persistence --------------------------------------------------------------
 
 function loadStore() {
-  try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(STORE)) || {};
+  } catch {
+    return {};
+  }
 }
 const store = loadStore();
 let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
   if (deleted) return;
-  try { localStorage.setItem(STORE, JSON.stringify(store)); } catch { /* quota: keep in memory */ }
+  try {
+    localStorage.setItem(STORE, JSON.stringify(store));
+  } catch {
+    /* quota: keep in memory */
+  }
 }
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -83,28 +131,36 @@ const settings = {
 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
-  el.addEventListener("change", () => { settings.mode = el.value; store.mode = el.value; save(); });
+  el.addEventListener("change", () => {
+    settings.mode = el.value;
+    store.mode = el.value;
+    save();
+  });
 });
 $("sound-pack").value = settings.soundPack;
 $("sound-pack").addEventListener("change", (e) => {
   settings.soundPack = SOUND_PACKS[e.target.value] ? e.target.value : "clean";
-  store.soundPack = settings.soundPack; save();
+  store.soundPack = settings.soundPack;
+  save();
   playBad(); // a preview of the new pack's reminder
 });
 $("specific-cues").checked = settings.specificCues;
 $("specific-cues").addEventListener("change", (e) => {
   settings.specificCues = e.target.checked;
-  store.specificCues = settings.specificCues; save();
+  store.specificCues = settings.specificCues;
+  save();
 });
 $("spoken-praise").checked = settings.spokenPraise;
 $("spoken-praise").addEventListener("change", (e) => {
   settings.spokenPraise = e.target.checked;
-  store.spokenPraise = settings.spokenPraise; save();
+  store.spokenPraise = settings.spokenPraise;
+  save();
 });
 $("voice-text").value = settings.voiceText;
 $("voice-text").addEventListener("change", (e) => {
   settings.voiceText = e.target.value.trim() || DEFAULT_PROMPT;
-  store.voiceText = settings.voiceText; save();
+  store.voiceText = settings.voiceText;
+  save();
 });
 
 settings.coachingLevel = normalizeLevel(store.coachingLevel);
@@ -113,7 +169,8 @@ $("coaching-level").value = settings.coachingLevel;
 $("coaching-level").addEventListener("change", (e) => {
   settings.coachingLevel = normalizeLevel(e.target.value);
   policy.setLevel(settings.coachingLevel);
-  store.coachingLevel = settings.coachingLevel; save();
+  store.coachingLevel = settings.coachingLevel;
+  save();
 });
 
 function allowed(nudge) {
@@ -179,14 +236,24 @@ function playBuffer(buffer) {
 
 // A falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
 // down, reedy odd harmonics) and a rising C-major arpeggio reward.
-const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
+const BAD_HARMONICS = [
+  [1, 1.0],
+  [3, 0.35],
+  [5, 0.15],
+];
 // An uploaded sound wins, then the chosen pack (clean by default).
-const playBad = () => (custom.bad ? playBuffer(custom.bad)
-  : settings.soundPack === "spooky" ? playSpooky(ensureAudio(), "bad")
-    : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS));
-const playGood = () => (custom.good ? playBuffer(custom.good)
-  : settings.soundPack === "spooky" ? playSpooky(ensureAudio(), "good")
-    : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
+const playBad = () =>
+  custom.bad
+    ? playBuffer(custom.bad)
+    : settings.soundPack === "spooky"
+      ? playSpooky(ensureAudio(), "bad")
+      : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS);
+const playGood = () =>
+  custom.good
+    ? playBuffer(custom.good)
+    : settings.soundPack === "spooky"
+      ? playSpooky(ensureAudio(), "good")
+      : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]);
 
 // -- voice --------------------------------------------------------------------
 // Default: clips pre-rendered with Kokoro-82M (docs/app/voice, see
@@ -217,7 +284,10 @@ let voices = [];
 
 fetch("./voice/manifest.json")
   .then((r) => (r.ok ? r.json() : null))
-  .then((m) => { clipManifest = m && m.voices ? m : null; refreshVoices(); })
+  .then((m) => {
+    clipManifest = m?.voices ? m : null;
+    refreshVoices();
+  })
   .catch(() => {});
 
 const kokoroVoices = () => Object.keys(VOICES).filter((id) => clipManifest?.voices[id]);
@@ -228,16 +298,21 @@ function selectedVoice() {
   if (want && voices.some((v) => v.name === want)) return want;
   return kokoroVoices().length ? KOKORO + kokoroVoices()[0] : (voices[0]?.name ?? "");
 }
-function chosenVoice() { // best or selected system voice (for fallback speech)
+function chosenVoice() {
+  // best or selected system voice (for fallback speech)
   const sel = selectedVoice();
   return voices.find((v) => v.name === sel) || voices[0] || null;
 }
 
 function refreshVoices() {
   const lang = navigator.language || "en-US";
-  voices = "speechSynthesis" in window
-    ? window.speechSynthesis.getVoices().slice().sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
-    : [];
+  voices =
+    "speechSynthesis" in window
+      ? window.speechSynthesis
+          .getVoices()
+          .slice()
+          .sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
+      : [];
   const pick = $("voice-pick");
   pick.replaceChildren();
   for (const id of kokoroVoices()) pick.add(new Option(VOICES[id], KOKORO + id));
@@ -247,7 +322,8 @@ function refreshVoices() {
   const best = voices[0];
   $("voice-note").textContent = sel.startsWith(KOKORO)
     ? "Recorded natural voice (Kokoro). A custom spoken prompt uses your browser's voice."
-    : !voices.length ? "No voice available in this browser."
+    : !voices.length
+      ? "No voice available in this browser."
       : best && voiceScore(best, lang) <= 0
         ? "Only basic system voices are installed here, so they may sound robotic. Pick a natural voice above."
         : `Using ${(chosenVoice() || best).name}.`;
@@ -257,26 +333,43 @@ if ("speechSynthesis" in window) {
   window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
 }
 $("voice-pick").addEventListener("change", (e) => {
-  store.voiceName = e.target.value; save(); refreshVoices();
+  store.voiceName = e.target.value;
+  save();
+  refreshVoices();
 });
 
 function loadClip(url) {
   if (!clipCache.has(url)) {
-    clipCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => ensureAudio().decodeAudioData(b)));
+    clipCache.set(
+      url,
+      fetch(url)
+        .then((r) => r.arrayBuffer())
+        .then((b) => ensureAudio().decodeAudioData(b)),
+    );
   }
   return clipCache.get(url);
 }
 
 function stopSpeech() {
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-  if (clipSource) { try { clipSource.stop(); } catch { /* already ended */ } clipSource = null; }
+  if (clipSource) {
+    try {
+      clipSource.stop();
+    } catch {
+      /* already ended */
+    }
+    clipSource = null;
+  }
 }
 
 function speakSystem(text) {
   if (!("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   const v = chosenVoice();
-  if (v) { u.voice = v; u.lang = v.lang; }
+  if (v) {
+    u.voice = v;
+    u.lang = v.lang;
+  }
   window.speechSynthesis.speak(u);
 }
 
@@ -287,16 +380,20 @@ function speak(text) {
   const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
   document.dispatchEvent(new CustomEvent("pg:speak", { detail: { text, engine: file ? "kokoro" : "system" } }));
   if (!file) return speakSystem(text);
-  loadClip(`./voice/${file}`).then((buffer) => {
-    if (paused || test || practice) return;
-    const ac = ensureAudio();
-    const src = ac.createBufferSource();
-    src.buffer = buffer;
-    src.connect(ac.destination);
-    src.onended = () => { if (clipSource === src) clipSource = null; };
-    clipSource = src;
-    src.start();
-  }).catch(() => speakSystem(text)); // clip missing or undecodable
+  loadClip(`./voice/${file}`)
+    .then((buffer) => {
+      if (paused || test || practice) return;
+      const ac = ensureAudio();
+      const src = ac.createBufferSource();
+      src.buffer = buffer;
+      src.connect(ac.destination);
+      src.onended = () => {
+        if (clipSource === src) clipSource = null;
+      };
+      clipSource = src;
+      src.start();
+    })
+    .catch(() => speakSystem(text)); // clip missing or undecodable
 }
 
 let praiseIndex = 0;
@@ -317,7 +414,10 @@ async function restoreSound(kind) {
     const bin = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     custom[kind] = await ensureAudio().decodeAudioData(bytes.buffer);
-  } catch { delete store[`${kind}Sound`]; save(); }
+  } catch {
+    delete store[`${kind}Sound`];
+    save();
+  }
 }
 
 for (const kind of ["bad", "good"]) {
@@ -326,7 +426,8 @@ for (const kind of ["bad", "good"]) {
     if (!file) return;
     try {
       custom[kind] = await decodeFile(file);
-      if (file.size < 1_500_000) { // small enough to keep across reloads
+      if (file.size < 1_500_000) {
+        // small enough to keep across reloads
         store[`${kind}Sound`] = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
@@ -334,16 +435,24 @@ for (const kind of ["bad", "good"]) {
         });
         save();
       }
-    } catch (err) { showError(`could not decode ${file.name}: ${err.message || err}`); }
+    } catch (err) {
+      showError(`could not decode ${file.name}: ${err.message || err}`);
+    }
   });
 }
 $("test-bad").addEventListener("click", () => playBad());
-$("test-voice").addEventListener("click", () => { ensureAudio(); speak(TEST_LINE); });
+$("test-voice").addEventListener("click", () => {
+  ensureAudio();
+  speak(TEST_LINE);
+});
 $("test-good").addEventListener("click", () => playGood());
 $("clear-sounds").addEventListener("click", () => {
   custom.bad = custom.good = null;
-  delete store.badSound; delete store.goodSound; save();
-  $("bad-file").value = ""; $("good-file").value = "";
+  delete store.badSound;
+  delete store.goodSound;
+  save();
+  $("bad-file").value = "";
+  $("good-file").value = "";
 });
 
 let notifyEnabled = false;
@@ -371,7 +480,9 @@ function reminderText(nudge, cue) {
 let episode = 0; // counts slouch episodes, for the coaching policy
 let lastBad = false;
 
-function showReminderNote(on) { $("reminder-note").classList.toggle("show", on); }
+function showReminderNote(on) {
+  $("reminder-note").classList.toggle("show", on);
+}
 
 function fire(nudge, cue) {
   if (test || practice) return; // silent test or practice: withhold every cue
@@ -380,15 +491,17 @@ function fire(nudge, cue) {
   const nowS = performance.now() / 1000;
   if (reminder) {
     const verdict = policy.onReminder(nowS, { episodeId: episode, voice: nudge === Nudge.VOICE });
-    if (verdict.capped) { showReminderNote(true); return; } // too many in an hour: stay quiet
+    if (verdict.capped) {
+      showReminderNote(true);
+      return;
+    } // too many in an hour: stay quiet
     if (nudge === Nudge.VOICE && !verdict.voice) nudge = Nudge.CHIME; // light: chime instead of voice
     reminderCount += 1;
     prompts.notePosture(pclock); // a posture reminder owns the screen: other prompts wait
   } else if (nudge === Nudge.POSITIVE_CHIME && !policy.onPraise("timed")) {
     return; // light coaching: no timed praise
   }
-  const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise()
-    : nudge === Nudge.RECOVERY ? nextRecovery() : null;
+  const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise() : nudge === Nudge.RECOVERY ? nextRecovery() : null;
   const text = praise || reminderText(nudge, cue);
   const banner = $("banner");
   banner.textContent = text;
@@ -417,7 +530,8 @@ $("calib-good").addEventListener("click", () => engine.calibration.start("good")
 $("calib-bad").addEventListener("click", () => engine.calibration.start("bad"));
 $("calib-reset").addEventListener("click", () => {
   engine.calibration.reset();
-  delete store.calibration; save();
+  delete store.calibration;
+  save();
 });
 
 function renderCalibration() {
@@ -429,7 +543,8 @@ function renderCalibration() {
   } else if (c.good || c.bad) {
     $("calib-status").textContent =
       `good: ${c.good ? c.good_samples + " frames" : "not recorded"} \u00b7 slouch: ` +
-      `${c.bad ? c.bad_samples + " frames" : "not recorded"}` + (c.calibrated ? " \u00b7 needle calibrated" : "");
+      `${c.bad ? c.bad_samples + " frames" : "not recorded"}` +
+      (c.calibrated ? " \u00b7 needle calibrated" : "");
   }
   if (engine.calibration.version !== savedCalVersion) {
     savedCalVersion = engine.calibration.version;
@@ -474,24 +589,44 @@ function requireConsent(then) {
 }
 $("consent-title").textContent = CONSENT_TITLE;
 $("consent-label").append(CONSENT_CHECKBOX);
-$("consent-list").replaceChildren(...CONSENT_POINTS.map((t) => { const li = document.createElement("li"); li.textContent = t; return li; }));
-$("consent-check").addEventListener("change", (e) => { $("consent-agree").disabled = !e.target.checked; });
+$("consent-list").replaceChildren(
+  ...CONSENT_POINTS.map((t) => {
+    const li = document.createElement("li");
+    li.textContent = t;
+    return li;
+  }),
+);
+$("consent-check").addEventListener("change", (e) => {
+  $("consent-agree").disabled = !e.target.checked;
+});
 $("consent-agree").addEventListener("click", () => {
-  recordConsent(store); save();
+  recordConsent(store);
+  save();
   $("consent-dialog").close();
-  renderConsentStatus(); renderPromptSettings();
-  const then = consentThen; consentThen = null;
+  renderConsentStatus();
+  renderPromptSettings();
+  const then = consentThen;
+  consentThen = null;
   if (then) then();
 });
-$("consent-cancel").addEventListener("click", () => { consentThen = null; $("consent-dialog").close(); renderPromptSettings(); });
-$("consent-dialog").addEventListener("close", () => { if (!hasConsent(store)) renderPromptSettings(); });
+$("consent-cancel").addEventListener("click", () => {
+  consentThen = null;
+  $("consent-dialog").close();
+  renderPromptSettings();
+});
+$("consent-dialog").addEventListener("close", () => {
+  if (!hasConsent(store)) renderPromptSettings();
+});
 $("consent-open").addEventListener("click", () => requireConsent(null));
 $("consent-withdraw").addEventListener("click", () => {
-  withdrawConsent(store); save();
-  guide.cancel(); breath.cancel?.();
+  withdrawConsent(store);
+  save();
+  guide.cancel();
+  breath.cancel?.();
   if (card) hideCard();
   prompts.dismiss(pclock, "done");
-  renderConsentStatus(); renderPromptSettings();
+  renderConsentStatus();
+  renderPromptSettings();
 });
 
 const bracing = new BracingMonitor();
@@ -535,15 +670,23 @@ function startBreathCheck() {
 }
 
 function relaxStep(landmarks, state, now) {
-  if (test || practice) { relaxLastT = null; return; }
-  if (!hasConsent(store)) { relaxLastT = null; $("relax-shoulders").textContent = "off until you opt in"; return; }
+  if (test || practice) {
+    relaxLastT = null;
+    return;
+  }
+  if (!hasConsent(store)) {
+    relaxLastT = null;
+    $("relax-shoulders").textContent = "off until you opt in";
+    return;
+  }
   const ratio = neckRatio(landmarks);
   const good = state === State.GOOD;
   const flagged = bracing.update(ratio, now, good && !breath.active);
   if (flagged && settings.relaxReminders && !breath.active) {
     showRelaxBanner(RELAX_LINES.bracing);
     sayRelax(RELAX_LINES.bracing);
-    store.bracingCount = (store.bracingCount || 0) + 1; save();
+    store.bracingCount = (store.bracingCount || 0) + 1;
+    save();
     prompts.enqueue("offer", pclock); // offer "Breathe with me" (scheduler rules apply)
   }
   if (breath.active) {
@@ -565,8 +708,8 @@ function relaxStep(landmarks, state, now) {
   relaxLastT = now;
   const ref = bracing.reference;
   const v = bracing.value;
-  $("relax-shoulders").textContent = ref === null || v === null ? "learning your relaxed shoulders..."
-    : v < ref * 0.88 ? "creeping up" : "relaxed";
+  $("relax-shoulders").textContent =
+    ref === null || v === null ? "learning your relaxed shoulders..." : v < ref * 0.88 ? "creeping up" : "relaxed";
 }
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
@@ -589,7 +732,12 @@ function setTrackingControls(on) {
 $("breath-check").addEventListener("click", startBreathCheck);
 $("relax-reminders").addEventListener("change", (e) => {
   const on = e.target.checked;
-  const apply = () => { settings.relaxReminders = on; store.relaxReminders = on; save(); renderPromptSettings(); };
+  const apply = () => {
+    settings.relaxReminders = on;
+    store.relaxReminders = on;
+    save();
+    renderPromptSettings();
+  };
   if (on && !requireConsent(apply)) return;
   apply();
 });
@@ -626,11 +774,11 @@ const prompts = new PromptScheduler({ isEnabled: promptEnabled });
 const breaks = new BreakTracker(settings);
 const moments = new BreathingMoments();
 const guide = new BreatheGuide();
-let pclock = 0;   // prompt clock (scaled by clockScale)
-let preal = 0;    // real seconds of running tracking (card timers, guide)
+let pclock = 0; // prompt clock (scaled by clockScale)
+let preal = 0; // real seconds of running tracking (card timers, guide)
 let plast = null;
-let pstreak = 0;  // good-posture streak on the prompt clock
-let card = null;  // the prompt on screen: { id, text, t, finished }
+let pstreak = 0; // good-posture streak on the prompt clock
+let card = null; // the prompt on screen: { id, text, t, finished }
 
 function renderPromptSettings() {
   $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
@@ -663,7 +811,11 @@ $("move-minutes").addEventListener("change", (e) => {
 });
 $("breathing-moments").addEventListener("change", (e) => {
   const on = e.target.checked;
-  const apply = () => { settings.breathingMoments = on; if (on) delete dismissed.breathing; savePromptSettings(); };
+  const apply = () => {
+    settings.breathingMoments = on;
+    if (on) delete dismissed.breathing;
+    savePromptSettings();
+  };
   if (on && !requireConsent(apply)) return; // asks first; renderPromptSettings resets the box if declined
   apply();
 });
@@ -726,11 +878,18 @@ function setCardFill(f) {
   $("prompt-bar").setAttribute("aria-valuenow", String(pct));
 }
 
-function hideCard() { card = null; renderCard(); }
+function hideCard() {
+  card = null;
+  renderCard();
+}
 
 /** The user (or a timeout) ends the card. how: done | snooze | notnow | never. */
 function endCard(how) {
-  if (card && card.id === "guide") { guide.cancel(); hideCard(); return; }
+  if (card && card.id === "guide") {
+    guide.cancel();
+    hideCard();
+    return;
+  }
   const id = prompts.dismiss(pclock, how);
   if (how === "never" && DISMISS_KEY[id]) {
     dismissed[DISMISS_KEY[id]] = true;
@@ -748,15 +907,24 @@ function cancelPrompts() {
 }
 
 function showPrompt(item) {
-  if (item.id === "share") { showSponsor(); return; }
-  if (item.id === "breath") { // the auto breath check has its own UI
+  if (item.id === "share") {
+    showSponsor();
+    return;
+  }
+  if (item.id === "breath") {
+    // the auto breath check has its own UI
     prompts.dismiss(pclock, "done");
     startBreathCheck();
     return;
   }
-  const text = item.id === "eye" ? BREAK_LINES.eye
-    : item.id === "move" ? BREAK_LINES.move
-      : item.id === "offer" ? BREATHE_LINES.offer : moments.take(pclock);
+  const text =
+    item.id === "eye"
+      ? BREAK_LINES.eye
+      : item.id === "move"
+        ? BREAK_LINES.move
+        : item.id === "offer"
+          ? BREATHE_LINES.offer
+          : moments.take(pclock);
   card = { id: item.id, text, t: 0, finished: false };
   setCardFill(0);
   renderCard();
@@ -796,7 +964,10 @@ function guideStep() {
 
 /** Runs every tracked frame (real `now` in seconds). */
 function promptStep(state, now) {
-  if (test || practice || paused) { plast = null; return; }
+  if (test || practice || paused) {
+    plast = null;
+    return;
+  }
   const dt = plast === null ? 0 : Math.min(1, Math.max(0, now - plast));
   plast = now;
   preal += dt;
@@ -805,8 +976,18 @@ function promptStep(state, now) {
   if (breaks.update(present, pclock)) countBreak();
   pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0;
   if (!present && card && card.id !== "guide") endCard("done"); // no prompt while away
-  if (!present && sponsorCard) { refundSponsorShown(store); save(); hideSponsor(); } // walking away is not an answer
-  if (shouldOfferSponsor(store, { nowMs: Date.now(), good: pstreak >= SPONSOR.good_streak_s, silent: !!test || !!practice || paused })) {
+  if (!present && sponsorCard) {
+    refundSponsorShown(store);
+    save();
+    hideSponsor();
+  } // walking away is not an answer
+  if (
+    shouldOfferSponsor(store, {
+      nowMs: Date.now(),
+      good: pstreak >= SPONSOR.good_streak_s,
+      silent: !!test || !!practice || paused,
+    })
+  ) {
     prompts.enqueue("share", pclock);
   }
   for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
@@ -831,13 +1012,20 @@ function promptStep(state, now) {
       endCard("notnow"); // ignoring a prompt counts as "Not now"
     }
   } else {
-    const item = prompts.poll(pclock, { paused, test: !!test || !!practice, breathCheck: breath.active || guide.active });
+    const item = prompts.poll(pclock, {
+      paused,
+      test: !!test || !!practice,
+      breathCheck: breath.active || guide.active,
+    });
     if (item) showPrompt(item);
   }
 }
 
 $("prompt-action").addEventListener("click", () => startGuide());
-$("prompt-done").addEventListener("click", () => { if (card && card.id === "move") breaks.taken("move"); endCard("done"); });
+$("prompt-done").addEventListener("click", () => {
+  if (card && card.id === "move") breaks.taken("move");
+  endCard("done");
+});
 $("prompt-snooze").addEventListener("click", () => endCard("snooze"));
 $("prompt-notnow").addEventListener("click", () => endCard("notnow"));
 $("prompt-never").addEventListener("click", () => endCard("never"));
@@ -851,9 +1039,17 @@ let sponsorCard = null; // { t } while on screen
 $("sponsor-link").href = SPONSOR_URL;
 
 function showSponsor() {
-  const still = shouldOfferSponsor(store, { nowMs: Date.now(), good: pstreak >= SPONSOR.good_streak_s, silent: !!test || !!practice || paused });
-  if (!still) { prompts.dismiss(pclock, "done"); return; } // conditions changed while it waited
-  markSponsorShown(store); save();
+  const still = shouldOfferSponsor(store, {
+    nowMs: Date.now(),
+    good: pstreak >= SPONSOR.good_streak_s,
+    silent: !!test || !!practice || paused,
+  });
+  if (!still) {
+    prompts.dismiss(pclock, "done");
+    return;
+  } // conditions changed while it waited
+  markSponsorShown(store);
+  save();
   sponsorCard = { t: 0 };
   $("sponsor-text").textContent = sponsorText(store);
   $("sponsor-card").hidden = false;
@@ -865,18 +1061,27 @@ function hideSponsor() {
   prompts.dismiss(pclock, "done");
 }
 function answerSponsorCard(how) {
-  if (how !== "done") { answerSponsor(store, how, Date.now()); save(); }
+  if (how !== "done") {
+    answerSponsor(store, how, Date.now());
+    save();
+  }
   hideSponsor();
 }
 $("sponsor-later").addEventListener("click", () => answerSponsorCard("later"));
 $("sponsor-never").addEventListener("click", () => answerSponsorCard("never"));
 $("sponsor-link").addEventListener("click", () => answerSponsorCard("never")); // they acted: do not ask again
-$("sponsor-share").addEventListener("click", () => { answerSponsorCard("later"); openShare(); });
+$("sponsor-share").addEventListener("click", () => {
+  answerSponsorCard("later");
+  openShare();
+});
 
 // -- share (Web Share API, else a menu of plain links; nothing third-party is loaded) --
 function renderShareLinks() {
   const links = shareLinks(shareUrl(location.href), { instance: $("share-instance").value });
-  for (const [id, href] of Object.entries(links)) { const a = $(`share-${id}`); if (a) a.href = href; }
+  for (const [id, href] of Object.entries(links)) {
+    const a = $(`share-${id}`);
+    if (a) a.href = href;
+  }
   $("share-mastodon").hidden = !links.mastodon;
 }
 function openShare() {
@@ -891,8 +1096,10 @@ function openShare() {
 }
 $("share-btn").addEventListener("click", openShare);
 $("share-native").addEventListener("click", async () => {
-  try { await navigator.share(nativeSharePayload(shareUrl(location.href))); } catch (e) {
-    if (!e || e.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
+  try {
+    await navigator.share(nativeSharePayload(shareUrl(location.href)));
+  } catch (e) {
+    if (e?.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
   }
 });
 $("share-close").addEventListener("click", () => $("share-dialog").close());
@@ -900,7 +1107,10 @@ $("share-close").addEventListener("click", () => $("share-dialog").close());
 let cardBlob = null;
 $("share-card-btn").addEventListener("click", () => {
   const d = scoreCardData(session);
-  if (!d) { $("share-msg").textContent = "Track at least a minute of posture first, then your score card is ready."; return; }
+  if (!d) {
+    $("share-msg").textContent = "Track at least a minute of posture first, then your score card is ready.";
+    return;
+  }
   const canvas = $("share-card");
   drawScoreCard(canvas.getContext("2d"), d);
   canvas.setAttribute("aria-label", cardAltText(d));
@@ -910,7 +1120,7 @@ $("share-card-btn").addEventListener("click", () => {
   canvas.toBlob((b) => {
     cardBlob = b;
     const file = b && new File([b], "backup-score.png", { type: "image/png" });
-    $("share-card-share").hidden = !(file && navigator.canShare && navigator.canShare({ files: [file] }));
+    $("share-card-share").hidden = !(file && navigator.canShare?.({ files: [file] }));
   }, "image/png");
 });
 $("share-card-download").addEventListener("click", () => {
@@ -924,8 +1134,14 @@ $("share-card-download").addEventListener("click", () => {
 $("share-card-share").addEventListener("click", async () => {
   if (!cardBlob) return;
   try {
-    await navigator.share({ files: [new File([cardBlob], "backup-score.png", { type: "image/png" })], text: SHARE_TEXT });
-  } catch (e) { if (!e || e.name !== "AbortError") $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead."; }
+    await navigator.share({
+      files: [new File([cardBlob], "backup-score.png", { type: "image/png" })],
+      text: SHARE_TEXT,
+    });
+  } catch (e) {
+    if (e?.name !== "AbortError")
+      $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead.";
+  }
 });
 $("share-instance").addEventListener("input", () => {
   renderShareLinks();
@@ -934,7 +1150,10 @@ $("share-instance").addEventListener("input", () => {
 });
 $("share-copy").addEventListener("click", async () => {
   const text = `${SHARE_TEXT} ${$("share-link").value}`;
-  try { await navigator.clipboard.writeText(text); $("share-msg").textContent = "Copied."; } catch {
+  try {
+    await navigator.clipboard.writeText(text);
+    $("share-msg").textContent = "Copied.";
+  } catch {
     $("share-link").select();
     $("share-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
   }
@@ -979,14 +1198,21 @@ function finishTest(stoppedEarly) {
   $("test-progress-wrap").style.display = "none";
   const tracked = t.good + t.bad;
   if (!stoppedEarly && tracked >= 30) {
-    store.tests.push({ at: new Date().toISOString(), minutes: t.minutes, good: Math.round(t.good), bad: Math.round(t.bad) });
+    store.tests.push({
+      at: new Date().toISOString(),
+      minutes: t.minutes,
+      good: Math.round(t.good),
+      bad: Math.round(t.bad),
+    });
     store.tests = store.tests.slice(-50);
     save();
     $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
     renderProgress();
     playGood();
   } else {
-    $("test-status").textContent = stoppedEarly ? "Test stopped, not saved." : "Not enough tracked time to score; not saved.";
+    $("test-status").textContent = stoppedEarly
+      ? "Test stopped, not saved."
+      : "Not enough tracked time to score; not saved.";
   }
   renderTest();
 }
@@ -1000,13 +1226,19 @@ function renderTest() {
     $("test-progress").style.width = `${Math.min(100, (100 * test.elapsed) / (test.minutes * 60)).toFixed(1)}%`;
   }
   const tests = store.tests;
-  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), { good: 0, bad: 0 });
+  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), {
+    good: 0,
+    bad: 0,
+  });
   const parts = [];
   if (tests.length) {
-    const first = tests[0], last = tests[tests.length - 1];
-    parts.push(tests.length === 1
-      ? `Silent test: <b>${pctOf(last)}%</b> good`
-      : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`);
+    const first = tests[0],
+      last = tests[tests.length - 1];
+    parts.push(
+      tests.length === 1
+        ? `Silent test: <b>${pctOf(last)}%</b> good`
+        : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`,
+    );
   } else {
     parts.push("No silent tests yet. Take one now for a baseline, then again after a few days of coaching.");
   }
@@ -1014,7 +1246,10 @@ function renderTest() {
   $("test-compare").innerHTML = parts.join(" &middot; ");
 }
 
-$("test-start").addEventListener("click", () => { ensureAudio(); startTest(); });
+$("test-start").addEventListener("click", () => {
+  ensureAudio();
+  startTest();
+});
 
 const DAY_SAVE_S = 15;
 let lastDaySave = 0;
@@ -1048,18 +1283,30 @@ function account(state, now) {
       if (test.elapsed >= test.minutes * 60) finishTest(false);
       return;
     }
-    if (practice) { session.lastT = now; return; } // practice records nothing
-    const day = (store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 });
+    if (practice) {
+      session.lastT = now;
+      return;
+    } // practice records nothing
+    const dayKey = todayKey();
+    store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0 };
+    const day = store.days[dayKey];
     if (state === State.GOOD) {
-      session.good += dt; day.good += dt; session.streak += dt;
+      session.good += dt;
+      day.good += dt;
+      session.streak += dt;
       session.best = Math.max(session.best, session.streak);
       const milestone = policy.onGood(now, dt);
       if (milestone !== null) fireMilestone(milestone);
     } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
-      session.bad += dt; day.bad += dt; session.streak = 0;
+      session.bad += dt;
+      day.bad += dt;
+      session.streak = 0;
       policy.onBad();
     }
-    if (now - lastDaySave >= DAY_SAVE_S) { lastDaySave = now; save(); } // keep daily totals across reloads
+    if (now - lastDaySave >= DAY_SAVE_S) {
+      lastDaySave = now;
+      save();
+    } // keep daily totals across reloads
   }
   session.lastT = now;
 }
@@ -1075,9 +1322,7 @@ function renderStats() {
   $("reminder-count").textContent = String(reminderCount);
   $("breaks-count").textContent = String(breaksTakenToday());
   const day = store.days[todayKey()];
-  $("today").textContent = day
-    ? `${mmss(day.good)} good, ${mmss(day.bad)} slouched`
-    : "nothing tracked yet";
+  $("today").textContent = day ? `${mmss(day.good)} good, ${mmss(day.bad)} slouched` : "nothing tracked yet";
 }
 
 // -- rendering ----------------------------------------------------------------
@@ -1091,38 +1336,63 @@ const STATE_LABELS = {
 };
 
 const WIRE = { good: "#4cc36a", drift: "#ffb340", bad: "#ff5c5c", slate: "#8b95a3" };
-const SKELETON = [[7, 8], [7, 11], [8, 12], [11, 12], [11, 23], [12, 24], [23, 24]];
+const SKELETON = [
+  [7, 8],
+  [7, 11],
+  [8, 12],
+  [11, 12],
+  [11, 23],
+  [12, 24],
+  [23, 24],
+];
 
 function wireColor(state, result) {
   if (state === State.BAD_CHIME || state === State.BAD_VOICE) return WIRE.bad;
   if (result.kind !== "scored") return WIRE.slate;
   const cfg = DEFAULTS.scoring;
-  if (Math.abs(result.head_forward_deg) > cfg.head_forward_deg ||
-      Math.abs(result.head_tilt_deg) > cfg.head_tilt_deg ||
-      Math.abs(result.shoulder_level_deg) > cfg.shoulder_level_deg) return WIRE.drift;
+  if (
+    Math.abs(result.head_forward_deg) > cfg.head_forward_deg ||
+    Math.abs(result.head_tilt_deg) > cfg.head_tilt_deg ||
+    Math.abs(result.shoulder_level_deg) > cfg.shoulder_level_deg
+  )
+    return WIRE.drift;
   return state === State.GOOD ? WIRE.good : WIRE.slate;
 }
 
 function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
-  const w = (cv.width = cv.clientWidth);
-  const h = (cv.height = cv.clientHeight);
+  cv.width = cv.clientWidth;
+  cv.height = cv.clientHeight;
+  const w = cv.width;
+  const h = cv.height;
   c.clearRect(0, 0, w, h);
   if (!landmarks) return;
-  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 4 * scale;
+  c.strokeStyle = color;
+  c.fillStyle = color;
+  c.lineWidth = 4 * scale;
   for (const [a, b] of SKELETON) {
-    const p = landmarks[a], q = landmarks[b];
+    const p = landmarks[a],
+      q = landmarks[b];
     if (![p.x, p.y, q.x, q.y].every(Number.isFinite)) continue;
-    c.beginPath(); c.moveTo(p.x * w, p.y * h); c.lineTo(q.x * w, q.y * h); c.stroke();
+    c.beginPath();
+    c.moveTo(p.x * w, p.y * h);
+    c.lineTo(q.x * w, q.y * h);
+    c.stroke();
   }
-  const le = landmarks[7], re = landmarks[8];
-  if ([le.x, le.y, re.x, re.y].every(Number.isFinite)) { // head outline between the ears
+  const le = landmarks[7],
+    re = landmarks[8];
+  if ([le.x, le.y, re.x, re.y].every(Number.isFinite)) {
+    // head outline between the ears
     const r = Math.hypot((re.x - le.x) * w, (re.y - le.y) * h) * 0.75;
-    c.beginPath(); c.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI); c.stroke();
+    c.beginPath();
+    c.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI);
+    c.stroke();
   }
   for (const i of TRACKED) {
     const p = landmarks[i];
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    c.beginPath(); c.arc(p.x * w, p.y * h, 6 * scale, 0, 2 * Math.PI); c.fill();
+    c.beginPath();
+    c.arc(p.x * w, p.y * h, 6 * scale, 0, 2 * Math.PI);
+    c.fill();
   }
 }
 
@@ -1130,12 +1400,16 @@ function causeFor(result, landmarks) {
   if (landmarks && landmarks[LEFT_EAR].y < 0.1) return "head near the top edge - lower the camera or sit lower";
   if (result.kind !== "unreliable") return "";
   switch (result.reason) {
-    case Reason.NO_POSE: return "no one in view - sit facing the camera";
-    case Reason.LOW_VISIBILITY: return `low confidence - ${result.detail}`;
+    case Reason.NO_POSE:
+      return "no one in view - sit facing the camera";
+    case Reason.LOW_VISIBILITY:
+      return `low confidence - ${result.detail}`;
     case Reason.FRAMING_OUT_OF_BAND:
       return result.detail.startsWith("too close") ? "too close - move back a little" : "too far - move closer";
-    case Reason.NON_FINITE: return "tracking glitch - holding the last state";
-    default: return result.detail;
+    case Reason.NON_FINITE:
+      return "tracking glitch - holding the last state";
+    default:
+      return result.detail;
   }
 }
 
@@ -1145,13 +1419,20 @@ function renderFix(state, result, cue, hold) {
   const box = $("fix-box");
   const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
   const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
-  let title, how = "", cls = "";
+  let title,
+    how = "",
+    cls = "";
   if ((bad || drifting) && cue) {
-    title = cue.title; how = cue.fix; cls = "active";
+    title = cue.title;
+    how = cue.fix;
+    cls = "active";
   } else if (bad) {
-    title = "Almost there"; cls = "active"; // the hold bar shows how long is left
+    title = "Almost there";
+    cls = "active"; // the hold bar shows how long is left
   } else if (state === State.GOOD) {
-    title = "Looking good"; how = "Stay soft: shoulders heavy, breathing easy."; cls = "ok";
+    title = "Looking good";
+    how = "Stay soft: shoulders heavy, breathing easy.";
+    cls = "ok";
   } else {
     title = "What to fix shows up here";
   }
@@ -1174,7 +1455,10 @@ const HOLD_TEXT = {
 };
 function renderHold(hold) {
   const bar = $("hold-bar");
-  if (!hold) { bar.className = "hold idle"; return; }
+  if (!hold) {
+    bar.className = "hold idle";
+    return;
+  }
   const secs = hold.remaining >= 10 ? `${Math.ceil(hold.remaining)} s` : `${hold.remaining.toFixed(1)} s`;
   bar.className = `hold ${hold.kind === "slipping" ? "warn" : "good"}`;
   $("hold-fill").style.width = `${(hold.fraction * 100).toFixed(1)}%`;
@@ -1191,7 +1475,13 @@ const MINI_VIEWS = ["practice", "setup"].map((pre) => {
 
 function renderMiniViews(landmarks, color, needle) {
   const open = { practice: !!practice, setup: $("setup-panel").open };
-  const draw = new Set(miniViewsToDraw(MINI_VIEWS.map((m) => m.pre), open, needle));
+  const draw = new Set(
+    miniViewsToDraw(
+      MINI_VIEWS.map((m) => m.pre),
+      open,
+      needle,
+    ),
+  );
   for (const m of MINI_VIEWS) {
     if (!draw.has(m.pre)) continue;
     drawSkeleton(landmarks, color, m.cv, m.c, MINI_SCALE);
@@ -1207,15 +1497,22 @@ function render(out, landmarks) {
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
   // otherwise read "no one in view" while being scored.
-  badge.textContent = transition.state === State.NO_PERSON && result.kind === "scored"
-    ? "settling in"
-    : STATE_LABELS[transition.state] || transition.state;
+  badge.textContent =
+    transition.state === State.NO_PERSON && result.kind === "scored"
+      ? "settling in"
+      : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
   const settling = !test && !practice && badge.textContent === "settling in";
   $("settling-note").hidden = !settling;
   badge.title = settling ? $("settling-note").textContent : "";
-  if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
-  if (practice) { badge.textContent = "practice"; badge.className = "badge practice"; }
+  if (test) {
+    badge.textContent = "silent test";
+    badge.className = "badge testing";
+  }
+  if (practice) {
+    badge.textContent = "practice";
+    badge.className = "badge practice";
+  }
   $("warnings").textContent = causeFor(result, landmarks);
   const cfg = DEFAULTS.scoring;
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
@@ -1230,8 +1527,11 @@ function render(out, landmarks) {
     // The threshold needle averages all metrics, so a single-metric slouch
     // sits mid-dial: the label follows the state machine, the needle shows how far.
     const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
-    const label = bad ? "slouching" : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
-      ? "drifting" : "upright";
+    const label = bad
+      ? "slouching"
+      : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
+        ? "drifting"
+        : "upright";
     $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
   }
   drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
@@ -1256,11 +1556,12 @@ function demoPose(t) {
   const slouch = Math.floor(t / DEMO_CYCLE_S) % 2 === 1;
   const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
   const wobble = Math.sin(t * 1.7) * 0.003;
-  lm[11] = { x: 0.60 + wobble, y: 0.62, visibility: 0.99 }; // unmirrored: left shoulder on the right
-  lm[12] = { x: 0.40 + wobble, y: 0.62, visibility: 0.99 };
+  lm[11] = { x: 0.6 + wobble, y: 0.62, visibility: 0.99 }; // unmirrored: left shoulder on the right
+  lm[12] = { x: 0.4 + wobble, y: 0.62, visibility: 0.99 };
   lm[23] = { x: 0.56, y: 0.95, visibility: 0.9 };
   lm[24] = { x: 0.44, y: 0.95, visibility: 0.9 };
-  const ex = slouch ? -0.02 : 0, ey = slouch ? 0.09 : 0;
+  const ex = slouch ? -0.02 : 0,
+    ey = slouch ? 0.09 : 0;
   lm[7] = { x: 0.54 + ex + wobble, y: 0.46 + ey, visibility: 0.99 };
   lm[8] = { x: 0.46 + ex + wobble, y: 0.46 + ey, visibility: 0.99 };
   return lm;
@@ -1278,7 +1579,10 @@ function setPaused(on) {
   paused = on;
   save(); // flush daily totals when pausing
   const stream = video.srcObject;
-  if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
+  if (stream)
+    stream.getVideoTracks().forEach((t) => {
+      t.enabled = !on;
+    });
   if (on) {
     if (practice) stopPractice();
     breath.cancel();
@@ -1309,12 +1613,14 @@ const PAUSE_TITLE = "Pause tracking and all sounds";
 function renderPauseShortcut() {
   $("pause-shortcut").checked = settings.pauseShortcut;
   $("pause").title = settings.pauseShortcut
-    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)` : PAUSE_TITLE;
+    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)`
+    : PAUSE_TITLE;
 }
 renderPauseShortcut();
 $("pause-shortcut").addEventListener("change", (e) => {
   settings.pauseShortcut = e.target.checked;
-  store.pauseShortcut = settings.pauseShortcut; save();
+  store.pauseShortcut = settings.pauseShortcut;
+  save();
   renderPauseShortcut();
 });
 document.addEventListener("keydown", (e) => {
@@ -1340,7 +1646,7 @@ function step() {
       stopCamera(err); // e.g. the GPU context was lost: stop instead of throwing every frame
       return;
     }
-    const first = res.landmarks && res.landmarks[0];
+    const first = res.landmarks?.[0];
     // Some tasks-vision builds omit visibility; absent means "detected".
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
@@ -1358,12 +1664,20 @@ function step() {
     $("fps").textContent = fpsEma.toFixed(0);
   }
   lastFrameT = now;
-  if (!document.hidden) { // a throttled background tab has a low fps that says nothing about the setup
+  if (!document.hidden) {
+    // a throttled background tab has a low fps that says nothing about the setup
     const { result } = out;
-    renderSetup(setup.update({
-      reason: result.kind === "unreliable" ? result.reason : null,
-      state: out.transition.state, fps: fpsEma, metricsPresent: result.kind === "scored",
-    }, now));
+    renderSetup(
+      setup.update(
+        {
+          reason: result.kind === "unreliable" ? result.reason : null,
+          state: out.transition.state,
+          fps: fpsEma,
+          metricsPresent: result.kind === "scored",
+        },
+        now,
+      ),
+    );
   }
   showReminderNote(policy.isCapped(now));
   if (!document.hidden) render(out, landmarks);
@@ -1383,7 +1697,9 @@ function visibleLoop() {
 function startHiddenTicker() {
   const src = `setInterval(() => postMessage(0), ${HIDDEN_TICK_MS});`;
   const worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
-  worker.onmessage = () => { if (document.hidden) step(); };
+  worker.onmessage = () => {
+    if (document.hidden) step();
+  };
 }
 
 // MediaPipe's web runtime uploads every camera frame through WebGL, even with
@@ -1407,7 +1723,9 @@ function webglCanvas() {
   return null;
 }
 
-function showWebGLHelp(show) { $("webgl-help").classList.toggle("show", show); }
+function showWebGLHelp(show) {
+  $("webgl-help").classList.toggle("show", show);
+}
 
 const CAMERA_LABEL = $("start-camera").textContent;
 
@@ -1526,7 +1844,9 @@ function bugReportUrl() {
 // Fill the link at click time so it carries the current state.
 for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-link")]) {
   link.title = BUG_LINK_TIP;
-  link.addEventListener("click", () => { link.href = bugReportUrl(); });
+  link.addEventListener("click", () => {
+    link.href = bugReportUrl();
+  });
 }
 
 /** Tracking failed after it started: release the camera, bring the start
@@ -1539,7 +1859,7 @@ function stopCamera(err) {
   setTrackingControls(false);
   poseLandmarker = null;
   const stream = video.srcObject;
-  if (stream) stream.getTracks().forEach((t) => t.stop());
+  if (stream) for (const t of stream.getTracks()) t.stop();
   video.srcObject = null;
   lowAccuracy = false;
   $("lowpower-note").style.display = "none";
@@ -1558,7 +1878,8 @@ function begin(source) {
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
   $("lowpower-note").style.display = lowAccuracy ? "block" : "none";
-  restoreSound("bad"); restoreSound("good");
+  restoreSound("bad");
+  restoreSound("good");
   $("pause").disabled = false;
   $("test-start").disabled = false;
   setTrackingControls(true);
@@ -1566,7 +1887,8 @@ function begin(source) {
   maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
-  recordSession(store, Date.now()); save();
+  recordSession(store, Date.now());
+  save();
   resetPromptSession();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
@@ -1581,7 +1903,8 @@ $("start-camera").addEventListener("click", async () => {
   try {
     $("start-status").textContent = "Asking for camera access...";
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false,
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      audio: false,
     });
     video.srcObject = stream;
     await video.play();
@@ -1597,8 +1920,9 @@ $("start-camera").addEventListener("click", async () => {
       }
     }
     if (!poseLandmarker) {
-      $("start-status").textContent = (canvas ? "The main pose model did not start, so loading" : "WebGL is off, so loading")
-        + " the simpler fallback pose model (about 6 MB, cached after the first visit)...";
+      $("start-status").textContent =
+        (canvas ? "The main pose model did not start, so loading" : "WebGL is off, so loading") +
+        " the simpler fallback pose model (about 6 MB, cached after the first visit)...";
       poseLandmarker = await loadMoveNet();
       lowAccuracy = true;
     }
@@ -1606,7 +1930,7 @@ $("start-camera").addEventListener("click", async () => {
   } catch (err) {
     $("start-status").textContent = "";
     const stream = video.srcObject;
-    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (stream) for (const t of stream.getTracks()) t.stop();
     video.srcObject = null;
     poseLandmarker = null;
     showError(cameraErrorMessage(err));
@@ -1679,7 +2003,13 @@ function coachControls() {
     el.addEventListener("change", () => {
       src.checked = el.checked;
       src.dispatchEvent(new Event("change"));
-      $("consent-dialog").addEventListener("close", () => { el.checked = src.checked; }, { once: true });
+      $("consent-dialog").addEventListener(
+        "close",
+        () => {
+          el.checked = src.checked;
+        },
+        { once: true },
+      );
     });
     return el;
   };
@@ -1688,35 +2018,59 @@ function coachControls() {
   voice.setAttribute("aria-label", "Voice");
   voice.value = settings.mode === "chime_and_voice" ? $("voice-pick").value : "__off";
   voice.addEventListener("change", () => {
-    const radio = document.querySelector(`input[name=mode][value=${voice.value === "__off" ? "chime_only" : "chime_and_voice"}]`);
+    const radio = document.querySelector(
+      `input[name=mode][value=${voice.value === "__off" ? "chime_only" : "chime_and_voice"}]`,
+    );
     radio.checked = true;
     radio.dispatchEvent(new Event("change"));
-    if (voice.value !== "__off") { $("voice-pick").value = voice.value; $("voice-pick").dispatchEvent(new Event("change")); }
+    if (voice.value !== "__off") {
+      $("voice-pick").value = voice.value;
+      $("voice-pick").dispatchEvent(new Event("change"));
+    }
   });
   const level = select($("coaching-level"));
   level.id = "coach-level";
   level.setAttribute("aria-label", "Reminder style");
   level.value = $("coaching-level").value;
-  level.addEventListener("change", () => { $("coaching-level").value = level.value; $("coaching-level").dispatchEvent(new Event("change")); });
+  level.addEventListener("change", () => {
+    $("coaching-level").value = level.value;
+    $("coaching-level").dispatchEvent(new Event("change"));
+  });
   const eye = check($("eye-breaks"));
   eye.id = "coach-eye";
   const move = select($("move-minutes"));
   move.id = "coach-move";
   move.setAttribute("aria-label", "Stand up and move");
   move.value = $("move-minutes").value;
-  move.addEventListener("change", () => { $("move-minutes").value = move.value; $("move-minutes").dispatchEvent(new Event("change")); });
+  move.addEventListener("change", () => {
+    $("move-minutes").value = move.value;
+    $("move-minutes").dispatchEvent(new Event("change"));
+  });
   const moments = check($("breathing-moments"));
   moments.id = "coach-moments";
   const samples = document.createElement("div");
   samples.className = "btn-row";
   samples.append(
-    firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
-    firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
-    firstRunButton("Play a voice sample", () => { ensureAudio(); speak(TEST_LINE); }),
+    firstRunButton("Play the reminder", () => {
+      ensureAudio();
+      playBad();
+    }),
+    firstRunButton("Play the praise chime", () => {
+      ensureAudio();
+      playGood();
+    }),
+    firstRunButton("Play a voice sample", () => {
+      ensureAudio();
+      speak(TEST_LINE);
+    }),
   );
   return [
-    row("Voice", voice), row("Reminder style", level), row("Eye break every 20 minutes", eye),
-    row("Stand up and move", move), row("Occasional breathing moments (asks for your OK first)", moments), samples,
+    row("Voice", voice),
+    row("Reminder style", level),
+    row("Eye break every 20 minutes", eye),
+    row("Stand up and move", move),
+    row("Occasional breathing moments (asks for your OK first)", moments),
+    samples,
   ];
 }
 
@@ -1754,7 +2108,11 @@ function renderFirstRun() {
     row.className = "btn-row";
     row.append(
       firstRunButton("Share BackUp", () => openShare(), false),
-      firstRunButton("Start a silent test", () => { closeFirstRun(); $("test-start").scrollIntoView({ block: "center" }); $("test-start").focus(); }),
+      firstRunButton("Start a silent test", () => {
+        closeFirstRun();
+        $("test-start").scrollIntoView({ block: "center" });
+        $("test-start").focus();
+      }),
     );
     parts.push(row);
   }
@@ -1775,7 +2133,10 @@ function closeFirstRun() {
   firstRun.open = false;
   firstRunLive = null;
   $("first-run").hidden = true;
-  if (!store.firstRunDone) { store.firstRunDone = true; save(); }
+  if (!store.firstRunDone) {
+    store.firstRunDone = true;
+    save();
+  }
 }
 
 function maybeStartFirstRun() {
@@ -1797,15 +2158,31 @@ function updateFirstRunLive(result, landmarks) {
 }
 
 $("first-run-next").addEventListener("click", () => {
-  if (firstRun.step >= FIRST_RUN.length - 1) { closeFirstRun(); $("state-badge").focus(); return; }
-  firstRun.step += 1; renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+  if (firstRun.step >= FIRST_RUN.length - 1) {
+    closeFirstRun();
+    $("state-badge").focus();
+    return;
+  }
+  firstRun.step += 1;
+  renderFirstRun();
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
 });
 $("first-run-back").addEventListener("click", () => {
-  firstRun.step = Math.max(0, firstRun.step - 1); renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+  firstRun.step = Math.max(0, firstRun.step - 1);
+  renderFirstRun();
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
 });
-$("first-run-skip").addEventListener("click", () => { closeFirstRun(); $("state-badge").focus(); });
+$("first-run-skip").addEventListener("click", () => {
+  closeFirstRun();
+  $("state-badge").focus();
+});
 $("intro-again").addEventListener("click", () => {
-  if (!loopsStarted) { $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing."; return; }
+  if (!loopsStarted) {
+    $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing.";
+    return;
+  }
   openFirstRun();
   $("first-run").scrollIntoView({ block: "nearest" });
   $("first-run-heading").tabIndex = -1;
@@ -1822,7 +2199,13 @@ const LAST_STEP = ONBOARDING_STEPS.length - 1;
 const ob = { step: needsAckOnly(store) ? LAST_STEP : 0, ackOnly: needsAckOnly(store) };
 
 function fillList(ul, points) {
-  ul.replaceChildren(...points.map((text) => { const li = document.createElement("li"); li.textContent = text; return li; }));
+  ul.replaceChildren(
+    ...points.map((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      return li;
+    }),
+  );
 }
 
 function renderOnboardingStep() {
@@ -1845,10 +2228,19 @@ function showStartControls() {
   if (need) renderOnboardingStep();
 }
 
-$("ob-next").addEventListener("click", () => { ob.step = Math.min(LAST_STEP, ob.step + 1); renderOnboardingStep(); $("ob-title").focus(); });
-$("ob-back").addEventListener("click", () => { ob.step = Math.max(0, ob.step - 1); renderOnboardingStep(); $("ob-title").focus(); });
+$("ob-next").addEventListener("click", () => {
+  ob.step = Math.min(LAST_STEP, ob.step + 1);
+  renderOnboardingStep();
+  $("ob-title").focus();
+});
+$("ob-back").addEventListener("click", () => {
+  ob.step = Math.max(0, ob.step - 1);
+  renderOnboardingStep();
+  $("ob-title").focus();
+});
 $("ob-ack").addEventListener("click", () => {
-  markOnboarded(store); save();
+  markOnboarded(store);
+  save();
   showStartControls();
   ($("start-camera").disabled ? $("start-demo") : $("start-camera")).focus();
 });
@@ -1858,8 +2250,10 @@ function openHelp() {
   const body = $("help-body");
   body.replaceChildren();
   for (const step of ONBOARDING_STEPS) {
-    const h = document.createElement("h3"); h.textContent = step.title;
-    const ul = document.createElement("ul"); fillList(ul, step.points);
+    const h = document.createElement("h3");
+    h.textContent = step.title;
+    const ul = document.createElement("ul");
+    fillList(ul, step.points);
     body.append(h, ul);
   }
   $("help-msg").textContent = "";
@@ -1876,13 +2270,19 @@ $("help-notworking").addEventListener("click", () => {
 $("help-practice").addEventListener("click", () => {
   const msg = startPractice();
   $("help-msg").textContent = msg;
-  if (!msg) { $("help-dialog").close(); $("practice-next").focus(); }
+  if (!msg) {
+    $("help-dialog").close();
+    $("practice-next").focus();
+  }
 });
 
 fillList($("safety-list"), SAFETY_POINTS);
 $("safety-footer").textContent = SAFETY_SHORT;
 $("relax-safety").textContent = RELAX_SAFETY;
-$("safety-link").addEventListener("click", (e) => { e.preventDefault(); $("safety-dialog").showModal(); });
+$("safety-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  $("safety-dialog").showModal();
+});
 $("safety-close").addEventListener("click", () => $("safety-dialog").close());
 
 // -- setup check ("Not working?") ----------------------------------------------------
@@ -1934,7 +2334,8 @@ function startPractice() {
 function stopPractice() {
   practice = null;
   document.body.classList.remove("practicing");
-  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) $(`t-${metric}`).classList.remove("focus");
+  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"])
+    $(`t-${metric}`).classList.remove("focus");
   engine.restart(); // practice postures must not carry into a reminder
   bracing.reset();
   relaxLastT = null;
@@ -1949,13 +2350,19 @@ function renderPractice(result) {
   if (!step.metric) {
     live = "Hold this for a moment. The tiles show your angles.";
   } else {
-    const v = result.kind === "scored" && (step.metric !== "trunk_lean" || result.trunk_lean_available)
-      ? result[`${step.metric}_deg`] : null;
-    live = v !== null && Math.abs(v) > cfg[`${step.metric}_deg`]
-      ? "That is what this cue looks like. Sit tall again, then press Next."
-      : "Try it. The highlighted tile lights up when it is past your threshold.";
+    const v =
+      result.kind === "scored" && (step.metric !== "trunk_lean" || result.trunk_lean_available)
+        ? result[`${step.metric}_deg`]
+        : null;
+    live =
+      v !== null && Math.abs(v) > cfg[`${step.metric}_deg`]
+        ? "That is what this cue looks like. Sit tall again, then press Next."
+        : "Try it. The highlighted tile lights up when it is past your threshold.";
   }
-  if (live !== practiceLive) { practiceLive = live; $("practice-live").textContent = live; }
+  if (live !== practiceLive) {
+    practiceLive = live;
+    $("practice-live").textContent = live;
+  }
   $("fix-title").textContent = "Practice";
   $("fix-how").textContent = "";
   $("fix-box").className = "fix active";
@@ -1981,7 +2388,10 @@ $("practice-next").addEventListener("click", () => {
   practice.i += 1;
   renderPracticeStep();
 });
-$("practice-stop").addEventListener("click", () => { stopPractice(); $("practice-msg").textContent = "Practice stopped."; });
+$("practice-stop").addEventListener("click", () => {
+  stopPractice();
+  $("practice-msg").textContent = "Practice stopped.";
+});
 $("practice-breath").addEventListener("click", () => {
   $("practice-breath").hidden = true;
   $("practice-msg").textContent = "";
@@ -1993,35 +2403,46 @@ $("practice-breath").addEventListener("click", () => {
 // is in progress.js. No streaks, no ranking; see .kiro/specs/progress-review.
 
 let lastProgressRender = 0;
-const minutesText = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`);
+const minutesText = (s) =>
+  s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`;
 
 function renderProgress() {
   lastProgressRender = Date.now();
   const s = summarize(store, Date.now());
-  $("progress-empty").textContent = s.empty ? "Nothing tracked yet. Your progress will appear after your first session." : "";
+  $("progress-empty").textContent = s.empty
+    ? "Nothing tracked yet. Your progress will appear after your first session."
+    : "";
   const days = $("progress-days");
   days.hidden = s.empty;
-  days.replaceChildren(...s.days.map((d) => {
-    const row = document.createElement("div");
-    row.className = "day-row";
-    row.setAttribute("role", "listitem");
-    const label = document.createElement("span");
-    label.textContent = new Date(`${d.date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
-    const bar = document.createElement("div");
-    bar.className = "score-bar";
-    const fill = document.createElement("div");
-    fill.style.width = `${d.pct ?? 0}%`;
-    bar.append(fill);
-    const text = document.createElement("span");
-    text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
-    if (d.pct === null) text.className = "nodata";
-    row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
-    row.append(label, bar, text);
-    return row;
-  }));
-  $("progress-total").textContent = s.empty ? "" : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
+  days.replaceChildren(
+    ...s.days.map((d) => {
+      const row = document.createElement("div");
+      row.className = "day-row";
+      row.setAttribute("role", "listitem");
+      const label = document.createElement("span");
+      label.textContent = new Date(`${d.date}T00:00:00Z`).toLocaleDateString(undefined, {
+        weekday: "short",
+        timeZone: "UTC",
+      });
+      const bar = document.createElement("div");
+      bar.className = "score-bar";
+      const fill = document.createElement("div");
+      fill.style.width = `${d.pct ?? 0}%`;
+      bar.append(fill);
+      const text = document.createElement("span");
+      text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
+      if (d.pct === null) text.className = "nodata";
+      row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
+      row.append(label, bar, text);
+      return row;
+    }),
+  );
+  $("progress-total").textContent = s.empty
+    ? ""
+    : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
   const parts = [];
-  if (s.tests.length) parts.push(`Silent tests, oldest to newest: ${s.tests.map((t) => `${t.pct}%`).join(" \u2192 ")}.`);
+  if (s.tests.length)
+    parts.push(`Silent tests, oldest to newest: ${s.tests.map((t) => `${t.pct}%`).join(" \u2192 ")}.`);
   else if (!s.empty) parts.push("No silent tests yet. Take one for a baseline.");
   if (s.coached_pct_7d !== null) parts.push(`With coaching over the last 7 days: ${s.coached_pct_7d}%.`);
   $("progress-tests").textContent = parts.join(" ");
@@ -2050,7 +2471,12 @@ $("progress-export").addEventListener("click", () => {
 });
 
 $("progress-delete").addEventListener("click", () => {
-  if (!window.confirm("Delete all BackUp data stored in this browser (settings, calibration, daily totals, tests, uploaded sounds and the offline copy)? This cannot be undone.")) return;
+  if (
+    !window.confirm(
+      "Delete all BackUp data stored in this browser (settings, calibration, daily totals, tests, uploaded sounds and the offline copy)? This cannot be undone.",
+    )
+  )
+    return;
   deleted = true; // stop any pending save from writing it back
   clearStoredData(localStorage);
   removeOfflineCopy().finally(() => location.reload());
@@ -2058,13 +2484,22 @@ $("progress-delete").addEventListener("click", () => {
 
 // ---- Offline mode (opt-in; sw.js caches the files listed in precache.json) ----
 const offlineSupported = "serviceWorker" in navigator && "caches" in window;
-const offline = { downloading: false, error: false, percent: 0, totalBytes: 0, ready: false, registered: false, stale: false };
+const offline = {
+  downloading: false,
+  error: false,
+  percent: 0,
+  totalBytes: 0,
+  ready: false,
+  registered: false,
+  stale: false,
+};
 
 function renderOffline() {
   const state = offlineState({ supported: offlineSupported, ...offline });
   $("offline-status").textContent = offlineMessage(state, offline);
   $("offline-enable").hidden = !offlineSupported || state === "ready" || state === "downloading";
-  $("offline-enable").textContent = state === "update-available" ? "Update offline copy" : state === "error" ? "Try again" : "Make available offline";
+  $("offline-enable").textContent =
+    state === "update-available" ? "Update offline copy" : state === "error" ? "Try again" : "Make available offline";
   $("offline-remove").hidden = !offlineSupported || !(offline.registered || offline.ready);
   $("offline-bar").hidden = state !== "downloading";
   $("offline-fill").style.width = `${offline.percent}%`;
@@ -2075,7 +2510,9 @@ async function removeOfflineCopy() {
   try {
     for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
     for (const k of await caches.keys()) if (k.startsWith("posture-guard-")) await caches.delete(k);
-  } catch { /* nothing more to remove */ }
+  } catch {
+    /* nothing more to remove */
+  }
 }
 
 async function refreshOffline() {
@@ -2086,21 +2523,33 @@ async function refreshOffline() {
     let pre = null;
     if (navigator.onLine) pre = await (await fetch("./precache.json", { cache: "no-cache" })).json();
     // Prefer the cache for the current release, else any complete older one (then stale).
-    let cache = null, meta = null;
+    let cache = null,
+      meta = null;
     const names = (await caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX)); // caches.open would create an empty one
     if (pre) names.sort((a, b) => (b === cacheNameFor(pre.version)) - (a === cacheNameFor(pre.version)));
     for (const k of names) {
       const c = await caches.open(k);
       const res = await c.match(META_URL);
       const m = res ? await res.json().catch(() => null) : null;
-      if (m) { cache = c; meta = m; break; }
+      if (m) {
+        cache = c;
+        meta = m;
+        break;
+      }
     }
-    if (!pre && meta) pre = { version: meta.version, totalBytes: offline.totalBytes, files: Object.keys(meta.hashes).map((url) => ({ url })) };
+    if (!pre && meta)
+      pre = {
+        version: meta.version,
+        totalBytes: offline.totalBytes,
+        files: Object.keys(meta.hashes).map((url) => ({ url })),
+      };
     if (!pre) throw new Error("offline and nothing cached");
     offline.totalBytes = pre.totalBytes;
     const base = new URL("./", location.href).href;
-    const cached = cache ? (await cache.keys()).map((r) => r.url.startsWith(base) ? r.url.slice(base.length) : r.url) : [];
-    offline.ready = isOfflineReady(pre, cached, meta && meta.version);
+    const cached = cache
+      ? (await cache.keys()).map((r) => (r.url.startsWith(base) ? r.url.slice(base.length) : r.url))
+      : [];
+    offline.ready = isOfflineReady(pre, cached, meta?.version);
     offline.stale = offline.registered && !offline.ready;
   } catch {
     // Offline and not cached, or precache.json unreadable: keep whatever we knew.
@@ -2112,18 +2561,27 @@ if (offlineSupported) {
   navigator.serviceWorker.addEventListener("message", (e) => {
     const m = e.data || {};
     if (m.type === "offline-progress") {
-      offline.downloading = true; offline.error = false; offline.totalBytes = m.totalBytes || offline.totalBytes;
-      offline.percent = m.percent; renderOffline();
+      offline.downloading = true;
+      offline.error = false;
+      offline.totalBytes = m.totalBytes || offline.totalBytes;
+      offline.percent = m.percent;
+      renderOffline();
     } else if (m.type === "offline-ready") {
-      offline.downloading = false; offline.percent = 100; refreshOffline();
+      offline.downloading = false;
+      offline.percent = 100;
+      refreshOffline();
     } else if (m.type === "offline-error") {
-      offline.downloading = false; offline.error = true; renderOffline();
+      offline.downloading = false;
+      offline.error = true;
+      renderOffline();
     }
   });
 }
 
 $("offline-enable").addEventListener("click", async () => {
-  offline.downloading = true; offline.error = false; offline.percent = progressPercent(0, 1);
+  offline.downloading = true;
+  offline.error = false;
+  offline.percent = progressPercent(0, 1);
   renderOffline();
   try {
     const reg = await navigator.serviceWorker.register("./sw.js");
@@ -2142,14 +2600,19 @@ $("offline-enable").addEventListener("click", async () => {
     }
     offline.downloading = false;
   } catch {
-    offline.downloading = false; offline.error = true;
+    offline.downloading = false;
+    offline.error = true;
   }
   await refreshOffline();
 });
 
 $("offline-remove").addEventListener("click", async () => {
   await removeOfflineCopy();
-  offline.ready = false; offline.registered = false; offline.stale = false; offline.error = false; offline.downloading = false;
+  offline.ready = false;
+  offline.registered = false;
+  offline.stale = false;
+  offline.error = false;
+  offline.downloading = false;
   await refreshOffline();
   $("offline-status").textContent = "Offline copy removed. The app needs a network connection again.";
 });
@@ -2162,4 +2625,6 @@ renderStats();
 renderTest();
 renderProgress();
 window.addEventListener("pagehide", save);
-document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) save();
+});

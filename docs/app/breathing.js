@@ -14,7 +14,7 @@ import { BREATHING_MOMENTS } from "./voice-lines.js";
 
 export const MOMENTS = Object.freeze({
   min_streak_s: 10 * 60, // only during a long good streak
-  every_s: 30 * 60,      // at most every 30 min
+  every_s: 30 * 60, // at most every 30 min
 });
 
 export const GUIDE = Object.freeze({ in_s: 4, out_s: 6, total_s: 60 });
@@ -50,10 +50,16 @@ export class BreatheGuide {
     this.t0 = null;
   }
 
-  get active() { return this.t0 !== null; }
+  get active() {
+    return this.t0 !== null;
+  }
 
-  start(now) { this.t0 = now; }
-  cancel() { this.t0 = null; }
+  start(now) {
+    this.t0 = now;
+  }
+  cancel() {
+    this.t0 = null;
+  }
 
   /** Returns null when idle, else { phase: "in"|"out"|"done", fill: 0..1, cycle, phaseStart }.
    *  fill rises over the inhale and falls over the exhale (the hold-bar style).
@@ -63,7 +69,11 @@ export class BreatheGuide {
     if (this.t0 === null) return null;
     const t = now - this.t0;
     const { in_s, out_s, total_s } = this.cfg;
-    if (t >= total_s) { this.t0 = null; this.lastPhase = null; return { phase: "done", fill: 0, cycle: 0, phaseStart: true }; }
+    if (t >= total_s) {
+      this.t0 = null;
+      this.lastPhase = null;
+      return { phase: "done", fill: 0, cycle: 0, phaseStart: true };
+    }
     const len = in_s + out_s;
     const cycle = Math.floor(t / len);
     const p = t - cycle * len;

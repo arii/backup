@@ -11,7 +11,9 @@ const RATE = 44100;
 
 function wav(samples) {
   const data = Buffer.alloc(samples.length * 2);
-  samples.forEach((s, i) => data.writeInt16LE(Math.trunc(s * 32767), i * 2));
+  samples.forEach((s, i) => {
+    data.writeInt16LE(Math.trunc(s * 32767), i * 2);
+  });
   const head = Buffer.alloc(44);
   head.write("RIFF", 0);
   head.writeUInt32LE(36 + data.length, 4);
@@ -29,8 +31,11 @@ function wav(samples) {
 }
 
 function notes(list, harmonics) {
-  const peak = Math.max(...Array.from({ length: 1000 }, (_, j) =>
-    Math.abs(harmonics.reduce((s, [k, a]) => s + a * Math.sin((k * 2 * Math.PI * j) / 1000), 0))));
+  const peak = Math.max(
+    ...Array.from({ length: 1000 }, (_, j) =>
+      Math.abs(harmonics.reduce((s, [k, a]) => s + a * Math.sin((k * 2 * Math.PI * j) / 1000), 0)),
+    ),
+  );
   const out = [];
   for (const [freq, seconds] of list) {
     const total = Math.floor(RATE * seconds);
@@ -45,7 +50,34 @@ function notes(list, harmonics) {
 
 mkdirSync("public/audio", { recursive: true });
 // Reminder: E5 then B-flat 4, reedy odd harmonics.
-writeFileSync("public/audio/chime.wav", wav(notes([[659.25, 0.18], [466.16, 0.42]], [[1, 1], [3, 0.35], [5, 0.15]])));
+writeFileSync(
+  "public/audio/chime.wav",
+  wav(
+    notes(
+      [
+        [659.25, 0.18],
+        [466.16, 0.42],
+      ],
+      [
+        [1, 1],
+        [3, 0.35],
+        [5, 0.15],
+      ],
+    ),
+  ),
+);
 // Praise: rising C major arpeggio of pure sines.
-writeFileSync("public/audio/positive.wav", wav(notes(
-  [[523.25, 0.2], [659.25, 0.2], [783.99, 0.2], [1046.5, 0.2]], [[1, 1]])));
+writeFileSync(
+  "public/audio/positive.wav",
+  wav(
+    notes(
+      [
+        [523.25, 0.2],
+        [659.25, 0.2],
+        [783.99, 0.2],
+        [1046.5, 0.2],
+      ],
+      [[1, 1]],
+    ),
+  ),
+);

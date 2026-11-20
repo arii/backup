@@ -12,7 +12,10 @@ import { BREAKS, BreakTracker, MOVE_BREAK_OPTIONS, normalizeMoveMinutes } from "
 function run(tr, t, seconds, present) {
   let taken = 0;
   if (tr.lastT === null) tr.update(present, t); // the first sample only starts the clock
-  for (let i = 0; i < seconds; i++) { t += 1; if (tr.update(present, t)) taken += 1; }
+  for (let i = 0; i < seconds; i++) {
+    t += 1;
+    if (tr.update(present, t)) taken += 1;
+  }
   return { t, taken };
 }
 
@@ -41,7 +44,7 @@ test("move break settings: off, 30, 45, 60 and 90; bad values fall back to 60", 
   assert.equal(normalizeMoveMinutes(12), 60);
   for (const m of [30, 45, 60, 90]) {
     const tr = new BreakTracker({ eyeBreaks: false, moveBreakMinutes: m });
-    let { t } = run(tr, 0, m * 60 - 1, true);
+    const { t } = run(tr, 0, m * 60 - 1, true);
     assert.deepEqual(tr.due(), [], `${m} just before`);
     run(tr, t, 1, true);
     assert.deepEqual(tr.due(), ["move"], `${m} on time`);
@@ -78,7 +81,7 @@ test("2 minutes with NO_PERSON counts as a break and restarts the timers", () =>
 
 test("a short absence is not a break: seated time carries on", () => {
   const tr = new BreakTracker();
-  let { t } = run(tr, 0, 19 * 60, true);
+  const { t } = run(tr, 0, 19 * 60, true);
   let r = run(tr, t, 60, false);
   assert.equal(r.taken, 0);
   r = run(tr, r.t, 61, true);
@@ -87,7 +90,7 @@ test("a short absence is not a break: seated time carries on", () => {
 
 test("no prompt is due while away", () => {
   const tr = new BreakTracker();
-  let { t } = run(tr, 0, 25 * 60, true);
+  const { t } = run(tr, 0, 25 * 60, true);
   run(tr, t, 5, false);
   assert.deepEqual(tr.due(), []);
   assert.deepEqual(tr.due(false), []);

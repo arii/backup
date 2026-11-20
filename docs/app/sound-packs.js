@@ -12,7 +12,15 @@
 
 // Bell partial ratios and levels (a classic minor-third "hum, prime, tierce"
 // church-bell spectrum). Inharmonic, so it needs one oscillator per partial.
-const BELL = [[0.5, 0.5], [1, 1], [1.19, 0.6], [1.56, 0.35], [2, 0.3], [2.51, 0.18], [3.01, 0.1]];
+const BELL = [
+  [0.5, 0.5],
+  [1, 1],
+  [1.19, 0.6],
+  [1.56, 0.35],
+  [2, 0.3],
+  [2.51, 0.18],
+  [3.01, 0.1],
+];
 
 function bellStrike(ac, out, base, at, dur) {
   const total = BELL.reduce((a, [, amp]) => a + amp, 0);
@@ -59,7 +67,10 @@ function ghost(ac) {
   gain.gain.setValueAtTime(0.35, t + 0.75);
   gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
   osc.connect(gain).connect(ac.destination);
-  for (const node of [osc, lfo]) { node.start(t); node.stop(t + 1.35); }
+  for (const node of [osc, lfo]) {
+    node.start(t);
+    node.stop(t + 1.35);
+  }
 }
 
 export const SOUND_PACKS = {

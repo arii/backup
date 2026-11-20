@@ -11,7 +11,10 @@ import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl
 const URL_ = "https://arii.github.io/posture-guard/";
 
 test("share text is the agreed sentence", () => {
-  assert.equal(SHARE_TEXT, "BackUp — Posture to Die For: a free webcam posture coach that runs in your browser. Nothing is uploaded.");
+  assert.equal(
+    SHARE_TEXT,
+    "BackUp — Posture to Die For: a free webcam posture coach that runs in your browser. Nothing is uploaded.",
+  );
 });
 
 test("links carry the text and the URL, encoded", () => {
@@ -26,15 +29,31 @@ test("links carry the text and the URL, encoded", () => {
 
 test("every web link points at a fixed, known host", () => {
   const hosts = Object.values(shareLinks(URL_, { instance: "Mastodon.Social" }))
-    .filter((u) => u.startsWith("http")).map((u) => new URL(u).hostname).sort();
+    .filter((u) => u.startsWith("http"))
+    .map((u) => new URL(u).hostname)
+    .sort();
   assert.deepEqual(hosts, ["bsky.app", "mastodon.social", "www.linkedin.com", "x.com"]);
 });
 
 test("mastodon instance must be a plain hostname", () => {
   assert.equal(normalizeInstance(" Mastodon.Social "), "mastodon.social");
   assert.equal(normalizeInstance("@fosstodon.org"), "fosstodon.org");
-  for (const bad of ["", "localhost", "https://mastodon.social", "mastodon.social/path", "a b.com", "evil.com@x.com",
-    "mastodon.social:8080", "1.2.3.4", "-bad.example.com", "x.c", "javascript:alert(1)", "a.com?x=1", null, undefined]) {
+  for (const bad of [
+    "",
+    "localhost",
+    "https://mastodon.social",
+    "mastodon.social/path",
+    "a b.com",
+    "evil.com@x.com",
+    "mastodon.social:8080",
+    "1.2.3.4",
+    "-bad.example.com",
+    "x.c",
+    "javascript:alert(1)",
+    "a.com?x=1",
+    null,
+    undefined,
+  ]) {
     assert.equal(normalizeInstance(bad), null, String(bad));
   }
   assert.equal(shareLinks(URL_, { instance: "evil.com/steal" }).mastodon, undefined);
@@ -58,12 +77,18 @@ test("score card data: needs a minute of tracking, rounds, caps the streak", () 
 
 test("score card draws only score text on a fake canvas context", () => {
   const texts = [];
-  const ctx = new Proxy({ fillText: (t) => texts.push(t), fillRect() {} }, {
-    set(o, k, v) { o[k] = v; return true },
-  });
+  const ctx = new Proxy(
+    { fillText: (t) => texts.push(t), fillRect() {} },
+    {
+      set(o, k, v) {
+        o[k] = v;
+        return true;
+      },
+    },
+  );
   const d = scoreCardData({ good: 900, bad: 100, best: 300 });
   drawScoreCard(ctx, d);
   assert.deepEqual(texts.slice(2, 5), ["90%", "good posture this session", "Best streak 5 min 0 s"]);
-  assert.equal(CARD.width / CARD.height | 0, 1);
+  assert.equal((CARD.width / CARD.height) | 0, 1);
   assert.match(cardAltText(d), /90% good posture/);
 });

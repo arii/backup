@@ -43,5 +43,4 @@ export function scenes(props: VideoProps): Scene[] {
   return list;
 }
 
-export const totalSeconds = (props: VideoProps): number =>
-  scenes(props).reduce((sum, s) => sum + s.seconds, 0);
+export const totalSeconds = (props: VideoProps): number => scenes(props).reduce((sum, s) => sum + s.seconds, 0);

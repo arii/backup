@@ -125,7 +125,10 @@ export const DemoVoice: React.FC<{ p: VideoProps }> = ({ p }) => (
     <Clip src={p.demo.src} fromSec={p.demo.voice - 0.8} />
     <Sound file="cue.wav" atSec={0.8} />
     <Caption>
-        Keep slouching and it speaks up: <i>&ldquo;{p.demo.cue}. {p.demo.fix}&rdquo;</i>
+      Keep slouching and it speaks up:{" "}
+      <i>
+        &ldquo;{p.demo.cue}. {p.demo.fix}&rdquo;
+      </i>
     </Caption>
   </FootageScene>
 );
@@ -176,14 +179,54 @@ export const Webcam: React.FC<{ p: VideoProps }> = ({ p }) => {
 // -- 4. The monster ---------------------------------------------------------------
 
 const PARTS: { name: string; donor: string; job: string; spot: { x: number; y: number; r: number } }[] = [
-  { name: "Eyes", donor: "Google MediaPipe Pose, compiled to WebAssembly", job: "33 body landmarks per frame from an ordinary webcam", spot: { x: 200, y: 130, r: 75 } },
-  { name: "Brain", donor: "posture-core.js: scoring, state machine, needle, calibration", job: "Decides when you're slouching and what to say", spot: { x: 200, y: 95, r: 55 } },
-  { name: "Reflexes", donor: "Cue engine and slow drift baseline", job: "Names the one thing to fix, and notices a slow slump", spot: { x: 200, y: 130, r: 95 } },
-  { name: "Spinal cord", donor: "A 632-frame golden timeline", job: "Recorded once, replayed by Node on every change: every frame must match", spot: { x: 200, y: 340, r: 110 } },
-  { name: "Voice", donor: "Web Audio + speech synthesis", job: "The chime, then \u201cHead forward. Tuck your chin\u2026\u201d", spot: { x: 200, y: 160, r: 45 } },
-  { name: "Heartbeat", donor: "A Web Worker timer", job: "Keeps it ticking after the browser throttles a background tab", spot: { x: 230, y: 290, r: 45 } },
-  { name: "Memory", donor: "localStorage", job: "Your calibration, settings and daily totals", spot: { x: 150, y: 110, r: 45 } },
-  { name: "Immune system", donor: "node:test property tests", job: "Seeded properties throw NaNs, mirrors and jitter at the core", spot: { x: 200, y: 330, r: 200 } },
+  {
+    name: "Eyes",
+    donor: "Google MediaPipe Pose, compiled to WebAssembly",
+    job: "33 body landmarks per frame from an ordinary webcam",
+    spot: { x: 200, y: 130, r: 75 },
+  },
+  {
+    name: "Brain",
+    donor: "posture-core.js: scoring, state machine, needle, calibration",
+    job: "Decides when you're slouching and what to say",
+    spot: { x: 200, y: 95, r: 55 },
+  },
+  {
+    name: "Reflexes",
+    donor: "Cue engine and slow drift baseline",
+    job: "Names the one thing to fix, and notices a slow slump",
+    spot: { x: 200, y: 130, r: 95 },
+  },
+  {
+    name: "Spinal cord",
+    donor: "A 632-frame golden timeline",
+    job: "Recorded once, replayed by Node on every change: every frame must match",
+    spot: { x: 200, y: 340, r: 110 },
+  },
+  {
+    name: "Voice",
+    donor: "Web Audio + speech synthesis",
+    job: "The chime, then \u201cHead forward. Tuck your chin\u2026\u201d",
+    spot: { x: 200, y: 160, r: 45 },
+  },
+  {
+    name: "Heartbeat",
+    donor: "A Web Worker timer",
+    job: "Keeps it ticking after the browser throttles a background tab",
+    spot: { x: 230, y: 290, r: 45 },
+  },
+  {
+    name: "Memory",
+    donor: "localStorage",
+    job: "Your calibration, settings and daily totals",
+    spot: { x: 150, y: 110, r: 45 },
+  },
+  {
+    name: "Immune system",
+    donor: "node:test property tests",
+    job: "Seeded properties throw NaNs, mirrors and jitter at the core",
+    spot: { x: 200, y: 330, r: 200 },
+  },
 ];
 const PART_SEC = 3.25;
 
@@ -321,9 +364,11 @@ export const History: React.FC = () => {
           <div style={{ fontSize: 60, fontWeight: 700, marginBottom: 10 }}>Case history</div>
         </Rise>
         {steps.map(([date, what, accent], i) => (
-          <Rise key={i} delay={Math.round((0.6 + i * 2.2) * fps)}>
+          <Rise key={what} delay={Math.round((0.6 + i * 2.2) * fps)}>
             <div style={{ display: "flex", gap: 40, alignItems: "center", width: 1500, textAlign: "left" }}>
-              <div style={{ fontSize: 46, fontWeight: 800, color: accent, minWidth: 220, fontFamily: mono }}>{date}</div>
+              <div style={{ fontSize: 46, fontWeight: 800, color: accent, minWidth: 220, fontFamily: mono }}>
+                {date}
+              </div>
               <div style={{ fontSize: 42, borderLeft: `6px solid ${accent}`, paddingLeft: 30 }}>{what}</div>
             </div>
           </Rise>

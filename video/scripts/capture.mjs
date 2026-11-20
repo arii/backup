@@ -44,7 +44,9 @@ async function record(name, args, script) {
       // Opt in to the shoulder and breathing features (docs/app/consent.js, CONSENT_VERSION 1).
       s.consent = s.consent || { version: 1, at: "2026-01-01T00:00:00.000Z" };
       localStorage.setItem("posture-guard:v1", JSON.stringify(s));
-    } catch { /* storage unavailable */ }
+    } catch {
+      /* storage unavailable */
+    }
   });
   const page = await context.newPage();
   const t0 = Date.now();
@@ -68,23 +70,23 @@ const demo = await record("demo", [], async (page, now) => {
   await page.goto(`${base}app/${bust()}`);
   await page.waitForTimeout(1200);
   await page.click("#start-demo");
-  await page.waitForFunction(
-    () => document.getElementById("state-badge").textContent === "good posture", null,
-    { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+    timeout: 15000,
+  });
   const good = now();
-  await page.waitForFunction(
-    () => Number(document.getElementById("reminder-count").textContent) >= 1, null,
-    { timeout: 45000 });
+  await page.waitForFunction(() => Number(document.getElementById("reminder-count").textContent) >= 1, null, {
+    timeout: 45000,
+  });
   const chime = now();
-  await page.waitForFunction(
-    () => Number(document.getElementById("reminder-count").textContent) >= 2, null,
-    { timeout: 20000 });
+  await page.waitForFunction(() => Number(document.getElementById("reminder-count").textContent) >= 2, null, {
+    timeout: 20000,
+  });
   const voice = now();
   const cue = await text(page, "fix-title");
   const fix = await text(page, "fix-how");
-  await page.waitForFunction(
-    () => document.getElementById("state-badge").textContent === "good posture", null,
-    { timeout: 25000 });
+  await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+    timeout: 25000,
+  });
   const recovered = now();
   await page.waitForTimeout(3000);
   return { good, chime, voice, recovered, end: now(), cue, fix };
@@ -93,29 +95,38 @@ const demo = await record("demo", [], async (page, now) => {
 // 2. Webcam mode: the real pose model on a real (fake-camera) person.
 let webcam = null;
 if (y4m && existsSync(y4m)) {
-  webcam = await record("webcam", [
-    "--use-fake-ui-for-media-stream",
-    "--use-fake-device-for-media-stream",
-    `--use-file-for-fake-video-capture=${y4m}`,
-  ], async (page, now) => {
-    await page.goto(`${base}app/${bust()}`);
-    await page.waitForTimeout(1000);
-    await page.click("#start-camera");
-    await page.waitForFunction(
-      () => getComputedStyle(document.getElementById("start-overlay")).display === "none", null,
-      { timeout: 90000 });
-    const live = now();
-    // The fake feed tilts the drawn figure after a few seconds; see if that reminds.
-    let reminder = null;
-    const deadline = Date.now() + 16000;
-    while (Date.now() < deadline) {
-      if ((await reminders(page)) >= 1) { reminder = now(); break; }
-      await page.waitForTimeout(250);
-    }
-    const cue = await text(page, "fix-title");
-    await page.waitForTimeout(3000);
-    return { live, reminder, cue, end: now() };
-  });
+  webcam = await record(
+    "webcam",
+    [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+      `--use-file-for-fake-video-capture=${y4m}`,
+    ],
+    async (page, now) => {
+      await page.goto(`${base}app/${bust()}`);
+      await page.waitForTimeout(1000);
+      await page.click("#start-camera");
+      await page.waitForFunction(
+        () => getComputedStyle(document.getElementById("start-overlay")).display === "none",
+        null,
+        { timeout: 90000 },
+      );
+      const live = now();
+      // The fake feed tilts the drawn figure after a few seconds; see if that reminds.
+      let reminder = null;
+      const deadline = Date.now() + 16000;
+      while (Date.now() < deadline) {
+        if ((await reminders(page)) >= 1) {
+          reminder = now();
+          break;
+        }
+        await page.waitForTimeout(250);
+      }
+      const cue = await text(page, "fix-title");
+      await page.waitForTimeout(3000);
+      return { live, reminder, cue, end: now() };
+    },
+  );
 }
 
 // 3. Landing page, scrolled top to bottom.

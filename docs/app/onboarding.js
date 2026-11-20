@@ -33,12 +33,11 @@ export const SAFETY_POINTS = Object.freeze([
     "and it does not diagnose, treat or prevent any condition.",
   "Do not hold a rigid posture. Relax your shoulders and change position often. " +
     "Reminders are not a substitute for regular movement breaks.",
-  "Stop and see a qualified clinician if you feel pain, numbness, tingling or dizziness, " +
-    "or if pain persists.",
+  "Stop and see a qualified clinician if you feel pain, numbness, tingling or dizziness, " + "or if pain persists.",
   "If you have a spine, nerve, neuromuscular or other medical condition, are pregnant, " +
     "or are recovering from an injury, check with a professional first.",
   "Webcam estimates are approximate. Lighting, camera angle, clothing and body shape " +
-    "change the result. \"Good\" means close to your own calibrated baseline.",
+    'change the result. "Good" means close to your own calibrated baseline.',
   "Your video and body landmarks are processed in your browser and are not uploaded. " +
     "Settings and daily totals are stored in this browser. The pose model and scripts are served from this site, with no third-party requests.",
   "The software is provided as-is, without warranty, under the MIT License.",
@@ -60,9 +59,9 @@ export const ONBOARDING_STEPS = Object.freeze([
   {
     title: "What you will see and hear",
     points: [
-      "A needle and a \"what to fix\" box show which part of your posture drifted and how to correct it.",
+      'A needle and a "what to fix" box show which part of your posture drifted and how to correct it.',
       "If you keep slouching you get a chime first, then a spoken cue.",
-      "Praise is opt-in. A silent \"Test me\" check shows whether the habit sticks without reminders.",
+      'Praise is opt-in. A silent "Test me" check shows whether the habit sticks without reminders.',
     ],
   },
   { title: "Before you start", points: SAFETY_POINTS },
@@ -117,7 +116,7 @@ export const Diagnosis = Object.freeze({
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 /** Plain-language fixes for a diagnosis. The framing band follows config. */
-export function fixesFor(diagnosis, scoring = DEFAULTS.scoring) {
+function fixesFor(diagnosis, scoring = DEFAULTS.scoring) {
   switch (diagnosis) {
     case Diagnosis.NO_PERSON:
       return [
@@ -184,9 +183,13 @@ export class SetupCheck {
    *  @param {number} now seconds. Returns {diagnosis, fixes, since_s}. */
   update(frame, now) {
     const f = frame || {};
-    if (f.reason !== Reason.NON_FINITE) { // a tracking glitch changes nothing
+    if (f.reason !== Reason.NON_FINITE) {
+      // a tracking glitch changes nothing
       const cand = this.candidateFor(f);
-      if (cand !== this.candidate) { this.candidate = cand; this.since = now; }
+      if (cand !== this.candidate) {
+        this.candidate = cand;
+        this.since = now;
+      }
       const need = cand === Diagnosis.OK ? this.cfg.ok_s : this.cfg.persist_s;
       if (cand !== this.reported && now - this.since >= need) {
         this.reported = cand;

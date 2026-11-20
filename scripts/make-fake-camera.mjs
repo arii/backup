@@ -15,7 +15,9 @@
 
 import { writeFileSync } from "node:fs";
 
-const W = 480, H = 640, FPS = 15;
+const W = 480,
+  H = 640,
+  FPS = 15;
 const args = process.argv.slice(2);
 const out = args[0] && !args[0].startsWith("--") ? args[0] : "person.y4m";
 const opt = (name, dflt) => {
@@ -26,11 +28,15 @@ const seconds = opt("--seconds", 3);
 const tiltAfter = opt("--tilt-after", Infinity);
 
 const ZOOM = 0.7;
-const SKIN = [224, 172, 135], SKIN_SHADE = [205, 150, 115];
-const SHIRT = [48, 92, 150], HAIR = [60, 40, 30], WALL = [196, 200, 205];
+const SKIN = [224, 172, 135],
+  SKIN_SHADE = [205, 150, 115];
+const SHIRT = [48, 92, 150],
+  HAIR = [60, 40, 30],
+  WALL = [196, 200, 205];
 
 const dist = (px, py, ax, ay, bx, by) => {
-  const dx = bx - ax, dy = by - ay;
+  const dx = bx - ax,
+    dy = by - ay;
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 };
@@ -57,24 +63,37 @@ function figure(x, y) {
 }
 
 function renderFrame(tiltDeg) {
-  const a = (tiltDeg * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
-  const px = 240, py = 640; // pivot at the bottom centre of the frame
-  const Y = new Uint8Array(W * H), U = new Uint8Array((W / 2) * (H / 2)), V = new Uint8Array((W / 2) * (H / 2));
+  const a = (tiltDeg * Math.PI) / 180,
+    ca = Math.cos(a),
+    sa = Math.sin(a);
+  const px = 240,
+    py = 640; // pivot at the bottom centre of the frame
+  const Y = new Uint8Array(W * H),
+    U = new Uint8Array((W / 2) * (H / 2)),
+    V = new Uint8Array((W / 2) * (H / 2));
   const SS = 2; // 2x2 supersampling for smooth edges
   for (let j = 0; j < H; j++) {
     for (let i = 0; i < W; i++) {
-      let r = 0, g = 0, b = 0;
+      let r = 0,
+        g = 0,
+        b = 0;
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
-          const x = i + (sx + 0.5) / SS - px, y = j + (sy + 0.5) / SS - py;
+          const x = i + (sx + 0.5) / SS - px,
+            y = j + (sy + 0.5) / SS - py;
           // inverse rotation into figure coordinates
-          const fx = px + x * ca + y * sa, fy = py - x * sa + y * ca;
+          const fx = px + x * ca + y * sa,
+            fy = py - x * sa + y * ca;
           // shrink the figure so the shoulders span about a third of the picture
           const c = figure(240 + (fx - 240) / ZOOM, 520 + (fy - 470) / ZOOM) ?? WALL;
-          r += c[0]; g += c[1]; b += c[2];
+          r += c[0];
+          g += c[1];
+          b += c[2];
         }
       }
-      r /= SS * SS; g /= SS * SS; b /= SS * SS;
+      r /= SS * SS;
+      g /= SS * SS;
+      b /= SS * SS;
       Y[j * W + i] = 0.299 * r + 0.587 * g + 0.114 * b;
       if (!(j & 1) && !(i & 1)) {
         const u = (j / 2) * (W / 2) + i / 2;

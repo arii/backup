@@ -1,0 +1,5 @@
+{
+  "entry": ["docs/app/app.js", "docs/app/sw.js", "scripts/*.mjs", "tests/js/*.test.mjs", "tests/e2e/*.mjs"],
+  "ignorePatterns": ["docs/app/vendor/**", "docs/app/voice/**"],
+  "ignoreDependencies": ["kokoro-js", "playwright"]
+}

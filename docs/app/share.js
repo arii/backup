@@ -14,7 +14,10 @@ export const SHARE_TEXT =
  *  the lower-case hostname, or null when the input is not a plain hostname
  *  (no scheme, path, port, credentials or spaces; at least one dot). */
 export function normalizeInstance(input) {
-  const raw = String(input ?? "").trim().toLowerCase().replace(/^@+/, "");
+  const raw = String(input ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "");
   if (!raw || raw.length > 253) return null;
   const label = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
   if (!new RegExp(`^(?:${label}\\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`).test(raw)) return null;
@@ -79,7 +82,9 @@ export function drawScoreCard(ctx, d, { width = CARD.width, height = CARD.height
   ctx.fillStyle = "#4cc38a";
   ctx.fillRect(0, 0, 16, height);
   ctx.textBaseline = "alphabetic";
-  const font = (px, weight = "700") => { ctx.font = `${weight} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`; };
+  const font = (px, weight = "700") => {
+    ctx.font = `${weight} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  };
   ctx.fillStyle = "#e8eef5";
   font(56);
   ctx.fillText("BackUp", 80, 120);

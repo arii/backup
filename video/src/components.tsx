@@ -19,8 +19,7 @@ import { color, font } from "./theme";
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 
 /** 0 -> 1 between two frames. */
-export const ramp = (frame: number, from: number, to: number): number =>
-  interpolate(frame, [from, to], [0, 1], clamp);
+export const ramp = (frame: number, from: number, to: number): number => interpolate(frame, [from, to], [0, 1], clamp);
 
 /** Fades its children in at the start and out at the end of the scene. */
 export const Fade: React.FC<{ children: React.ReactNode; inFrames?: number; outFrames?: number }> = ({
@@ -30,10 +29,7 @@ export const Fade: React.FC<{ children: React.ReactNode; inFrames?: number; outF
 }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const opacity = Math.min(
-    ramp(frame, 0, inFrames),
-    1 - ramp(frame, durationInFrames - outFrames, durationInFrames),
-  );
+  const opacity = Math.min(ramp(frame, 0, inFrames), 1 - ramp(frame, durationInFrames - outFrames, durationInFrames));
   return <AbsoluteFill style={{ opacity }}>{children}</AbsoluteFill>;
 };
 
@@ -46,9 +42,7 @@ export const Rise: React.FC<{ children: React.ReactNode; delay?: number; style?:
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = spring({ frame: frame - delay, fps, config: { damping: 200 } });
-  return (
-    <div style={{ opacity: t, transform: `translateY(${(1 - t) * 40}px)`, ...style }}>{children}</div>
-  );
+  return <div style={{ opacity: t, transform: `translateY(${(1 - t) * 40}px)`, ...style }}>{children}</div>;
 };
 
 export const Background: React.FC<{ glow?: string }> = ({ glow = color.good }) => (
@@ -115,11 +109,7 @@ export const Clip: React.FC<{ src: string; fromSec: number; dim?: number }> = ({
 };
 
 /** Plays a sound from public/audio at `atSec` into the scene. */
-export const Sound: React.FC<{ file: string; atSec: number; volume?: number }> = ({
-  file,
-  atSec,
-  volume = 1,
-}) => {
+export const Sound: React.FC<{ file: string; atSec: number; volume?: number }> = ({ file, atSec, volume = 1 }) => {
   const { fps } = useVideoConfig();
   return (
     <Sequence from={Math.max(0, Math.round(atSec * fps))} layout="none">
@@ -142,7 +132,14 @@ export const Figure: React.FC<{
   return (
     <svg width={size * (400 / 600)} height={size} viewBox="0 0 400 600">
       {highlight ? (
-        <circle cx={highlight.x} cy={highlight.y} r={highlight.r} fill={`${color.warn}33`} stroke={color.warn} strokeWidth={4} />
+        <circle
+          cx={highlight.x}
+          cy={highlight.y}
+          r={highlight.r}
+          fill={`${color.warn}33`}
+          stroke={color.warn}
+          strokeWidth={4}
+        />
       ) : null}
       <g stroke={stroke} strokeWidth={10} strokeLinecap="round" fill="none">
         <circle cx={headX} cy={headY} r={58} />
@@ -156,7 +153,7 @@ export const Figure: React.FC<{
         <line x1={240} y1={430} x2={250} y2={570} />
       </g>
       {[110, 290, 140, 260].map((x, i) => (
-        <circle key={i} cx={x} cy={i < 2 ? 250 : 430} r={11} fill={stroke} />
+        <circle key={x} cx={x} cy={i < 2 ? 250 : 430} r={11} fill={stroke} />
       ))}
       {bolts ? (
         <g fill="#9aa3ad" stroke="#555c66" strokeWidth={3}>
