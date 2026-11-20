@@ -100,7 +100,8 @@
         <div id="webgl-help" role="alert">
           <b>Your browser has WebGL turned off, and the pose model needs it.</b>
           <ul>
-            <li><b>Chrome / Edge:</b> Settings &gt; System &gt; turn on <i>Use graphics acceleration when available</i>, then relaunch the browser. <code>chrome://gpu</code> shows whether WebGL is on.</li>
+            <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
+            <li><b>Linux / Wayland:</b> start the browser with <code>--ozone-platform=x11</code>.</li>
             <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
             <li>Strict privacy settings, some extensions, remote desktops and virtual machines can also block WebGL; try another browser or machine.</li>
           </ul>

@@ -138,11 +138,25 @@ try {
           };
         }
       });
+      await page.goto(base + bust);
+      const landing = await page.evaluate(() => ({
+        banner: getComputedStyle(document.getElementById("webgl-warning")).display,
+        text: document.getElementById("webgl-warning").textContent,
+      }));
+      check("no WebGL: landing page shows the warning banner",
+        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /demo/i.test(landing.text), landing);
       await page.goto(`${base}app/${bust}`);
       const gl = await page.evaluate(() => Boolean(
         document.createElement("canvas").getContext("webgl") ||
         (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2"))));
-      await page.click("#start-camera");
+      const cam = await page.evaluate(() => ({
+        text: document.getElementById("start-camera").textContent,
+        disabled: document.getElementById("start-camera").disabled,
+        help: getComputedStyle(document.getElementById("webgl-help")).display,
+      }));
+      check("no WebGL: camera button shows the WebGL message on load",
+        /needs WebGL/i.test(cam.text) && cam.disabled && cam.help === "block", cam);
+      await page.click("#start-camera", { force: true, timeout: 2000 }).catch(() => {});
       await page.waitForTimeout(1500);
       const s = await page.evaluate(() => ({
         help: getComputedStyle(document.getElementById("webgl-help")).display,

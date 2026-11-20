@@ -68,6 +68,14 @@ Why these parts don't normally fit, and the stitches that hold them:
 
 Press *Start with webcam*, leave the tab open, and it chimes when you slouch.
 
+**Requirements:** a webcam, a recent Chrome, Edge or Firefox, and **hardware
+acceleration / WebGL turned on**. Everything runs in your browser and no video is
+uploaded. If WebGL is off, the site says so up front and *Try the demo* still works.
+To turn it on in Chrome or Edge, open `chrome://settings/system`, enable *Use
+graphics acceleration when available*, relaunch, and check `chrome://gpu`. On
+Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
+`webgl.disabled` to `false` in `about:config`.
+
 - **Tells you what to fix.** Reminders name the problem and the fix, on screen and
   out loud: "Head forward: tuck your chin and bring your ears back over your
   shoulders", "Right shoulder dropped: lift your right shoulder and take your
