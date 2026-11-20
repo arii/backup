@@ -13,7 +13,7 @@ export const PROGRESS = Object.freeze({
   max_tests: 10,
 });
 
-export const EXPORT_SCHEMA = 1;
+const EXPORT_SCHEMA = 1;
 const DAY_MS = 86400000;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 

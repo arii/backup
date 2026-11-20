@@ -23,7 +23,7 @@ export const FEEDBACK = Object.freeze({
   streak_gap_s: 5, // a longer gap between good samples ends the streak
 });
 
-export const LEVELS = Object.freeze(["standard", "light"]);
+const LEVELS = Object.freeze(["standard", "light"]);
 export const normalizeLevel = (v) => (LEVELS.includes(v) ? v : "standard");
 
 export const MILESTONE_TEXT = Object.freeze({

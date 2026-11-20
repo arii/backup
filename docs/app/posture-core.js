@@ -103,19 +103,19 @@ function angleFromVertical(dx, dy) {
   return Math.atan2(dx, dy) * RAD_TO_DEG;
 }
 
-export function measureHeadForward(lm) {
+function measureHeadForward(lm) {
   const ear = mid(lm[LEFT_EAR], lm[RIGHT_EAR]);
   const sh = mid(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
   return angleFromVertical(ear[0] - sh[0], sh[1] - ear[1]);
 }
 
-export function measureTrunkLean(lm) {
+function measureTrunkLean(lm) {
   const sh = mid(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
   const hip = mid(lm[LEFT_HIP], lm[RIGHT_HIP]);
   return angleFromVertical(sh[0] - hip[0], hip[1] - sh[1]);
 }
 
-export function measureHeadTilt(lm) {
+function measureHeadTilt(lm) {
   const ex = lm[RIGHT_EAR].x - lm[LEFT_EAR].x;
   const ey = lm[RIGHT_EAR].y - lm[LEFT_EAR].y;
   const sx = lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x;
@@ -123,13 +123,13 @@ export function measureHeadTilt(lm) {
   return Math.atan2(ex * sy - ey * sx, ex * sx + ey * sy) * RAD_TO_DEG;
 }
 
-export function measureShoulderLevel(lm) {
+function measureShoulderLevel(lm) {
   const dy = lm[RIGHT_SHOULDER].y - lm[LEFT_SHOULDER].y;
   const dx = lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x;
   return Math.atan2(dy, Math.abs(dx)) * RAD_TO_DEG;
 }
 
-export function shoulderWidth(lm) {
+function shoulderWidth(lm) {
   return Math.abs(lm[RIGHT_SHOULDER].x - lm[LEFT_SHOULDER].x);
 }
 
@@ -233,7 +233,7 @@ export function zoneOf(m, cfg) {
 }
 
 
-export class PostureBaseline {
+class PostureBaseline {
   constructor(cfg) {
     this.windowS = cfg.window_s;
     this.metrics = null;
@@ -277,7 +277,7 @@ export class PostureBaseline {
   }
 }
 
-export function deviationZone(m, baseline, cfg) {
+function deviationZone(m, baseline, cfg) {
   const ref = baseline.metrics;
   if (ref === null) return "good";
   const pairs = [
@@ -522,7 +522,7 @@ function dims(m, includeTrunk) {
   return v;
 }
 
-export function axisOk(cal) {
+function axisOk(cal) {
   const g = dims(cal.good, false);
   const b = dims(cal.bad, false);
   if (!g.every(isFinite_) || !b.every(isFinite_)) return false;
@@ -642,6 +642,7 @@ export class CalibrationRecorder {
   }
 
   /** Restore centroids saved in localStorage. */
+  // fallow-ignore-next-line unused-class-member
   load(saved) {
     this.centroids = { good: saved.good ? scored(saved.good) : null, bad: saved.bad ? scored(saved.bad) : null };
     this.counts = { good: saved.good_samples ?? 0, bad: saved.bad_samples ?? 0 };

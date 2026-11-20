@@ -117,7 +117,7 @@ export const Diagnosis = Object.freeze({
 const pct = (x) => `${Math.round(x * 100)}%`;
 
 /** Plain-language fixes for a diagnosis. The framing band follows config. */
-export function fixesFor(diagnosis, scoring = DEFAULTS.scoring) {
+function fixesFor(diagnosis, scoring = DEFAULTS.scoring) {
   switch (diagnosis) {
     case Diagnosis.NO_PERSON:
       return [

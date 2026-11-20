@@ -9,7 +9,7 @@
 import { normalizeMoveMinutes } from "./breaks.js";
 
 /** Prompt ids a user can silence with "Don't show this again". */
-export const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "breathing"]);
+const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "breathing"]);
 
 /** Stored choices win; anything never stored gets the default for new users. */
 export function resolveSettings(store) {

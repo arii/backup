@@ -62,7 +62,7 @@ export const BREATHE_LINES = {
   done: "Easy. Now a breath check.",
 };
 
-export const CUE_LINES = CUE_METRICS.map((metric) => cueText(metric, "")[2]);
+const CUE_LINES = CUE_METRICS.map((metric) => cueText(metric, "")[2]);
 
 /** All lines to pre-render, de-duplicated, in a stable order. */
 export const ALL_LINES = [...new Set([

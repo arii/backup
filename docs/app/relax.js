@@ -110,7 +110,7 @@ export class BracingMonitor {
 
 /** Phases: before (2 s baseline already in the monitor) -> inhale (5 s) ->
  *  exhale (4 s, the last 3 s recorded as relaxed) -> done. */
-export const BREATH_PHASES = Object.freeze({ inhale_s: 5, exhale_s: 4, settle_record_s: 3 });
+const BREATH_PHASES = Object.freeze({ inhale_s: 5, exhale_s: 4, settle_record_s: 3 });
 
 export class BreathCheck {
   constructor(cfg = RELAX) {

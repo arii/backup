@@ -11,7 +11,7 @@
 // Global rule: none in the first 5 minutes of a session, then at most one
 // non-posture prompt every 10 minutes. Each prompt also has its own cooldown.
 
-export const PRIORITY = Object.freeze(["posture", "breath", "break", "breathing", "share"]);
+const PRIORITY = Object.freeze(["posture", "breath", "break", "breathing", "share"]);
 
 export const PROMPTS = Object.freeze({
   first_quiet_s: 300,    // nothing in the first 5 minutes of a session
@@ -22,7 +22,7 @@ export const PROMPTS = Object.freeze({
 });
 
 /** id -> { type, cooldown_s }. The id is also the key for enabled/dismissed flags. */
-export const PROMPT_DEFS = Object.freeze({
+const PROMPT_DEFS = Object.freeze({
   breath: { type: "breath", cooldown_s: 1200 },
   eye: { type: "break", cooldown_s: 600 },
   move: { type: "break", cooldown_s: 600 },
