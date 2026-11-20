@@ -20,6 +20,12 @@ what you will see and hear, and a safety notice). The *Help* button replays it, 
 The app needs a webcam (or use the demo), a recent Chrome, Edge or Firefox, and
 hardware acceleration (WebGL) turned on. Released under the [MIT License](LICENSE).
 Third-party credits: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+[![Sponsor on GitHub](https://img.shields.io/badge/%E2%99%A5-Sponsor-ea4aaa)](https://github.com/sponsors/arii)
+Posture Guard is free and built by one person. If it is useful to you, you can
+[sponsor on GitHub](https://github.com/sponsors/arii). The app asks at most three times, only after
+regular use (counted in your own browser, never sent anywhere), and
+*Don't ask again* is permanent. Not legal advice, but the engineering side of the
+privacy and legal review is tracked in [`docs/legal-checklist.md`](docs/legal-checklist.md).
 Kiroween 2026 submission deadline: **Dec 4, 2026, 2:00 PM PT**.
 Docs last verified: 2026-11-20.
 
@@ -109,7 +115,7 @@ body. Unlike its namesake, it sits up straight.
 | **Spinal cord** | A golden timeline: Python records a scripted 632-frame session, Node replays it | Keeps both brains making identical decisions, numbers within 1e-9 |
 | **Voice** | Web Audio and speech synthesis in the browser; `paplay` with pico2wave or espeak-ng on Linux | The chime, then "Head forward. Tuck your chin..." |
 | **Heartbeat** | A Web Worker timer | Keeps tracking at ~5 fps after the browser throttles a background tab |
-| **Memory** | `localStorage` | Your calibration, settings, custom sounds and daily totals |
+| **Memory** | `localStorage` | Your calibration, settings, custom sounds, daily totals, usage counts for the sponsor prompt and your dated consent record |
 | **Packed lunch** | An opt-in service worker (`docs/app/sw.js`) and Cache Storage | The app's own files, so it runs with Wi-Fi off (see Offline mode) |
 | **Desktop nervous system** | FastAPI, WebSocket, MJPEG | The optional Linux dashboard |
 | **Immune system** | pytest and hypothesis (Python), `node:test` (JavaScript) | Seven correctness properties plus unit tests; every bug we planted on purpose got caught |
@@ -235,11 +241,15 @@ same per-hour prompt cap. See [`.kiro/specs/wellness-tools`](.kiro/specs/wellnes
 | Tool | Status |
 |---|---|
 | Breath check and bracing monitor (*Relax, don't brace*) | Built |
-| Guided slow-breathing exercise | Spec only |
+| Guided slow-breathing exercise (*Breathe with me*) | Built. Needs your opt-in (a dated consent record in this browser) |
 | Face and jaw tension prompt (the Pose model has no jaw landmarks, so this needs the Face Landmarker blendshapes and an extra model download) | Spec only |
 | Neck and shoulder micro-stretch prompts | Spec only |
-| 20-20-20 eye breaks and blink reminders | Spec only |
-| Stand and move microbreak timer | Spec only |
+| 20-20-20 eye breaks | Built |
+| Stand and move microbreak timer | Built |
+
+**Red line:** breathing, tension and posture data are never sent to a server (no accounts,
+sync, analytics or leaderboards) without redoing the legal review in
+[`docs/legal-checklist.md`](docs/legal-checklist.md).
 
 ## Linux desktop app (optional, secondary)
 

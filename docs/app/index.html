@@ -6,6 +6,18 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; media-src 'self' blob: data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Posture Guard - posture to die for</title>
 <meta name="description" content="Leave this tab open: your webcam, MediaPipe Pose and a posture state machine run entirely in your browser and chime when you slouch.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Posture Guard: posture to die for">
+<meta property="og:description" content="A free webcam posture coach that runs in your browser. Nothing is uploaded.">
+<meta property="og:url" content="https://arii.github.io/posture-guard/">
+<meta property="og:image" content="https://arii.github.io/posture-guard/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Posture Guard showing a posture needle and live coaching in the browser.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Posture Guard: posture to die for">
+<meta name="twitter:description" content="A free webcam posture coach that runs in your browser. Nothing is uploaded.">
+<meta name="twitter:image" content="https://arii.github.io/posture-guard/assets/og-image.png">
 <style>
   :root {
     --bg: #14171c; --panel: #1d222a; --line: #2c333e; --text: #e8ebf0;
@@ -152,6 +164,13 @@
   #first-run .framing { font-weight: 600; }
   #first-run .framing.ok { color: var(--good); }
   #settling-note { color: var(--muted); font-size: 13px; }
+  #sponsor-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--bg); }
+  #sponsor-card .btn-row a.btn { flex: 1 1 auto; text-align: center; padding: 6px 12px; border-radius: 6px; background: var(--good); color: #0b2412; font-weight: 600; font-size: 13px; text-decoration: none; }
+  #sponsor-card button { padding: 6px 12px; font-size: 13px; }
+  #sponsor-card .link { background: none; border: 0; color: var(--muted); text-decoration: underline; }
+  .share-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .share-links a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; text-decoration: none; }
+  .quiet-link { color: var(--muted); }
   footer { max-width: 1280px; margin: 0 auto; padding: 0 20px 40px; color: var(--muted); font-size: 13px; }
 </style>
 </head>
@@ -164,7 +183,8 @@
   <span class="stat">source <b id="source">-</b></span>
   <button class="secondary" id="pause" disabled title="Pause tracking and all sounds (shortcut: P, can be turned off under Reminders &amp; sounds)">Pause</button>
   <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
-  <span class="stat" style="margin-left:auto"><a href="../">About</a> &middot; <a href="https://github.com/arii/posture-guard">GitHub</a> &middot; <a href="https://github.com/arii/posture-guard/issues/new" id="report-bug" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue with browser and app details (no video or images)">Report a bug</a></span>
+  <button class="secondary" id="share-btn" title="Share Posture Guard with a friend">Share</button>
+  <span class="stat" style="margin-left:auto"><a href="../">About</a> &middot; <a href="https://github.com/arii/posture-guard">GitHub</a> &middot; <a href="https://github.com/arii/posture-guard/issues/new" id="report-bug" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue with browser and app details (no video or images)">Report a bug</a> &middot; <a href="https://github.com/sponsors/arii" class="quiet-link" id="sponsor-header" target="_blank" rel="noopener">&hearts; Sponsor</a></span>
 </header>
 <main>
   <div>
@@ -235,6 +255,15 @@
       <div class="note">A break is 2 minutes or more away from the camera. Breaks are not part of the posture score.</div>
       <div class="score-bar"><div id="good-bar"></div></div>
       <div class="note">Today: <span id="today"></span></div>
+      <div id="sponsor-card" role="status" hidden>
+        <div id="sponsor-text"></div>
+        <div class="btn-row">
+          <a class="btn" id="sponsor-link" href="https://github.com/sponsors/arii" target="_blank" rel="noopener">Sponsor</a>
+          <button class="secondary" id="sponsor-share">Share instead</button>
+          <button class="secondary" id="sponsor-later">Maybe later</button>
+          <button class="link" id="sponsor-never">Don&rsquo;t ask again</button>
+        </div>
+      </div>
     </div>
     <div class="panel" id="practice-panel" aria-labelledby="practice-title">
       <h2 id="practice-title">Learn the cues</h2>
@@ -358,14 +387,14 @@
     <div class="panel coaching">
       <h2>Relax, don&rsquo;t brace</h2>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
-        to look upright overworks your upper back. Lift your chest a little and let your shoulders hang.
+        to look upright is tiring for your upper back. Lift your chest a little and let your shoulders hang.
         <span id="relax-safety"></span></div>
       <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
       <div class="btn-row">
         <button id="breath-check" class="secondary" disabled title="Start the webcam or demo first">Breath check</button>
       </div>
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
-      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (on by default)</label>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (asks for your OK first)</label>
     </div>
     <div class="panel coaching" id="breaks-panel">
       <h2>Breaks &amp; prompts</h2>
@@ -387,6 +416,12 @@
       </div>
       <div class="note" id="breathe-note">One minute of easy breathing, about 4 seconds in and 6 seconds out, then a breath check. Stop if you feel dizzy.</div>
       <div class="note">Leaving the camera for 2 minutes or more counts as a break and restarts the timers. These are reminders to rest, not medical advice.</div>
+      <h2 style="margin-top:14px">Shoulder &amp; breathing features</h2>
+      <div class="note" id="consent-status" role="status" style="margin-top:0"></div>
+      <div class="btn-row">
+        <button id="consent-open" class="secondary">Turn on&hellip;</button>
+        <button id="consent-withdraw" class="secondary" hidden>Withdraw my OK</button>
+      </div>
     </div>
     <div class="panel">
       <h2>Calibrate to your desk</h2>
@@ -437,6 +472,30 @@
   </div>
   <div class="note" id="help-msg" aria-live="polite"></div>
 </dialog>
+<dialog id="consent-dialog" aria-labelledby="consent-title">
+  <h2 id="consent-title" style="margin-top:0"></h2>
+  <ul id="consent-list"></ul>
+  <label class="note" id="consent-label" style="display:block;margin-top:8px"><input type="checkbox" id="consent-check"> </label>
+  <div class="btn-row"><button id="consent-agree" disabled>Turn on</button><button id="consent-cancel" class="secondary">Not now</button></div>
+  <div class="note"><a href="../privacy.html#biometric">Biometric retention</a> &middot; <a href="../privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a></div>
+</dialog>
+<dialog id="share-dialog" aria-labelledby="share-title">
+  <h2 id="share-title" style="margin-top:0">Share Posture Guard</h2>
+  <div class="note" id="share-text" style="margin-top:0"></div>
+  <div class="share-links">
+    <a id="share-bluesky" href="https://bsky.app/" target="_blank" rel="noopener noreferrer">Bluesky</a>
+    <a id="share-linkedin" href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    <a id="share-x" href="https://x.com/" target="_blank" rel="noopener noreferrer">X</a>
+    <a id="share-email" href="mailto:">Email</a>
+  </div>
+  <label class="note" for="share-instance" style="display:block">Mastodon: your server, such as mastodon.social</label>
+  <div class="share-links"><input type="text" id="share-instance" maxlength="253" autocomplete="off" spellcheck="false" style="flex:1 1 200px;width:auto"><a id="share-mastodon" href="https://mastodon.social/" target="_blank" rel="noopener noreferrer" hidden>Share on Mastodon</a></div>
+  <label class="note" for="share-link" style="display:block">Link</label>
+  <div class="share-links"><input type="text" id="share-link" readonly style="flex:1 1 200px;width:auto"><button id="share-copy" class="secondary">Copy</button></div>
+  <div class="note" id="share-msg" aria-live="polite"></div>
+  <div class="note">These are plain links. Nothing is loaded from those sites until you open one, and no share counters or tracking scripts are used.</div>
+  <div class="btn-row"><button id="share-close">Close</button></div>
+</dialog>
 <dialog id="safety-dialog" aria-labelledby="safety-title">
   <h2 id="safety-title" style="margin-top:0">Safety notice</h2>
   <ul id="safety-list"></ul>
@@ -447,6 +506,8 @@
   <a href="#" id="safety-link" role="button">Safety notice</a> &middot;
   <a href="../privacy.html#about">About and safety</a> &middot;
   <a href="../privacy.html">Privacy</a> &middot;
+  <a href="../privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a> &middot;
+  <a href="https://github.com/sponsors/arii" class="quiet-link" target="_blank" rel="noopener">&hearts; Sponsor</a> &middot;
   Runs on MediaPipe Pose Landmarker (served from this site) and the same scoring and state machine as the
   <a href="https://github.com/arii/posture-guard">Python app</a>, ported to <code>posture-core.js</code> and checked frame-by-frame against it.
   Keep this tab open in the background: the tracker slows to about 5 fps when hidden and keeps reminding you.

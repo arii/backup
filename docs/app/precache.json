@@ -1,11 +1,11 @@
 {
-  "version": "7f8a816ff9abd60a",
-  "totalBytes": 25839378,
+  "version": "6f7941881d988be5",
+  "totalBytes": 25862762,
   "files": [
     {
       "url": "app.js",
-      "size": 78462,
-      "sha256": "1332bd416ae9babe161a134f1f4229b3d2a4298d80b7460f403754f01a990cb8"
+      "size": 87852,
+      "sha256": "2094f9f3c17cbb8147b3b886f4f8b32d5247daf101dbf0e6c6b3bd054ac8c615"
     },
     {
       "url": "breaks.js",
@@ -18,14 +18,19 @@
       "sha256": "522ef7dc4c46b269515557f6e5ddf0ad8d6f7608adecae6094061ec9a5e12a6a"
     },
     {
+      "url": "consent.js",
+      "size": 2328,
+      "sha256": "e71d7eeeb12074e4d880e3db6e4b25c05aa70d5f05cf7861a0195c299608f088"
+    },
+    {
       "url": "feedback.js",
       "size": 3899,
       "sha256": "839d5f7741b2c8893f6859b9677d7ccb4e42512d36d447c9c1d8e7b3dfc6f4df"
     },
     {
       "url": "index.html",
-      "size": 34106,
-      "sha256": "378d790f9ff5daa4723c419d049b6e4c6dd4cf268751a1f92fe3db2607e7a8b5"
+      "size": 39287,
+      "sha256": "938f0e27c99c3c9b0fcff3ec82d79e4d3f05fafd989142603ada0f725d8b88f3"
     },
     {
       "url": "mini-view.js",
@@ -39,8 +44,8 @@
     },
     {
       "url": "onboarding.js",
-      "size": 8321,
-      "sha256": "aa86acb7f85e20ba0aa6ca52f462b164b5d5f79e525e581ab260edfdbab11a99"
+      "size": 8854,
+      "sha256": "e05eaa32522017667d17005e22b9a7f6b3b9c4d57b8d3d93fca97986875e22f1"
     },
     {
       "url": "posture-core.js",
@@ -71,6 +76,16 @@
       "url": "settings.js",
       "size": 2659,
       "sha256": "3abe7601171450557b08d1c02e8e556a314c152af40f5ddb8b20063cc8637fdd"
+    },
+    {
+      "url": "share.js",
+      "size": 2051,
+      "sha256": "ecd8dc29115f1975574d17ceffd7db41fcad90eb71d0092a0e8ab2b220471875"
+    },
+    {
+      "url": "sponsor.js",
+      "size": 3901,
+      "sha256": "62d2eb3a84ff704c987c8f51c1ba5c800ec85244b560af2948e94bf9b13cd9bf"
     },
     {
       "url": "vendor/LICENSE",

@@ -37,6 +37,12 @@ Ground truth about the sensor:
 8. NO new spoken text SHALL be added without a rendered voice clip (see
    `scripts/render-voice.mjs`). Until clips exist, tools use on-screen text and the chime only.
 9. EVERY tool SHALL be keyboard accessible, labelled, and use `aria-live` for text changes.
+10. **Red line:** NO breathing, tension or posture data SHALL be sent to a server (accounts, sync,
+    analytics, leaderboards) without redoing the legal review in `docs/legal-checklist.md`
+    (consumer health data laws, the FTC Health Breach Notification Rule).
+11. EVERY tool that reads shoulder, neck or face landmarks SHALL stay off until the user gives
+    a dated opt-in (`docs/app/consent.js`), and any face tension tool SHALL use Face Landmarker
+    blendshape scores only, never face meshes or embeddings, and store derived scores only.
 
 ### Requirement 2: Breath check (shipped)
 1. THE App SHALL offer a breath check (`#breath-check`): breathe in, breathe out, then a

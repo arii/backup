@@ -68,6 +68,14 @@ export const ONBOARDING_STEPS = Object.freeze([
   { title: "Before you start", points: SAFETY_POINTS },
 ]);
 
+/** First-run "Choose your coach" and "You're set" steps (rendered in app.js). */
+export const COACH_INTRO =
+  "Pick how Posture Guard talks to you. Every choice can be changed later under Reminders & sounds and Breaks & prompts.";
+export const DONE_INTRO =
+  "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
+  "Pause any time with the Pause button. A silent test now gives you a baseline to compare with later. " +
+  "If a friend might like it, you can share the page.";
+
 /** "Learn the cues" practice: each step names the tile (metric) that should light up. */
 export const PRACTICE_STEPS = Object.freeze([
   { text: "Sit tall, head over your shoulders. This is the posture to come back to.", metric: null },

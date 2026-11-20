@@ -26,6 +26,12 @@
 //    Breaks & prompts settings persist across a reload.
 // 4b. Offline mode: opt in, wait for the ready message, go offline, reload, run
 //    demo (and the webcam when a fake camera is given), then remove the copy.
+// 4c. Consent (issue #51): the breath check and breathing moments ask first,
+//    declining stores nothing, withdrawing and Delete my data remove the record.
+// 4d. Share menu (issue #49) without navigator.share: plain links, no third-party request.
+// 4e. Sponsor card (issue #49): shown once after seeded sustained use, never
+//    after 3 showings, Don't ask again, Maybe later, the first week, or in a silent test.
+// 4f. Open Graph tags, privacy page sections and footer links (issues #49, #51).
 // 5. Self-hosting (issue #45): the vendored files are served, and no request
 //    leaves the site's origin (in particular none to cdn.jsdelivr.net or
 //    storage.googleapis.com). CSP violations show up as console errors, which
@@ -62,11 +68,15 @@ function check(name, ok, detail) {
 const ONBOARDED = 1;
 const ACKED = 1;
 
-async function newPage(browser, { fresh = false, guide = false, viewport = { width: 1280, height: 900 } } = {}) {
+// The shoulder and breathing features need a dated consent (docs/app/consent.js).
+// Every check except the consent one seeds it; keep in step with CONSENT_VERSION.
+const CONSENT = { version: 1, at: "2026-01-01T00:00:00.000Z" };
+
+async function newPage(browser, { fresh = false, guide = false, consent = true, extra = null, viewport = { width: 1280, height: 900 } } = {}) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
-    await context.addInitScript(([onboarded, ackVersion, firstRunDone]) => {
+    await context.addInitScript(([onboarded, ackVersion, firstRunDone, consentRecord, extraStore]) => {
       try {
         if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
         sessionStorage.setItem("pg-e2e-acked", "1");
@@ -74,9 +84,11 @@ async function newPage(browser, { fresh = false, guide = false, viewport = { wid
         s.onboarded = Math.max(s.onboarded || 0, onboarded);
         s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
         if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
+        if (consentRecord) s.consent = consentRecord;
+        if (extraStore) Object.assign(s, extraStore);
         localStorage.setItem("posture-guard:v1", JSON.stringify(s));
       } catch { /* storage unavailable */ }
-    }, [ONBOARDED, ACKED, !guide]);
+    }, [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra]);
   }
   const page = await context.newPage();
   page.on("request", (r) => {
@@ -421,8 +433,21 @@ try {
     check("first run: step 2 offers calibration",
       (await page.textContent("#first-run-heading")) === "Calibrate to your posture" && await page.isVisible("#first-run-body button"));
     await page.click("#first-run-next");
-    check("first run: step 3 plays the sounds and mentions keeping the tab open",
-      /Leave this tab open/.test(await page.textContent("#first-run-body")) && (await page.locator("#first-run-body button").count()) === 3);
+    check("first run: step 3 is Choose your coach, with voice, breaks and sample buttons",
+      (await page.textContent("#first-run-heading")) === "Choose your coach" &&
+      (await page.locator("#coach-voice, #coach-level, #coach-eye, #coach-move, #coach-moments").count()) === 5 &&
+      (await page.locator("#first-run-body button").count()) === 3);
+    await page.selectOption("#coach-move", "45");
+    await page.uncheck("#coach-eye");
+    const coach = await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("posture-guard:v1"));
+      return { move: s.moveBreakMinutes, eye: s.eyeBreaks };
+    });
+    check("first run: coach choices change the real settings", coach.move === 45 && coach.eye === false, coach);
+    await page.click("#first-run-next");
+    check("first run: last step says to leave the tab open and has Share and a silent test",
+      /Leave this tab open/.test(await page.textContent("#first-run-body")) && /Pause any time/.test(await page.textContent("#first-run-body")) &&
+      (await page.locator("#first-run-body button").allTextContents()).join("|") === "Share Posture Guard|Start a silent test");
     await page.click("#first-run-next");
     const done = await page.evaluate(() => ({
       hidden: document.getElementById("first-run").hidden,
@@ -741,6 +766,171 @@ try {
     }
     await page.close();
   }
+  // 4c. Issue #51: consent gates the shoulder and breathing features.
+  {
+    const { page, errors } = await newPage(browser, { consent: false });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    await page.waitForTimeout(1500);
+    check("consent: relax reminders box is off and the status says off until the user opts in",
+      !(await page.isChecked("#relax-reminders")) && /Off\./.test(await page.textContent("#consent-status")),
+      await page.textContent("#consent-status"));
+    await page.click("#breath-check");
+    check("consent: the breath check asks first and does not start", await page.evaluate(() => document.getElementById("consent-dialog").open &&
+      !/Breathe in slowly/.test(document.getElementById("relax-status").textContent)));
+    const dialog = await page.textContent("#consent-dialog");
+    check("consent: the dialog explains what, where, kept, identify and withdraw",
+      /measured/.test(dialog) && /only in this browser tab/.test(dialog) && /identify/.test(dialog) && /withdraw/i.test(dialog) && /Consumer Health Data/.test(dialog), dialog.slice(0, 200));
+    check("consent: Turn on is disabled until the box is checked", await page.isDisabled("#consent-agree"));
+    await page.screenshot({ path: path.join(outDir, "consent-dialog.png") });
+    await page.click("#consent-cancel");
+    check("consent: declining stores nothing", await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent));
+    await page.check("#breathing-moments");
+    check("consent: the breathing moments box also asks and resets when declined", await page.evaluate(() => document.getElementById("consent-dialog").open));
+    await page.click("#consent-cancel");
+    check("consent: breathing moments stay off", !(await page.isChecked("#breathing-moments")));
+    await page.click("#breath-check");
+    await page.check("#consent-check");
+    await page.click("#consent-agree");
+    await page.waitForFunction(() => /Breathe in slowly/.test(document.getElementById("relax-status").textContent), null, { timeout: 5000 }).catch(() => {});
+    const rec = await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).consent);
+    check("consent: agreeing records a dated consent and runs the breath check",
+      rec && rec.version === 1 && !Number.isNaN(Date.parse(rec.at)) && /Breathe in slowly/.test(await page.textContent("#relax-status")), rec);
+    await page.click("#consent-withdraw");
+    check("consent: withdrawing removes the record",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent) && !(await page.isChecked("#relax-reminders")));
+    page.on("dialog", (d) => d.accept());
+    await page.click("#consent-open");
+    await page.check("#consent-check");
+    await page.click("#consent-agree");
+    await page.click("#progress-delete");
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(500);
+    check("consent: Delete my data removes the consent record",
+      await page.evaluate(() => !(JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent)));
+    check("consent: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4d. Issue #49 part 4: Share menu without navigator.share, plain links only.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => { Object.defineProperty(navigator, "share", { value: undefined, configurable: true }); });
+    await page.goto(`${base}app/${bust}`);
+    const before = externalRequests.length;
+    await page.click("#share-btn");
+    const links = await page.evaluate(() => Object.fromEntries(["bluesky", "linkedin", "x", "email", "mastodon"].map((id) => {
+      const a = document.getElementById(`share-${id}`);
+      return [id, { href: a.href, hidden: a.hidden, rel: a.rel }];
+    })));
+    const hosts = ["bluesky", "linkedin", "x"].map((k) => new URL(links[k].href).hostname).join();
+    check("share: menu opens with Bluesky, LinkedIn, X and email links, no third-party host before a click",
+      hosts === "bsky.app,www.linkedin.com,x.com" && links.email.href.startsWith("mailto:") && links.mastodon.hidden &&
+      /noopener/.test(links.bluesky.rel) && externalRequests.length === before, links);
+    check("share: the text and link are shown",
+      /Nothing is uploaded/.test(await page.textContent("#share-text")) && /\/posture-guard\/|^http/.test(await page.inputValue("#share-link")));
+    await page.fill("#share-instance", "https://evil.example/x");
+    check("share: an invalid Mastodon server shows a hint and no link", await page.evaluate(() => document.getElementById("share-mastodon").hidden) &&
+      /server name/.test(await page.textContent("#share-msg")));
+    await page.fill("#share-instance", "fosstodon.org");
+    const masto = await page.evaluate(() => { const a = document.getElementById("share-mastodon"); return { hidden: a.hidden, host: new URL(a.href).hostname }; });
+    check("share: a valid Mastodon server gives a link to that host", !masto.hidden && masto.host === "fosstodon.org", masto);
+    await page.screenshot({ path: path.join(outDir, "share-dialog.png") });
+    check("share: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4e. Issue #49 part 5: sponsor card gating (seeded store, accelerated clock).
+  {
+    const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const used = (extra = {}) => ({
+      usage: { firstSeen: day(30), sessions: 8 },
+      days: { [day(20)]: { good: 3000, bad: 600 }, [day(10)]: { good: 3000, bad: 600 }, [day(3)]: { good: 3000, bad: 600 } },
+      // keep the other prompts out of the way: only the sponsor card is under test
+      eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false,
+      ...extra,
+    });
+    const shownIn = async (extra, ms) => {
+      const { page, errors } = await newPage(browser, { extra: used(extra) });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      const seen = await page.waitForFunction(() => !document.getElementById("sponsor-card").hidden, null, { timeout: ms }).then(() => true, () => false);
+      return { page, errors, seen };
+    };
+    {
+      const { page, errors, seen } = await shownIn({}, 20000);
+      check("sponsor: card appears after sustained use, in the session panel", seen);
+      if (seen) {
+        const info = await page.evaluate(() => ({
+          text: document.getElementById("sponsor-text").textContent,
+          link: document.getElementById("sponsor-link").href,
+          buttons: [...document.querySelectorAll("#sponsor-card button")].map((b) => b.textContent),
+          stored: JSON.parse(localStorage.getItem("posture-guard:v1")).sponsor,
+          inPanel: !!document.getElementById("sponsor-card").closest(".panel"),
+          video: document.getElementById("sponsor-card").closest(".stage") === null,
+        }));
+        check("sponsor: text, links and buttons, counted once", /tracked about \d+ hours/.test(info.text) &&
+          info.link === "https://github.com/sponsors/arii" && info.buttons.join("|") === "Share instead|Maybe later|Don\u2019t ask again" &&
+          info.stored.shown === 1 && info.inPanel && info.video, info);
+        await page.screenshot({ path: path.join(outDir, "sponsor-card.png") });
+        await page.click("#sponsor-never");
+        const after = await page.evaluate(() => ({ hidden: document.getElementById("sponsor-card").hidden, sp: JSON.parse(localStorage.getItem("posture-guard:v1")).sponsor }));
+        check("sponsor: Don't ask again hides it and is stored", after.hidden && after.sp.never === true, after);
+      }
+      check("sponsor: no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    for (const [name, extra] of [
+      ["after 3 showings", { sponsor: { shown: 3 } }],
+      ["after Don't ask again", { sponsor: { never: true } }],
+      ["within 30 days of Maybe later", { sponsor: { shown: 1, laterOn: day(5) } }],
+      ["in the first week", { usage: { firstSeen: day(2), sessions: 8 } }],
+      ["with too few sessions", { usage: { firstSeen: day(30), sessions: 2 } }],
+    ]) {
+      const { page, seen } = await shownIn(extra, 4000);
+      check(`sponsor: not shown ${name}`, !seen);
+      await page.close();
+    }
+    {
+      const { page } = await newPage(browser, { extra: used() });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.click("#test-start");
+      await page.waitForTimeout(4000);
+      check("sponsor: not shown during a silent test", await page.evaluate(() => document.getElementById("sponsor-card").hidden));
+      await page.close();
+    }
+  }
+
+  // 4f. Landing, Open Graph tags, privacy sections (issues #49, #51).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(base + bust);
+    const og = await page.evaluate(() => Object.fromEntries(["og:title", "og:description", "og:image", "twitter:card", "twitter:image"].map((k) => {
+      const m = document.querySelector(`meta[property="${k}"], meta[name="${k}"]`);
+      return [k, m && m.content];
+    })));
+    check("landing: Open Graph and Twitter card tags are present", Object.values(og).every(Boolean) && og["twitter:card"] === "summary_large_image", og);
+    const img = await fetch(`${base}assets/og-image.png${bust}`);
+    check("landing: og-image.png is served", img.ok && /image\/png/.test(img.headers.get("content-type") || ""), { status: img.status });
+    check("landing: footer links to the Consumer Health Data Privacy Policy",
+      (await page.locator('footer a[href="privacy.html#consumer-health-data"]').count()) === 1);
+    await page.goto(`${base}privacy.html${bust}`);
+    const sections = await page.evaluate(() => ({
+      chd: /Consumer Health Data Privacy Policy/.test(document.getElementById("consumer-health-data")?.textContent || ""),
+      bio: /do not retain any face geometry/.test(document.getElementById("biometric")?.nextElementSibling?.textContent || ""),
+      sponsor: /sponsor prompt/.test(document.body.textContent),
+      offline: /Make available offline/.test(document.body.textContent),
+    }));
+    check("privacy page has the consumer health data and biometric retention sections", sections.chd && sections.bio && sections.sponsor && sections.offline, sections);
+    await page.goto(`${base}app/${bust}`);
+    check("app footer links to the Consumer Health Data Privacy Policy and Sponsor",
+      (await page.locator('footer a[href="../privacy.html#consumer-health-data"]').count()) === 1 &&
+      (await page.locator('footer a[href="https://github.com/sponsors/arii"]').count()) === 1);
+    check("landing and privacy pages have no errors", errors.length === 0, errors);
+    await page.close();
+  }
+
   // 5. Self-hosting: vendored files are served, nothing left the origin.
   {
     const missing = [];

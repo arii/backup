@@ -30,6 +30,14 @@ import {
 import {
   CACHE_NAME, META_URL, isOfflineReady, offlineMessage, offlineState, progressPercent,
 } from "./offline.js";
+import {
+  CONSENT_CHECKBOX, CONSENT_POINTS, CONSENT_TITLE, consentStatus, hasConsent, recordConsent, withdrawConsent,
+} from "./consent.js";
+import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl } from "./share.js";
+import {
+  SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
+} from "./sponsor.js";
+import { COACH_INTRO, DONE_INTRO } from "./onboarding.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
@@ -427,6 +435,49 @@ store.days = store.days || {};
 // and runs the breath check ("if your shoulders rise when you breathe in, you
 // are bracing"). See relax.js for the measurement.
 
+// -- consent for shoulder and breathing features -------------------------------------
+// Breath check, "Breathe with me", breathing moments and shoulder-creep
+// reminders read shoulder, neck and nose landmarks. They stay off until the
+// user opts in (a dated record in the store, see consent.js). Posture tracking
+// itself does not need it.
+
+let consentThen = null; // runs after the user agrees
+function renderConsentStatus() {
+  $("consent-status").textContent = consentStatus(store);
+  $("consent-withdraw").hidden = !hasConsent(store);
+  $("consent-open").hidden = hasConsent(store);
+}
+/** True when consent exists. Otherwise opens the consent dialog and runs `then` after the user agrees. */
+function requireConsent(then) {
+  if (hasConsent(store)) return true;
+  consentThen = then || null;
+  $("consent-check").checked = false;
+  $("consent-agree").disabled = true;
+  $("consent-dialog").showModal();
+  return false;
+}
+$("consent-title").textContent = CONSENT_TITLE;
+$("consent-label").append(CONSENT_CHECKBOX);
+$("consent-list").replaceChildren(...CONSENT_POINTS.map((t) => { const li = document.createElement("li"); li.textContent = t; return li; }));
+$("consent-check").addEventListener("change", (e) => { $("consent-agree").disabled = !e.target.checked; });
+$("consent-agree").addEventListener("click", () => {
+  recordConsent(store); save();
+  $("consent-dialog").close();
+  renderConsentStatus(); renderPromptSettings();
+  const then = consentThen; consentThen = null;
+  if (then) then();
+});
+$("consent-cancel").addEventListener("click", () => { consentThen = null; $("consent-dialog").close(); renderPromptSettings(); });
+$("consent-dialog").addEventListener("close", () => { if (!hasConsent(store)) renderPromptSettings(); });
+$("consent-open").addEventListener("click", () => requireConsent(null));
+$("consent-withdraw").addEventListener("click", () => {
+  withdrawConsent(store); save();
+  guide.cancel(); breath.cancel?.();
+  if (card) hideCard();
+  prompts.dismiss(pclock, "done");
+  renderConsentStatus(); renderPromptSettings();
+});
+
 const bracing = new BracingMonitor();
 const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
@@ -458,6 +509,7 @@ const VERDICT_TEXT = {
 
 function startBreathCheck() {
   if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (!requireConsent(startBreathCheck)) return;
   ensureAudio();
   goodSinceBreath = 0;
   breath.start(performance.now() / 1000, bracing.value);
@@ -468,6 +520,7 @@ function startBreathCheck() {
 
 function relaxStep(landmarks, state, now) {
   if (test || practice) { relaxLastT = null; return; }
+  if (!hasConsent(store)) { relaxLastT = null; $("relax-shoulders").textContent = "off until you opt in"; return; }
   const ratio = neckRatio(landmarks);
   const good = state === State.GOOD;
   const flagged = bracing.update(ratio, now, good && !breath.active);
@@ -518,10 +571,11 @@ function setTrackingControls(on) {
 }
 
 $("breath-check").addEventListener("click", startBreathCheck);
-$("relax-reminders").checked = settings.relaxReminders;
 $("relax-reminders").addEventListener("change", (e) => {
-  settings.relaxReminders = e.target.checked;
-  store.relaxReminders = settings.relaxReminders; save();
+  const on = e.target.checked;
+  const apply = () => { settings.relaxReminders = on; store.relaxReminders = on; save(); renderPromptSettings(); };
+  if (on && !requireConsent(apply)) return;
+  apply();
 });
 
 // -- breaks and prompts ---------------------------------------------------------
@@ -547,8 +601,8 @@ function promptEnabled(id) {
   if (dismissed[DISMISS_KEY[id]]) return false;
   if (id === "eye") return settings.eyeBreaks;
   if (id === "move") return settings.moveBreakMinutes > 0;
-  if (id === "breathing") return settings.breathingMoments;
-  if (id === "breath" || id === "offer") return settings.relaxReminders;
+  if (id === "breathing") return settings.breathingMoments && hasConsent(store);
+  if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
   return true;
 }
 
@@ -565,7 +619,8 @@ let card = null;  // the prompt on screen: { id, text, t, finished }
 function renderPromptSettings() {
   $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
   $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
-  $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing;
+  $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
+  $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
   $("breathe-cues").checked = settings.breatheCues;
   $("prompts-reset").hidden = !Object.keys(dismissed).length;
 }
@@ -591,9 +646,10 @@ $("move-minutes").addEventListener("change", (e) => {
   savePromptSettings();
 });
 $("breathing-moments").addEventListener("change", (e) => {
-  settings.breathingMoments = e.target.checked;
-  if (e.target.checked) delete dismissed.breathing;
-  savePromptSettings();
+  const on = e.target.checked;
+  const apply = () => { settings.breathingMoments = on; if (on) delete dismissed.breathing; savePromptSettings(); };
+  if (on && !requireConsent(apply)) return; // asks first; renderPromptSettings resets the box if declined
+  apply();
 });
 $("breathe-cues").addEventListener("change", (e) => {
   settings.breatheCues = e.target.checked;
@@ -604,6 +660,7 @@ $("prompts-reset").addEventListener("click", () => {
   savePromptSettings();
 });
 renderPromptSettings();
+renderConsentStatus();
 
 function breaksTakenToday() {
   const b = store.breaksToday;
@@ -668,12 +725,14 @@ function endCard(how) {
 
 /** Drop whatever prompt is on screen (pause, silent test, practice). */
 function cancelPrompts() {
+  hideSponsor();
   guide.cancel();
   if (card) endCard("done");
   prompts.dismiss(pclock, "done");
 }
 
 function showPrompt(item) {
+  if (item.id === "share") { showSponsor(); return; }
   if (item.id === "breath") { // the auto breath check has its own UI
     prompts.dismiss(pclock, "done");
     startBreathCheck();
@@ -690,6 +749,7 @@ function showPrompt(item) {
 
 function startGuide() {
   if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (!requireConsent(startGuide)) return;
   ensureAudio();
   if (card) endCard("done");
   guide.start(preal);
@@ -729,9 +789,16 @@ function promptStep(state, now) {
   if (breaks.update(present, pclock)) countBreak();
   pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0;
   if (!present && card && card.id !== "guide") endCard("done"); // no prompt while away
+  if (!present && sponsorCard) answerSponsorCard("later");
+  if (shouldOfferSponsor(store, { nowMs: Date.now(), good: pstreak >= SPONSOR.good_streak_s, silent: !!test || !!practice || paused })) {
+    prompts.enqueue("share", pclock);
+  }
   for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
   if (settings.breathingMoments && moments.due(pstreak, pclock)) prompts.enqueue("breathing", pclock);
-  if (guide.active) guideStep();
+  if (sponsorCard) {
+    sponsorCard.t += dt;
+    if (sponsorCard.t >= 120) answerSponsorCard("later"); // ignoring it counts as "Maybe later"
+  } else if (guide.active) guideStep();
   else if (card) {
     card.t += dt;
     if (card.id === "eye") {
@@ -759,6 +826,68 @@ $("prompt-snooze").addEventListener("click", () => endCard("snooze"));
 $("prompt-notnow").addEventListener("click", () => endCard("notnow"));
 $("prompt-never").addEventListener("click", () => endCard("never"));
 $("breathe-with-me").addEventListener("click", startGuide);
+
+// -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
+// A small non-modal card in the session panel. Gating is in sponsor.js; the
+// counts it uses live only in this browser's store.
+
+let sponsorCard = null; // { t } while on screen
+$("sponsor-link").href = SPONSOR_URL;
+
+function showSponsor() {
+  const still = shouldOfferSponsor(store, { nowMs: Date.now(), good: pstreak >= SPONSOR.good_streak_s, silent: !!test || !!practice || paused });
+  if (!still) { prompts.dismiss(pclock, "done"); return; } // conditions changed while it waited
+  markSponsorShown(store); save();
+  sponsorCard = { t: 0 };
+  $("sponsor-text").textContent = sponsorText(store);
+  $("sponsor-card").hidden = false;
+}
+function hideSponsor() {
+  if (!sponsorCard) return;
+  sponsorCard = null;
+  $("sponsor-card").hidden = true;
+  prompts.dismiss(pclock, "done");
+}
+function answerSponsorCard(how) {
+  if (how !== "done") { answerSponsor(store, how, Date.now()); save(); }
+  hideSponsor();
+}
+$("sponsor-later").addEventListener("click", () => answerSponsorCard("later"));
+$("sponsor-never").addEventListener("click", () => answerSponsorCard("never"));
+$("sponsor-link").addEventListener("click", () => answerSponsorCard("never")); // they acted: do not ask again
+$("sponsor-share").addEventListener("click", () => { answerSponsorCard("later"); openShare(); });
+
+// -- share (Web Share API, else a menu of plain links; nothing third-party is loaded) --
+function renderShareLinks() {
+  const links = shareLinks(shareUrl(location.href), { instance: $("share-instance").value });
+  for (const [id, href] of Object.entries(links)) { const a = $(`share-${id}`); if (a) a.href = href; }
+  $("share-mastodon").hidden = !links.mastodon;
+}
+async function openShare() {
+  const url = shareUrl(location.href);
+  if (typeof navigator.share === "function") {
+    try { await navigator.share(nativeSharePayload(url)); return; } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  $("share-link").value = url;
+  $("share-text").textContent = SHARE_TEXT;
+  $("share-msg").textContent = "";
+  renderShareLinks();
+  $("share-dialog").showModal();
+}
+$("share-btn").addEventListener("click", openShare);
+$("share-close").addEventListener("click", () => $("share-dialog").close());
+$("share-instance").addEventListener("input", () => {
+  renderShareLinks();
+  const v = $("share-instance").value.trim();
+  $("share-msg").textContent = v && !normalizeInstance(v) ? "Enter just the server name, such as mastodon.social." : "";
+});
+$("share-copy").addEventListener("click", async () => {
+  const text = `${SHARE_TEXT} ${$("share-link").value}`;
+  try { await navigator.clipboard.writeText(text); $("share-msg").textContent = "Copied."; } catch {
+    $("share-link").select();
+    $("share-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
+  }
+});
 
 function resetPromptSession() {
   prompts.startSession(pclock);
@@ -1362,6 +1491,7 @@ function begin(source) {
   maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
+  recordSession(store, Date.now()); save();
   resetPromptSession();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
@@ -1419,18 +1549,17 @@ $("start-demo").addEventListener("click", () => {
 
 const FIRST_RUN = [
   {
+    key: "framing",
     title: "Check your framing",
     intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
   },
   {
+    key: "calibrate",
     title: "Calibrate to your posture",
     intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
   },
-  {
-    title: "You're set",
-    intro: "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
-      "Take a silent test first for a baseline. Here is what the sounds mean:",
-  },
+  { key: "coach", title: "Choose your coach", intro: COACH_INTRO },
+  { key: "done", title: "You're set", intro: DONE_INTRO },
 ];
 const firstRun = { step: 0, open: false };
 let firstRunLive = null; // the element updated every frame on the current step
@@ -1441,6 +1570,69 @@ function firstRunButton(label, onClick, secondary = true) {
   if (secondary) b.className = "secondary";
   b.addEventListener("click", onClick);
   return b;
+}
+
+/** The "Choose your coach" controls. Each one drives the real setting (same
+ *  element, same change handler), so nothing is stored twice. */
+function coachControls() {
+  const row = (text, control) => {
+    const l = document.createElement("label");
+    l.className = "note";
+    l.style.display = "block";
+    l.append(control, ` ${text}`);
+    return l;
+  };
+  const select = (src, extra = []) => {
+    const el = document.createElement("select");
+    for (const o of [...src.options, ...extra]) el.add(new Option(o.text, o.value));
+    return el;
+  };
+  const check = (src) => {
+    const el = document.createElement("input");
+    el.type = "checkbox";
+    el.checked = src.checked;
+    el.addEventListener("change", () => {
+      src.checked = el.checked;
+      src.dispatchEvent(new Event("change"));
+      $("consent-dialog").addEventListener("close", () => { el.checked = src.checked; }, { once: true });
+    });
+    return el;
+  };
+  const voice = select($("voice-pick"), [new Option("Off (chime only, no voice)", "__off")]);
+  voice.id = "coach-voice";
+  voice.setAttribute("aria-label", "Voice");
+  voice.value = settings.mode === "chime_and_voice" ? $("voice-pick").value : "__off";
+  voice.addEventListener("change", () => {
+    const radio = document.querySelector(`input[name=mode][value=${voice.value === "__off" ? "chime_only" : "chime_and_voice"}]`);
+    radio.checked = true;
+    radio.dispatchEvent(new Event("change"));
+    if (voice.value !== "__off") { $("voice-pick").value = voice.value; $("voice-pick").dispatchEvent(new Event("change")); }
+  });
+  const level = select($("coaching-level"));
+  level.id = "coach-level";
+  level.setAttribute("aria-label", "Reminder style");
+  level.value = $("coaching-level").value;
+  level.addEventListener("change", () => { $("coaching-level").value = level.value; $("coaching-level").dispatchEvent(new Event("change")); });
+  const eye = check($("eye-breaks"));
+  eye.id = "coach-eye";
+  const move = select($("move-minutes"));
+  move.id = "coach-move";
+  move.setAttribute("aria-label", "Stand up and move");
+  move.value = $("move-minutes").value;
+  move.addEventListener("change", () => { $("move-minutes").value = move.value; $("move-minutes").dispatchEvent(new Event("change")); });
+  const moments = check($("breathing-moments"));
+  moments.id = "coach-moments";
+  const samples = document.createElement("div");
+  samples.className = "btn-row";
+  samples.append(
+    firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
+    firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
+    firstRunButton("Play a voice sample", () => { ensureAudio(); speak(TEST_LINE); }),
+  );
+  return [
+    row("Voice", voice), row("Reminder style", level), row("Eye break every 20 minutes", eye),
+    row("Stand up and move", move), row("Occasional breathing moments (asks for your OK first)", moments), samples,
+  ];
 }
 
 function renderFirstRun() {
@@ -1454,12 +1646,12 @@ function renderFirstRun() {
   intro.textContent = step.intro;
   const parts = [intro];
   firstRunLive = null;
-  if (firstRun.step === 0) {
+  if (step.key === "framing") {
     firstRunLive = document.createElement("div");
     firstRunLive.className = "framing";
     firstRunLive.setAttribute("aria-live", "polite");
     parts.push(firstRunLive);
-  } else if (firstRun.step === 1) {
+  } else if (step.key === "calibrate") {
     firstRunLive = document.createElement("div");
     firstRunLive.className = "note";
     firstRunLive.setAttribute("aria-live", "polite");
@@ -1470,13 +1662,14 @@ function renderFirstRun() {
       firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
     );
     parts.push(row, firstRunLive);
+  } else if (step.key === "coach") {
+    parts.push(...coachControls());
   } else {
     const row = document.createElement("div");
     row.className = "btn-row";
     row.append(
-      firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
-      firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
-      firstRunButton("Play a voice line", () => { ensureAudio(); speak(TEST_LINE); }),
+      firstRunButton("Share Posture Guard", () => openShare(), false),
+      firstRunButton("Start a silent test", () => { closeFirstRun(); $("test-start").scrollIntoView({ block: "center" }); $("test-start").focus(); }),
     );
     parts.push(row);
   }
@@ -1507,13 +1700,13 @@ function maybeStartFirstRun() {
 /** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
 function updateFirstRunLive(result, landmarks) {
   if (!firstRun.open || !firstRunLive) return;
-  if (firstRun.step === 0) {
+  if (FIRST_RUN[firstRun.step].key === "framing") {
     const ok = result.kind === "scored";
     firstRunLive.className = ok ? "framing ok" : "framing";
     firstRunLive.textContent = ok
       ? "Head and shoulders in view \u2713"
       : causeFor(result, landmarks) || "Looking for you...";
-  } else if (firstRun.step === 1) {
+  } else if (FIRST_RUN[firstRun.step].key === "calibrate") {
     firstRunLive.textContent = $("calib-status").textContent;
   }
 }

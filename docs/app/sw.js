@@ -11,7 +11,7 @@
 // changes whenever a precached file changes, which makes the browser update it.
 // Plain script (not a module): the constants below mirror offline.js.
 
-const PRECACHE_VERSION = "7f8a816ff9abd60a";
+const PRECACHE_VERSION = "6f7941881d988be5";
 const CACHE_NAME = "posture-guard-offline";
 const META_URL = "./__offline-meta.json";
 
