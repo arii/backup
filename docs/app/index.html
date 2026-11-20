@@ -284,6 +284,16 @@
       <div class="note">Stored only in this browser. Days are counted in UTC. A missed day is just a day with no data.</div>
       <div class="note" id="progress-msg" aria-live="polite"></div>
     </div>
+    <div class="panel" id="offline-panel" aria-labelledby="offline-title">
+      <h2 id="offline-title">Offline mode</h2>
+      <div class="note" id="offline-status" role="status" style="margin-top:0">Checking offline support...</div>
+      <div class="hold" id="offline-bar" hidden style="display:block"><div class="hold-fill" id="offline-fill"></div></div>
+      <div class="btn-row">
+        <button class="secondary" id="offline-enable">Make available offline</button>
+        <button class="secondary" id="offline-remove" hidden>Remove offline copy</button>
+      </div>
+      <div class="note">Nothing is downloaded until you select the button. The copy stays on this device and holds only the app files, never video or images. <b>Remove offline copy</b> or <b>Delete my data</b> deletes it.</div>
+    </div>
   </div>
   <div>
     <div id="warnings"></div>

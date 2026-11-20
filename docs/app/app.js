@@ -27,6 +27,9 @@ import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSetting
 import {
   BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
 } from "./privacy.js";
+import {
+  CACHE_NAME, META_URL, isOfflineReady, offlineMessage, offlineState, progressPercent,
+} from "./offline.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
@@ -1769,11 +1772,103 @@ $("progress-export").addEventListener("click", () => {
 });
 
 $("progress-delete").addEventListener("click", () => {
-  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests and uploaded sounds)? This cannot be undone.")) return;
+  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests, uploaded sounds and the offline copy)? This cannot be undone.")) return;
   deleted = true; // stop any pending save from writing it back
   clearStoredData(localStorage);
-  location.reload();
+  removeOfflineCopy().finally(() => location.reload());
 });
+
+// ---- Offline mode (opt-in; sw.js caches the files listed in precache.json) ----
+const offlineSupported = "serviceWorker" in navigator && "caches" in window;
+const offline = { downloading: false, error: false, percent: 0, totalBytes: 0, ready: false, registered: false, stale: false };
+
+function renderOffline() {
+  const state = offlineState({ supported: offlineSupported, ...offline });
+  $("offline-status").textContent = offlineMessage(state, offline);
+  $("offline-enable").hidden = !offlineSupported || state === "ready" || state === "downloading";
+  $("offline-enable").textContent = state === "update-available" ? "Update offline copy" : state === "error" ? "Try again" : "Make available offline";
+  $("offline-remove").hidden = !offlineSupported || !(offline.registered || offline.ready);
+  $("offline-bar").hidden = state !== "downloading";
+  $("offline-fill").style.width = `${offline.percent}%`;
+}
+
+async function removeOfflineCopy() {
+  if (!offlineSupported) return;
+  try {
+    for (const reg of await navigator.serviceWorker.getRegistrations()) await reg.unregister();
+    for (const k of await caches.keys()) if (k.startsWith("posture-guard-")) await caches.delete(k);
+  } catch { /* nothing more to remove */ }
+}
+
+async function refreshOffline() {
+  if (!offlineSupported) return renderOffline();
+  try {
+    offline.registered = !!(await navigator.serviceWorker.getRegistration());
+    const hasCache = await caches.has(CACHE_NAME); // caches.open would create an empty one
+    const cache = hasCache ? await caches.open(CACHE_NAME) : null;
+    const metaRes = cache && await cache.match(META_URL);
+    const meta = metaRes ? await metaRes.json() : null;
+    // precache.json always comes from the network; skip it when offline.
+    let pre = null;
+    if (navigator.onLine) pre = await (await fetch("./precache.json", { cache: "no-cache" })).json();
+    else if (meta) pre = { version: meta.version, totalBytes: offline.totalBytes, files: Object.keys(meta.hashes).map((url) => ({ url })) };
+    if (!pre) throw new Error("offline and nothing cached");
+    offline.totalBytes = pre.totalBytes;
+    const base = new URL("./", location.href).href;
+    const cached = cache ? (await cache.keys()).map((r) => r.url.startsWith(base) ? r.url.slice(base.length) : r.url) : [];
+    offline.ready = isOfflineReady(pre, cached, meta && meta.version);
+    offline.stale = offline.registered && !offline.ready;
+  } catch {
+    // Offline and not cached, or precache.json unreadable: keep whatever we knew.
+  }
+  renderOffline();
+}
+
+if (offlineSupported) {
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const m = e.data || {};
+    if (m.type === "offline-progress") {
+      offline.downloading = true; offline.error = false; offline.totalBytes = m.totalBytes || offline.totalBytes;
+      offline.percent = m.percent; renderOffline();
+    } else if (m.type === "offline-ready") {
+      offline.downloading = false; offline.percent = 100; refreshOffline();
+    } else if (m.type === "offline-error") {
+      offline.downloading = false; offline.error = true; renderOffline();
+    }
+  });
+}
+
+$("offline-enable").addEventListener("click", async () => {
+  offline.downloading = true; offline.error = false; offline.percent = progressPercent(0, 1);
+  renderOffline();
+  try {
+    const reg = await navigator.serviceWorker.register("./sw.js");
+    await reg.update(); // picks up a newer sw.js; no-op when already current
+    const sw = reg.installing || reg.waiting;
+    if (sw) {
+      await new Promise((resolve, reject) => {
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated") resolve();
+          else if (sw.state === "redundant") reject(new Error("install failed"));
+        });
+      });
+    }
+    offline.downloading = false;
+  } catch {
+    offline.downloading = false; offline.error = true;
+  }
+  await refreshOffline();
+});
+
+$("offline-remove").addEventListener("click", async () => {
+  await removeOfflineCopy();
+  offline.ready = false; offline.registered = false; offline.stale = false; offline.error = false; offline.downloading = false;
+  await refreshOffline();
+  $("offline-status").textContent = "Offline copy removed. The app needs a network connection again.";
+});
+
+renderOffline();
+refreshOffline();
 
 renderCalibration();
 renderStats();

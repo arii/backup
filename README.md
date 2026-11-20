@@ -110,6 +110,7 @@ body. Unlike its namesake, it sits up straight.
 | **Voice** | Web Audio and speech synthesis in the browser; `paplay` with pico2wave or espeak-ng on Linux | The chime, then "Head forward. Tuck your chin..." |
 | **Heartbeat** | A Web Worker timer | Keeps tracking at ~5 fps after the browser throttles a background tab |
 | **Memory** | `localStorage` | Your calibration, settings, custom sounds and daily totals |
+| **Packed lunch** | An opt-in service worker (`docs/app/sw.js`) and Cache Storage | The app's own files, so it runs with Wi-Fi off (see Offline mode) |
 | **Desktop nervous system** | FastAPI, WebSocket, MJPEG | The optional Linux dashboard |
 | **Immune system** | pytest and hypothesis (Python), `node:test` (JavaScript) | Seven correctness properties plus unit tests; every bug we planted on purpose got caught |
 | **Lab test subject** | Playwright, Chromium's fake camera, and ffmpeg turning a photo into a video feed | Checks that the deployed site finds a real person (an Apache-2.0 sample photo; the paperwork is in order) |
@@ -168,6 +169,22 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   the Python pipeline (see *Development*).
 
 GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
+
+### Offline mode (opt-in)
+
+Select **Make available offline** in the app's Offline mode section. The browser
+downloads about 25 MB (app code, the MediaPipe runtime and pose model, voice clips)
+and the app then says "Offline mode is ready. You can disconnect Wi-Fi now."
+Nothing is downloaded until you select the button. Video is never stored, with or
+without offline mode; the cache holds only the app's own files. To remove it, use
+**Remove offline copy** or **Delete my data**, or clear this site's data in your
+browser. To check it works, turn on Offline in your browser's DevTools Network tab
+and reload.
+
+For contributors: `docs/app/precache.json` lists every file the worker caches, and
+`docs/app/sw.js` carries its version. After changing anything under `docs/app/`,
+run `node scripts/gen-precache.mjs` (CI runs it with `--check`, and the voice-clips
+workflow runs it after rendering clips). Offline needs HTTPS or localhost.
 
 ## Feedback design and the research behind it
 

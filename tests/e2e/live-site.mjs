@@ -24,6 +24,8 @@
 //    eye break shows after the quiet start, one prompt at a time with the 10
 //    minute gap between prompts, none while paused or in a silent test, and the
 //    Breaks & prompts settings persist across a reload.
+// 4b. Offline mode: opt in, wait for the ready message, go offline, reload, run
+//    demo (and the webcam when a fake camera is given), then remove the copy.
 // 5. Self-hosting (issue #45): the vendored files are served, and no request
 //    leaves the site's origin (in particular none to cdn.jsdelivr.net or
 //    storage.googleapis.com). CSP violations show up as console errors, which
@@ -682,6 +684,61 @@ try {
     const kept = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
     check("custom sound: survives a reload (not blocked by the CSP)", kept);
     check("custom sound: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+  // 4b. Offline mode (issue #49): opt in, go offline, reload, run, remove.
+  {
+    const { page, errors } = await newPage(browser);
+    const ctx = page.context();
+    await page.goto(`${base}app/${bust}`);
+    const supported = await page.evaluate(() => "serviceWorker" in navigator && "caches" in window);
+    if (!supported) {
+      console.log("SKIP offline mode: service workers unsupported in this browser");
+    } else {
+      const swBefore = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+      check("offline: no service worker is registered until the user opts in", swBefore === 0, { swBefore });
+      await page.click("#offline-enable");
+      await page.waitForFunction(
+        () => /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(document.getElementById("offline-status").textContent),
+        null, { timeout: 90000 },
+      ).catch(() => {});
+      const status = await page.evaluate(() => document.getElementById("offline-status").textContent);
+      check("offline: ready message appears and says video is never stored",
+        /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(status) && /video is never stored/i.test(status), status);
+      await page.screenshot({ path: path.join(outDir, "offline-ready.png") });
+      await page.reload(); // let the worker take control of the page before going offline
+      await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 }).catch(() => {});
+      await ctx.setOffline(true);
+      const failedReqs = [];
+      page.on("requestfailed", (r) => failedReqs.push(r.url()));
+      const resp = await page.goto(`${base}app/?offline=1`).catch((e) => ({ err: String(e) }));
+      check("offline: the app reloads with the network off", !!resp && !resp.err, resp && resp.err);
+      await page.click("#start-demo");
+      await page.waitForTimeout(3000);
+      const off = await ui(page);
+      check("offline: demo mode runs", off.badge === "good posture", off);
+      if (y4m) {
+        await page.reload();
+        await page.click("#start-camera");
+        await page.waitForFunction(
+          () => !/Starting|Loading/i.test(document.getElementById("source").textContent) && document.getElementById("source").textContent !== "",
+          null, { timeout: 60000 },
+        ).catch(() => {});
+        const cam = await ui(page);
+        check("offline: webcam mode starts and the pose model loads without a network", !cam.startError, cam);
+      }
+      check("offline: no failed requests", failedReqs.length === 0, failedReqs.slice(0, 5));
+      check("offline: no page errors", errors.length === 0, errors);
+      await ctx.setOffline(false);
+      await page.reload();
+      await page.click("#offline-remove");
+      await page.waitForFunction(() => /Offline copy removed/.test(document.getElementById("offline-status").textContent), null, { timeout: 10000 });
+      const left = await page.evaluate(async () => ({
+        regs: (await navigator.serviceWorker.getRegistrations()).length,
+        caches: (await caches.keys()).filter((k) => k.startsWith("posture-guard-")).length,
+      }));
+      check("offline: Remove offline copy unregisters the worker and deletes the cache", left.regs === 0 && left.caches === 0, left);
+    }
     await page.close();
   }
   // 5. Self-hosting: vendored files are served, nothing left the origin.
