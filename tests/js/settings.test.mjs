@@ -9,8 +9,10 @@ import test from "node:test";
 import { cameraErrorMessage, isPauseShortcut, resolveSettings } from "../../docs/app/settings.js";
 
 test("new users get the breath check and the P shortcut on", () => {
-  assert.deepEqual(resolveSettings({}), { relaxReminders: true, pauseShortcut: true });
-  assert.deepEqual(resolveSettings(null), { relaxReminders: true, pauseShortcut: true });
+  for (const s of [resolveSettings({}), resolveSettings(null)]) {
+    assert.equal(s.relaxReminders, true);
+    assert.equal(s.pauseShortcut, true);
+  }
 });
 
 test("stored choices are kept, including an explicit off", () => {
@@ -45,4 +47,27 @@ test("other camera errors keep their detail", () => {
   const msg = cameraErrorMessage({ name: "NotFoundError", message: "Requested device not found" });
   assert.match(msg, /Requested device not found/);
   assert.match(msg, /demo/);
+});
+
+test("breaks and prompts defaults: eye breaks on, move break 60, breathing moments opt in", () => {
+  const s = resolveSettings({});
+  assert.equal(s.eyeBreaks, true);
+  assert.equal(s.moveBreakMinutes, 60);
+  assert.equal(s.breathingMoments, false);
+  assert.equal(s.breatheCues, false);
+  assert.deepEqual(s.promptsDismissed, {});
+});
+
+test("breaks and prompts choices persist, and bad stored values fall back", () => {
+  const s = resolveSettings({
+    eyeBreaks: false, moveBreakMinutes: 0, breathingMoments: true, breatheCues: true,
+    promptsDismissed: { eye: true, move: false, bogus: true },
+  });
+  assert.equal(s.eyeBreaks, false);
+  assert.equal(s.moveBreakMinutes, 0);
+  assert.equal(s.breathingMoments, true);
+  assert.equal(s.breatheCues, true);
+  assert.deepEqual(s.promptsDismissed, { eye: true });
+  assert.equal(resolveSettings({ moveBreakMinutes: 33 }).moveBreakMinutes, 60);
+  assert.equal(resolveSettings({ moveBreakMinutes: "45" }).moveBreakMinutes, 45);
 });

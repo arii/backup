@@ -43,7 +43,9 @@ jobs:
         run: node scripts/render-voice.mjs
       - name: Commit clips if they changed
         run: |
-          git add docs/app/voice
+          # Offline mode precaches the clips: refresh precache.json and sw.js version.
+          node scripts/gen-precache.mjs
+          git add docs/app/voice docs/app/precache.json docs/app/sw.js
           if git diff --cached --quiet; then echo "clips unchanged"; exit 0; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "Render voice clips with Kokoro-82M"

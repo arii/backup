@@ -9,7 +9,7 @@ import test from "node:test";
 import { DEFAULTS, Reason } from "../../docs/app/posture-core.js";
 import {
   ACK_VERSION, Diagnosis, markOnboarded, ONBOARDING_STEPS, ONBOARDING_VERSION, SAFETY_POINTS,
-  SAFETY_SHORT, SETUP, SetupCheck, shouldShowOnboarding, needsAckOnly,
+  COACH_INTRO, DONE_INTRO, SAFETY_SHORT, SETUP, SetupCheck, shouldShowOnboarding, needsAckOnly,
 } from "../../docs/app/onboarding.js";
 
 const FPS = 15;
@@ -112,4 +112,12 @@ test("the framing advice follows the configured shoulder band", () => {
   const text = out.fixes.join(" ");
   assert.ok(text.includes(`${Math.round(DEFAULTS.scoring.shoulder_width_min * 100)}%`));
   assert.ok(text.includes(`${Math.round(DEFAULTS.scoring.shoulder_width_max * 100)}%`));
+});
+
+test("first-run coach and done text: versions stay at 1 so existing seeds keep working", () => {
+  assert.equal(ONBOARDING_VERSION, 1);
+  assert.equal(ACK_VERSION, 1);
+  assert.match(COACH_INTRO, /Reminders & sounds/);
+  for (const re of [/Leave this tab open/, /Pause any time/, /silent test/, /share/]) assert.match(DONE_INTRO, re);
+  assert.doesNotMatch(`${COACH_INTRO} ${DONE_INTRO}`, /\u2014/); // no em dash
 });

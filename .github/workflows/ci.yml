@@ -35,6 +35,8 @@ jobs:
           node-version: "22"
       - name: Browser core parity + properties
         run: node --test "tests/js/*.test.mjs"
+      - name: Offline precache list is current
+        run: node scripts/gen-precache.mjs --check
 
   vendored-files:
     # The app is self-hosted (issue #45): vendored MediaPipe files must exist

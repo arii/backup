@@ -41,6 +41,8 @@ async function record(name, args, script) {
       s.onboarded = Math.max(s.onboarded || 0, 1);
       s.ackVersion = Math.max(s.ackVersion || 0, 1);
       s.firstRunDone = true; // skip the first-run guide card
+      // Opt in to the shoulder and breathing features (docs/app/consent.js, CONSENT_VERSION 1).
+      s.consent = s.consent || { version: 1, at: "2026-01-01T00:00:00.000Z" };
       localStorage.setItem("posture-guard:v1", JSON.stringify(s));
     } catch { /* storage unavailable */ }
   });
