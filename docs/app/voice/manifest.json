@@ -1,0 +1,42 @@
+{
+ "model": "onnx-community/Kokoro-82M-v1.0-ONNX",
+ "license": "Apache-2.0",
+ "voices": {
+  "af_heart": {
+   "Please fix your posture": "af_heart/please-fix-your-posture-465eb4.mp3",
+   "Hi. I'll let you know when you slouch.": "af_heart/hi-i-ll-let-you-know-when-you-slouch-a0cd4c.mp3",
+   "Head forward. Tuck your chin and bring your ears back over your shoulders.": "af_heart/head-forward-tuck-your-chin-and-bring-yo-c02a3b.mp3",
+   "Your head is tilted. Straighten your neck.": "af_heart/your-head-is-tilted-straighten-your-neck-bd8293.mp3",
+   "Your shoulders are uneven. Level them out.": "af_heart/your-shoulders-are-uneven-level-them-out-440a8b.mp3",
+   "You're leaning to one side. Sit up straight.": "af_heart/you-re-leaning-to-one-side-sit-up-straig-aef210.mp3",
+   "Looking good.": "af_heart/looking-good-c91019.mp3",
+   "Nice posture.": "af_heart/nice-posture-8113a7.mp3",
+   "You're looking good.": "af_heart/you-re-looking-good-21a0ef.mp3",
+   "Great, keep it up.": "af_heart/great-keep-it-up-ee7635.mp3",
+   "Posture to die for.": "af_heart/posture-to-die-for-7ae0ad.mp3",
+   "Tall and relaxed. Nice.": "af_heart/tall-and-relaxed-nice-452cc8.mp3",
+   "Spine of a champion.": "af_heart/spine-of-a-champion-39c35b.mp3",
+   "That's better.": "af_heart/that-s-better-11cffb.mp3",
+   "There you go.": "af_heart/there-you-go-19b809.mp3",
+   "Much better.": "af_heart/much-better-f78898.mp3"
+  },
+  "am_michael": {
+   "Please fix your posture": "am_michael/please-fix-your-posture-465eb4.mp3",
+   "Hi. I'll let you know when you slouch.": "am_michael/hi-i-ll-let-you-know-when-you-slouch-a0cd4c.mp3",
+   "Head forward. Tuck your chin and bring your ears back over your shoulders.": "am_michael/head-forward-tuck-your-chin-and-bring-yo-c02a3b.mp3",
+   "Your head is tilted. Straighten your neck.": "am_michael/your-head-is-tilted-straighten-your-neck-bd8293.mp3",
+   "Your shoulders are uneven. Level them out.": "am_michael/your-shoulders-are-uneven-level-them-out-440a8b.mp3",
+   "You're leaning to one side. Sit up straight.": "am_michael/you-re-leaning-to-one-side-sit-up-straig-aef210.mp3",
+   "Looking good.": "am_michael/looking-good-c91019.mp3",
+   "Nice posture.": "am_michael/nice-posture-8113a7.mp3",
+   "You're looking good.": "am_michael/you-re-looking-good-21a0ef.mp3",
+   "Great, keep it up.": "am_michael/great-keep-it-up-ee7635.mp3",
+   "Posture to die for.": "am_michael/posture-to-die-for-7ae0ad.mp3",
+   "Tall and relaxed. Nice.": "am_michael/tall-and-relaxed-nice-452cc8.mp3",
+   "Spine of a champion.": "am_michael/spine-of-a-champion-39c35b.mp3",
+   "That's better.": "am_michael/that-s-better-11cffb.mp3",
+   "There you go.": "am_michael/there-you-go-19b809.mp3",
+   "Much better.": "am_michael/much-better-f78898.mp3"
+  }
+ }
+}

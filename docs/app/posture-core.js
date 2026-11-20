@@ -704,7 +704,7 @@ export class CalibrationRecorder {
 
 // -- cues.py --------------------------------------------------------------------
 
-const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
+export const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
 
 /** +1 when the person's right shoulder is at larger image x, else -1. */
 export function mirrorSign(landmarks) {
@@ -712,7 +712,10 @@ export function mirrorSign(landmarks) {
   return landmarks[RIGHT_SHOULDER].x - landmarks[LEFT_SHOULDER].x < 0 ? -1.0 : 1.0;
 }
 
-function cueText(metric, side) {
+
+/** [title, fix, say] for a metric's cue. Exported so voice-lines.js can list
+ *  every spoken sentence for pre-rendering. */
+export function cueText(metric, side) {
   if (metric === "head_forward") {
     return [
       "Head forward",

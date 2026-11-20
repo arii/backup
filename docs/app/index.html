@@ -19,7 +19,14 @@
   .badge.good { background: var(--good); color: #0b2412; }
   .badge.bad_chime, .badge.bad_voice { background: var(--warn); color: #3a2503; }
   .badge.unreliable { background: #4a3a20; color: var(--warn); }
-  .badge.paused { background: #2c3a52; color: #b9cdf0; }
+  .badge.paused, .badge.testing { background: #2c3a52; color: #b9cdf0; }
+  /* Silent test: hide everything that would coach the user. */
+  body.testing .coaching { display: none; }
+  .test-placeholder { display: none; color: var(--muted); }
+  body.testing .test-placeholder { display: block; }
+  body.testing #banner, body.testing #warnings { display: none; }
+  #test-minutes { padding: 8px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+  #test-compare b { color: var(--text); }
   header button { padding: 5px 12px; font-size: 13px; }
   .stat { color: var(--muted); font-size: 13px; }
   .stat b { color: var(--text); }
@@ -118,16 +125,32 @@
         </div>
       </div>
     </div>
-    <div class="panel" style="margin-top:16px">
+    <div class="panel coaching" style="margin-top:16px">
       <h2>This session</h2>
       <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b></div>
       <div class="score-bar"><div id="good-bar"></div></div>
       <div class="note">Today: <span id="today"></span></div>
     </div>
+    <div class="panel">
+      <h2>Is it working? Test me</h2>
+      <div class="note" style="margin-top:0">A silent check: no sounds, banners, needle or hints, so it measures your habit, not the coaching.
+        Sit and work as usual. If the coaching is sticking, your silent score climbs over the days.</div>
+      <div class="btn-row">
+        <select id="test-minutes" aria-label="Test length"><option value="5">5 min</option><option value="10" selected>10 min</option><option value="20">20 min</option></select>
+        <button id="test-start" class="secondary" disabled title="Start the webcam first">Start silent test</button>
+      </div>
+      <div class="note" id="test-status"></div>
+      <div class="score-bar" id="test-progress-wrap" style="display:none"><div id="test-progress" style="background:#6b8fd6"></div></div>
+      <div id="test-compare" class="note"></div>
+    </div>
   </div>
   <div>
     <div id="warnings"></div>
-    <div class="panel">
+    <div class="panel test-placeholder">
+      <h2>Silent test running</h2>
+      Posture feedback is hidden until the test ends, so the score shows your own habit.
+    </div>
+    <div class="panel coaching">
       <h2>Posture needle</h2>
       <svg viewBox="0 0 200 128" style="width:100%;max-width:300px;display:block;margin:0 auto" role="img" aria-label="Posture needle: left is upright, right is slouched">
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
@@ -172,8 +195,8 @@
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="specific-cues" checked> Say what to fix (&ldquo;Head forward. Tuck your chin&hellip;&rdquo;)</label>
       <label class="note" for="voice-text">Spoken prompt when there is nothing specific to say</label>
       <input type="text" id="voice-text" maxlength="120" value="Please fix your posture">
-      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="spoken-praise" checked> Say it when I&rsquo;m doing well (&ldquo;Looking good&rdquo;)</label>
-      <div class="sound-row"><span>Voice</span><select id="voice-pick" aria-label="Speaking voice"><option value="">Best available</option></select><button class="secondary" id="test-voice">Play</button></div>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="spoken-praise"> Also say it out loud when I&rsquo;m doing well (the chime and banner always show)</label>
+      <div class="sound-row"><span>Voice</span><select id="voice-pick" aria-label="Speaking voice"></select><button class="secondary" id="test-voice">Play</button></div>
       <div class="note" id="voice-note"></div>
       <div class="sound-row"><span>Bad sound</span><input type="file" id="bad-file" accept="audio/*"><button class="secondary" id="test-bad">Play</button></div>
       <div class="sound-row"><span>Good sound</span><input type="file" id="good-file" accept="audio/*"><button class="secondary" id="test-good">Play</button></div>
