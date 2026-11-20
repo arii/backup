@@ -34,8 +34,8 @@ jobs:
       - name: System packages (ffmpeg, espeak-ng, fonts)
         timeout-minutes: 8
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg espeak-ng fonts-dejavu-core
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg espeak-ng fonts-dejavu-core
       - name: Install Remotion and Playwright
         timeout-minutes: 10
         run: |
