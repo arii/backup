@@ -23,6 +23,7 @@ on:
       - ".github/workflows/live-site.yml"
       - "tests/e2e/**"
       - "docs/**"
+      - "scripts/make-fake-camera.mjs"
 
 jobs:
   live-site:

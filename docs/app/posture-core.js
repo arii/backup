@@ -19,7 +19,7 @@ export const TRACKED = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT
 const EPS = 1e-9; // window comparisons
 const JITTER_PATTERN = [0.0, -1.0, 1.0, -0.5, 0.5]; // praise spacing jitter
 const NEEDLE_EPS = 1e-9; // degenerate-axis guard
-const RAD_TO_DEG = 180 / Math.PI; 
+const RAD_TO_DEG = 180 / Math.PI;
 
 // Tuning knobs. The golden test asserts they match the config recorded in its fixture.
 export const DEFAULTS = Object.freeze({

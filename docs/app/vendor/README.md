@@ -1,7 +1,8 @@
 # Vendored third-party files
 
 These files are served from this site so the app contacts no third-party host at runtime
-(see issue #45). They are unmodified copies. Do not edit them by hand.
+(see issue #45). They are unmodified copies, except `movenet/movenet_bundle.mjs`, which is an esbuild
+bundle of the packages listed below. Do not edit them by hand.
 
 | File | Source | sha256 |
 | --- | --- | --- |

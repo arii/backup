@@ -1,11 +1,11 @@
 {
-  "version": "e2581efa10385c35",
-  "totalBytes": 32841162,
+  "version": "1fbd2c3614187548",
+  "totalBytes": 32841666,
   "files": [
     {
       "url": "app.js",
-      "size": 92791,
-      "sha256": "f38b3b8cdda13eb529d79b6fc5c30e39f4669daf0de3f97c92c4a51e41b5006c"
+      "size": 92339,
+      "sha256": "ab8ab6853cbfa957da319926cebf89c6b255f5a403f966985f9a7ccfe6716ebd"
     },
     {
       "url": "breaks.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 40473,
-      "sha256": "f3e6f115b17001ad86ecf20b5ba2142ceec239bc08d136831f88d79c944e676b"
+      "size": 40459,
+      "sha256": "b84f7b9bb962537606f6d55b27f309305d97466543e52e88c315fd3a5302bccf"
     },
     {
       "url": "mini-view.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "movenet-adapter.js",
-      "size": 2486,
-      "sha256": "2a1ab262e003033547ca65fce782ac4f738cc71b0de2fe2a30610ff6ee275040"
+      "size": 3457,
+      "sha256": "e83c42ffcd6889b381c0581b00a0c17422740e01607cfbc25b67b81e69febe87"
     },
     {
       "url": "offline.js",
@@ -54,8 +54,8 @@
     },
     {
       "url": "posture-core.js",
-      "size": 29763,
-      "sha256": "7157f0d25092558dceed7a69dd63aeab5543ffbaf94098f3d385bb52984fedd2"
+      "size": 29762,
+      "sha256": "850bfac2f68d569e621596801d0c928db5d65ba7eddd9323bfd5d996d5ffdf6b"
     },
     {
       "url": "privacy.js",

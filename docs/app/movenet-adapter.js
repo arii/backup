@@ -52,9 +52,9 @@ function clamp01(v) {
  * keypoints: MoveNet output for one pose ([{x, y, score}] in video pixels, 17 entries).
  * width/height: the video's pixel size, used to normalize x and y to 0..1.
  * Returns 33 {x, y, visibility} landmarks, or null when there is no usable pose.
- * visibility comes from scoreToVisibility. Points MoveNet does not produce get visibility 0. A missing or non-finite
- * keypoint also gets visibility 0 (the core treats NaN visibility as hidden,
- * but 0 keeps drawing code simple).
+ * visibility comes from scoreToVisibility. Points MoveNet does not produce get
+ * visibility 0. A missing or non-finite keypoint also gets visibility 0 (the
+ * core treats NaN visibility as hidden, but 0 keeps drawing code simple).
  */
 export function movenetToLandmarks(keypoints, width, height) {
   if (!Array.isArray(keypoints) || keypoints.length < MOVENET_TO_BLAZEPOSE.length) return null;
@@ -66,4 +66,29 @@ export function movenetToLandmarks(keypoints, width, height) {
     out[target] = { x: k.x / width, y: k.y / height, visibility: scoreToVisibility(k.score) };
   });
   return out;
+}
+
+/**
+ * Wraps a TF.js pose detector (estimatePoses is async) in the synchronous
+ * detectForVideo shape that app.js step() expects from MediaPipe. It answers
+ * with the latest finished result and starts the next inference only when
+ * idle. An inference error is rethrown on every later call.
+ */
+export function createMoveNetDetector(detector) {
+  let latest = null;
+  let failure = null;
+  let busy = false;
+  return {
+    detectForVideo(videoEl) {
+      if (failure) throw failure;
+      if (!busy && videoEl.videoWidth > 0) {
+        busy = true;
+        const w = videoEl.videoWidth, h = videoEl.videoHeight;
+        Promise.resolve().then(() => detector.estimatePoses(videoEl, { flipHorizontal: false })).then((poses) => {
+          latest = poses.length ? movenetToLandmarks(poses[0].keypoints, w, h) : null;
+        }).catch((err) => { failure = err; }).finally(() => { busy = false; });
+      }
+      return { landmarks: latest ? [latest] : [] };
+    },
+  };
 }

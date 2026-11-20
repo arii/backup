@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LANDMARK_COUNT, MOVENET_SCORE_THRESHOLD, MOVENET_TO_BLAZEPOSE, movenetToLandmarks, scoreToVisibility } from "../../docs/app/movenet-adapter.js";
+import { LANDMARK_COUNT, createMoveNetDetector, MOVENET_SCORE_THRESHOLD, MOVENET_TO_BLAZEPOSE, movenetToLandmarks, scoreToVisibility } from "../../docs/app/movenet-adapter.js";
 import {
   DEFAULTS, LEFT_EAR, LEFT_HIP, LEFT_SHOULDER, PostureEngine, RIGHT_EAR, RIGHT_HIP, RIGHT_SHOULDER, State, scorePose,
 } from "../../docs/app/posture-core.js";
@@ -117,4 +117,52 @@ test("engine reaches good when upright and bad after a sustained lean", () => {
   for (; t < 10; t += 0.1) out = engine.process(leaning, t);
   assert.ok([State.BAD_CHIME, State.BAD_VOICE].includes(out.transition.state), out.transition.state);
   assert.ok(Number.isFinite(out.needle));
+});
+
+const kp = () => Array.from({ length: 17 }, () => ({ x: 320, y: 240, score: 0.9 }));
+const video = { videoWidth: 640, videoHeight: 480 };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test("createMoveNetDetector returns the latest finished result and never overlaps inferences", async () => {
+  let calls = 0;
+  let release;
+  const detector = { estimatePoses: () => { calls++; return new Promise((r) => { release = () => r([{ keypoints: kp() }]); }); } };
+  const d = createMoveNetDetector(detector);
+  assert.deepEqual(d.detectForVideo(video).landmarks, []);
+  await tick();
+  d.detectForVideo(video);
+  d.detectForVideo(video);
+  assert.equal(calls, 1);
+  release();
+  await tick();
+  const res = d.detectForVideo(video);
+  assert.equal(res.landmarks.length, 1);
+  assert.equal(res.landmarks[0].length, LANDMARK_COUNT);
+  await tick();
+  assert.equal(calls, 2);
+});
+
+test("createMoveNetDetector does not start before the video has a size", async () => {
+  let calls = 0;
+  const d = createMoveNetDetector({ estimatePoses: async () => { calls++; return []; } });
+  d.detectForVideo({ videoWidth: 0, videoHeight: 0 });
+  await tick();
+  assert.equal(calls, 0);
+});
+
+test("createMoveNetDetector rethrows an inference error on later calls", async () => {
+  const boom = new Error("boom");
+  const d = createMoveNetDetector({ estimatePoses: async () => { throw boom; } });
+  d.detectForVideo(video);
+  await tick();
+  await tick();
+  assert.throws(() => d.detectForVideo(video), boom);
+  assert.throws(() => d.detectForVideo(video), boom);
+});
+
+test("createMoveNetDetector reports no landmarks when no pose is found", async () => {
+  const d = createMoveNetDetector({ estimatePoses: async () => [] });
+  d.detectForVideo(video);
+  await tick();
+  assert.deepEqual(d.detectForVideo(video).landmarks, []);
 });

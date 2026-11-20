@@ -14,7 +14,7 @@ import {
   BREAK_LINES, BREATHE_LINES, DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
-import { movenetToLandmarks } from "./movenet-adapter.js";
+import { createMoveNetDetector } from "./movenet-adapter.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
@@ -1421,11 +1421,12 @@ function applyWebGLState() {
 
 /**
  * Pose detector for browsers without WebGL: MoveNet Lightning on the TF.js
- * WASM backend. estimatePoses is async but step() is synchronous, so this
- * answers detectForVideo with the latest finished result and starts the next
- * inference when idle. Errors surface on the next call, like MediaPipe's.
+ * WASM backend. The sync wrapper lives in movenet-adapter.js.
  */
+let moveNetDetector = null; // TF.js detector, built once and reused across retries
+
 async function loadMoveNet() {
+  if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
   const tfm = await import(`${MOVENET_DIR}/movenet_bundle.mjs`);
   tfm.setWasmPaths({
     "tfjs-backend-wasm.wasm": `${MOVENET_DIR}/tfjs-backend-wasm.wasm`,
@@ -1439,22 +1440,8 @@ async function loadMoveNet() {
     modelUrl: `${MOVENET_DIR}/model.json`,
     enableSmoothing: true,
   });
-  let latest = null;
-  let failure = null;
-  let busy = false;
-  return {
-    detectForVideo(videoEl) {
-      if (failure) throw failure;
-      if (!busy && videoEl.videoWidth > 0) {
-        busy = true;
-        const w = videoEl.videoWidth, h = videoEl.videoHeight;
-        detector.estimatePoses(videoEl, { flipHorizontal: false }).then((poses) => {
-          latest = poses.length ? movenetToLandmarks(poses[0].keypoints, w, h) : null;
-        }).catch((err) => { failure = err; }).finally(() => { busy = false; });
-      }
-      return { landmarks: latest ? [latest] : [] };
-    },
-  };
+  moveNetDetector = detector;
+  return createMoveNetDetector(detector);
 }
 
 async function loadModel(canvas) {
@@ -1609,7 +1596,8 @@ $("start-camera").addEventListener("click", async () => {
       }
     }
     if (!poseLandmarker) {
-      $("start-status").textContent = "WebGL is off, so loading the simpler fallback pose model (about 6 MB, cached after the first visit)...";
+      $("start-status").textContent = (canvas ? "The main pose model did not start, so loading" : "WebGL is off, so loading")
+        + " the simpler fallback pose model (about 6 MB, cached after the first visit)...";
       poseLandmarker = await loadMoveNet();
       lowAccuracy = true;
     }
