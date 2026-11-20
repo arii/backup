@@ -246,7 +246,8 @@ def validate(config: AppConfig) -> AppConfig:
         raise ConfigError("feedback.positive_chime.every_seconds: must be > 0")
     if pc.first_after_seconds is not None and not 0 < pc.first_after_seconds <= pc.every_seconds:
         raise ConfigError(
-            "feedback.positive_chime.first_after_seconds: need 0 < first_after_seconds <= every_seconds"
+            "feedback.positive_chime.first_after_seconds: "
+            "need 0 < first_after_seconds <= every_seconds"
         )
     if pc.growth < 1:
         raise ConfigError("feedback.positive_chime.growth: must be >= 1")
