@@ -20,6 +20,7 @@ import {
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
 import { createMoveNetDetector } from "./movenet-adapter.js";
+import { LoadSteps, downloadAll, nextPaint } from "./loading.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
@@ -1743,8 +1744,17 @@ function applyWebGLState() {
  */
 let moveNetDetector = null; // TF.js detector, built once and reused across retries
 
-async function loadMoveNet() {
+async function loadMoveNet(onProgress = () => {}) {
   if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
+  // Warm the HTTP cache with byte-level progress; TF.js then reads from it.
+  const files = [
+    "movenet_bundle.mjs",
+    "tfjs-backend-wasm-simd.wasm",
+    "model.json",
+    "group1-shard1of2.bin",
+    "group1-shard2of2.bin",
+  ];
+  await downloadAll(files.map((f) => new URL(`${MOVENET_DIR}/${f}`, location.href).href), onProgress);
   const tfm = await import(`${MOVENET_DIR}/movenet_bundle.mjs`);
   tfm.setWasmPaths({
     "tfjs-backend-wasm.wasm": `${MOVENET_DIR}/tfjs-backend-wasm.wasm`,
@@ -1762,23 +1772,55 @@ async function loadMoveNet() {
   return createMoveNetDetector(detector);
 }
 
-async function loadModel(canvas) {
+async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {}) {
   const { FilesetResolver, PoseLandmarker } = await import(`${TASKS_VISION}/vision_bundle.mjs`);
   const fileset = await FilesetResolver.forVisionTasks(`${TASKS_VISION}/wasm`);
+  // Download the model and the runtime with progress, then hand both over as
+  // buffers so nothing is fetched twice. The bundle passes a pre-existing
+  // self.Module to the Emscripten loader, which uses Module.wasmBinary
+  // instead of fetching the .wasm file.
+  const [model, wasm] = await downloadAll([MODEL_URL, new URL(fileset.wasmBinaryPath, location.href).href], onProgress);
+  onDownloaded();
   const options = (delegate) => ({
-    baseOptions: { modelAssetPath: MODEL_URL, delegate },
+    baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
     runningMode: "VIDEO",
     numPoses: 1,
     canvas,
   });
+  const create = async (delegate) => {
+    self.Module = { wasmBinary: new Uint8Array(wasm) };
+    try {
+      return await PoseLandmarker.createFromOptions(fileset, options(delegate));
+    } finally {
+      self.Module = undefined; // the bundle clears it on success; make sure on failure too
+    }
+  };
   try {
-    return await PoseLandmarker.createFromOptions(fileset, options("GPU"));
+    return await create("GPU");
   } catch {
-    return await PoseLandmarker.createFromOptions(fileset, options("CPU"));
+    return await create("CPU");
   }
 }
 
 let lowAccuracy = false; // tracking runs on the MoveNet fallback
+
+/** Run one detection before showing the dashboard: the first call compiles
+ *  the model for the GPU (or CPU) and can block for seconds. Doing it here,
+ *  under "Start the model", means the page never sits frozen on a blank
+ *  dashboard. Throws if the detector fails on a real frame. */
+async function warmUp(detector, isMoveNet) {
+  await nextPaint();
+  if (video.readyState < 2) return;
+  if (isMoveNet) {
+    if (moveNetDetector) await moveNetDetector.estimatePoses(video, { flipHorizontal: false });
+    return;
+  }
+  const ts = Math.max(performance.now(), lastVideoMs + 1);
+  lastVideoMs = ts;
+  detector.detectForVideo(video, ts);
+}
+
+const loadSteps = new LoadSteps();
 
 function showError(message) {
   $("start-error").textContent = message;
@@ -1866,6 +1908,7 @@ function stopCamera(err) {
   showWebGLHelp(!webglCanvas());
   showError(`Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
   $("start-status").textContent = "";
+  loadSteps.finish();
   $("start-overlay").style.display = "";
   $("start-camera").disabled = $("start-demo").disabled = false;
   applyWebGLState();
@@ -1900,8 +1943,10 @@ $("start-camera").addEventListener("click", async () => {
   $("start-camera").disabled = $("start-demo").disabled = true;
   showError("");
   showWebGLHelp(false);
+  $("start-status").textContent = "";
+  loadSteps.open();
   try {
-    $("start-status").textContent = "Asking for camera access...";
+    loadSteps.step("camera");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
       audio: false,
@@ -1911,23 +1956,35 @@ $("start-camera").addEventListener("click", async () => {
     // MediaPipe needs WebGL; without it (or if it fails to start) use the MoveNet fallback.
     const canvas = webglCanvas();
     lowAccuracy = false;
+    const progress = (got, total) => loadSteps.progress(got, total);
     if (canvas) {
-      $("start-status").textContent = "Loading the pose model (about 6 MB, cached after the first visit)...";
+      loadSteps.step("download");
       try {
-        poseLandmarker = await loadModel(canvas);
+        poseLandmarker = await loadModel(canvas, progress, () => loadSteps.step("start"));
+        await warmUp(poseLandmarker, false);
       } catch (err) {
+        poseLandmarker = null;
         logProblem(`MediaPipe did not start, using the fallback: ${err.message || err}`);
       }
     }
     if (!poseLandmarker) {
-      $("start-status").textContent =
-        (canvas ? "The main pose model did not start, so loading" : "WebGL is off, so loading") +
-        " the simpler fallback pose model (about 6 MB, cached after the first visit)...";
-      poseLandmarker = await loadMoveNet();
+      loadSteps.label(
+        "download",
+        canvas
+          ? "The main model didn't start: downloading the simpler one"
+          : "WebGL is off: downloading the simpler pose model",
+      );
+      loadSteps.step("download");
+      const detector = await loadMoveNet(progress);
+      loadSteps.step("start");
+      poseLandmarker = detector;
+      await warmUp(detector, true);
       lowAccuracy = true;
     }
+    loadSteps.finish();
     begin("webcam");
   } catch (err) {
+    loadSteps.fail();
     $("start-status").textContent = "";
     const stream = video.srcObject;
     if (stream) for (const t of stream.getTracks()) t.stop();
@@ -1944,6 +2001,7 @@ applyWebGLState();
 
 $("start-demo").addEventListener("click", () => {
   ensureAudio();
+  loadSteps.finish();
   demo = true;
   engine.setDriftBaselineEnabled(false); // synthetic poses: no desk baseline to adapt (#67)
   video.style.display = "none";

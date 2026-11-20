@@ -11,7 +11,7 @@
 // changes whenever a precached file changes, which makes the browser update it.
 // Plain script (not a module): the constants below mirror offline.js.
 
-const PRECACHE_VERSION = "3518cf66d1f96959";
+const PRECACHE_VERSION = "718bc4136c0ff8c8";
 const CACHE_PREFIX = "posture-guard-";
 // One cache per release. The worker only ever reads and writes its own cache,
 // so an update never changes what the currently active worker serves.
