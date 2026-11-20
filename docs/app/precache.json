@@ -1,11 +1,11 @@
 {
-  "version": "e87f0651b283d6cc",
-  "totalBytes": 26231137,
+  "version": "5675988bd6e93f2c",
+  "totalBytes": 26235423,
   "files": [
     {
       "url": "app.js",
-      "size": 88913,
-      "sha256": "b3b846d7ed1a8db64490e91b43f260316b0b4d51de1397db8b893c6fd8d6254d"
+      "size": 90600,
+      "sha256": "a22bcf5f71f84cd9b986fb3c7210c0c109ae424d6f59ca97d50b4ae6048273db"
     },
     {
       "url": "breaks.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 39419,
-      "sha256": "638a0614b85bad8ac84aa75e7aa4462be7bf8fac64f8968b1afebe46ef59c7e1"
+      "size": 40048,
+      "sha256": "eba262246752785267eabd44bf1fa198391154283dfd5c92a0078bdbb2b99135"
     },
     {
       "url": "mini-view.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "offline.js",
-      "size": 3449,
-      "sha256": "26d3d296402f8becc94bf08f13d7637e0c7f6b3a5e07646d231d95e0ef9e442a"
+      "size": 3466,
+      "sha256": "cfb67f7c1e9042ffee3583feff01e63d123f9f3a8316318572566467f70ec993"
     },
     {
       "url": "onboarding.js",
@@ -79,8 +79,8 @@
     },
     {
       "url": "share.js",
-      "size": 2094,
-      "sha256": "c6a1ae1f43921dbf851ccfbfd333edff6a3c260c3bd3c3b43d89e6de0b971e1a"
+      "size": 4047,
+      "sha256": "bb477fcfba9013fe1f2c434083255c25c908549e346faee324ea2dd29ffc7168"
     },
     {
       "url": "sound-packs.js",

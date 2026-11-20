@@ -76,3 +76,15 @@ test("precache covers the vendored runtime, model and voices", () => {
     "vendor/wasm/vision_wasm_internal.wasm", "voice/manifest.json"]) assert.ok(urls.includes(u), u);
   assert.ok(!urls.includes("sw.js") && !urls.includes("precache.json"));
 });
+
+test("static docs quote the real offline download size from precache.json", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pre = JSON.parse(readFileSync(new URL("../../docs/app/precache.json", import.meta.url), "utf8"));
+  const mb = Math.round(pre.totalBytes / 1048576);
+  for (const f of ["docs/privacy.html", "README.md"]) {
+    const text = readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+    const m = text.match(/about (\d+) MB/);
+    assert.ok(m, `${f} states the size`);
+    assert.equal(Number(m[1]), mb, `${f} says ${m[1]} MB but precache.json totals ${mb} MB`);
+  }
+});

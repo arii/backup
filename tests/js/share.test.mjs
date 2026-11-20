@@ -45,3 +45,25 @@ test("native payload and share URL (no query, no hash)", () => {
   assert.deepEqual(nativeSharePayload(URL_), { title: "BackUp — Posture to Die For", text: SHARE_TEXT, url: URL_ });
   assert.equal(shareUrl("https://arii.github.io/posture-guard/app/?clockScale=600#x"), URL_);
 });
+
+import { CARD, cardAltText, drawScoreCard, scoreCardData } from "../../docs/app/share.js";
+
+test("score card data: needs a minute of tracking, rounds, caps the streak", () => {
+  assert.equal(scoreCardData({ good: 30, bad: 20, best: 30 }), null);
+  assert.equal(scoreCardData(), null);
+  assert.deepEqual(scoreCardData({ good: 750, bad: 250, best: 185 }), { pct: 75, goodMin: 13, bestMin: 3, bestSec: 5 });
+  assert.equal(scoreCardData({ good: 100, bad: 0, best: 500 }).bestMin, 1);
+  assert.equal(scoreCardData({ good: NaN, bad: 120, best: -4 }).pct, 0);
+});
+
+test("score card draws only score text on a fake canvas context", () => {
+  const texts = [];
+  const ctx = new Proxy({ fillText: (t) => texts.push(t), fillRect() {} }, {
+    set(o, k, v) { o[k] = v; return true },
+  });
+  const d = scoreCardData({ good: 900, bad: 100, best: 300 });
+  drawScoreCard(ctx, d);
+  assert.deepEqual(texts.slice(2, 5), ["90%", "good posture this session", "Best streak 5 min 0 s"]);
+  assert.equal(CARD.width / CARD.height | 0, 1);
+  assert.match(cardAltText(d), /90% good posture/);
+});

@@ -34,7 +34,7 @@ import {
 import {
   CONSENT_CHECKBOX, CONSENT_POINTS, CONSENT_TITLE, consentStatus, hasConsent, recordConsent, withdrawConsent,
 } from "./consent.js";
-import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl } from "./share.js";
+import { SHARE_TEXT, cardAltText, drawScoreCard, nativeSharePayload, scoreCardData, normalizeInstance, shareLinks, shareUrl } from "./share.js";
 import {
   SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, refundSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
 } from "./sponsor.js";
@@ -876,19 +876,54 @@ function renderShareLinks() {
   for (const [id, href] of Object.entries(links)) { const a = $(`share-${id}`); if (a) a.href = href; }
   $("share-mastodon").hidden = !links.mastodon;
 }
-async function openShare() {
+function openShare() {
   const url = shareUrl(location.href);
-  if (typeof navigator.share === "function") {
-    try { await navigator.share(nativeSharePayload(url)); return; } catch (e) { if (e && e.name === "AbortError") return; }
-  }
+  $("share-native").hidden = typeof navigator.share !== "function";
   $("share-link").value = url;
   $("share-text").textContent = SHARE_TEXT;
   $("share-msg").textContent = "";
+  $("share-card-wrap").hidden = true;
   renderShareLinks();
   $("share-dialog").showModal();
 }
 $("share-btn").addEventListener("click", openShare);
+$("share-native").addEventListener("click", async () => {
+  try { await navigator.share(nativeSharePayload(shareUrl(location.href))); } catch (e) {
+    if (!e || e.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
+  }
+});
 $("share-close").addEventListener("click", () => $("share-dialog").close());
+// The score card is drawn from this session's two numbers only. No video frame is read.
+let cardBlob = null;
+$("share-card-btn").addEventListener("click", () => {
+  const d = scoreCardData(session);
+  if (!d) { $("share-msg").textContent = "Track at least a minute of posture first, then your score card is ready."; return; }
+  const canvas = $("share-card");
+  drawScoreCard(canvas.getContext("2d"), d);
+  canvas.setAttribute("aria-label", cardAltText(d));
+  $("share-card-wrap").hidden = false;
+  $("share-msg").textContent = "";
+  cardBlob = null;
+  canvas.toBlob((b) => {
+    cardBlob = b;
+    const file = b && new File([b], "backup-score.png", { type: "image/png" });
+    $("share-card-share").hidden = !(file && navigator.canShare && navigator.canShare({ files: [file] }));
+  }, "image/png");
+});
+$("share-card-download").addEventListener("click", () => {
+  if (!cardBlob) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(cardBlob);
+  a.download = "backup-score.png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("share-card-share").addEventListener("click", async () => {
+  if (!cardBlob) return;
+  try {
+    await navigator.share({ files: [new File([cardBlob], "backup-score.png", { type: "image/png" })], text: SHARE_TEXT });
+  } catch (e) { if (!e || e.name !== "AbortError") $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead."; }
+});
 $("share-instance").addEventListener("input", () => {
   renderShareLinks();
   const v = $("share-instance").value.trim();
