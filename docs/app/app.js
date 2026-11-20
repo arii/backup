@@ -225,13 +225,14 @@ function speakSystem(text) {
 }
 
 function speak(text) {
+  if (test || paused) return; // a line queued just before a pause or silent test must not play
   stopSpeech();
   const sel = selectedVoice();
   const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
   document.dispatchEvent(new CustomEvent("pg:speak", { detail: { text, engine: file ? "kokoro" : "system" } }));
   if (!file) return speakSystem(text);
   loadClip(`./voice/${file}`).then((buffer) => {
-    if (paused) return;
+    if (paused || test) return;
     const ac = ensureAudio();
     const src = ac.createBufferSource();
     src.buffer = buffer;
