@@ -1,8 +1,12 @@
 name: live-site
 
-# End-to-end check of the deployed GitHub Pages app (docs/app): demo mode, plus
-# webcam mode with Chromium's fake camera playing a photo of a person, so the
-# real MediaPipe bundle, WASM and model are loaded from the CDN and run.
+# End-to-end check of the browser app (docs/app): demo mode, plus webcam mode
+# with Chromium's fake camera playing a photo of a person, so the real
+# MediaPipe bundle, WASM and model are loaded from the CDN and run.
+#
+# Target depends on the trigger: pushes validate the candidate build served
+# from the checkout (so PR checks can cover not-yet-deployed changes), while
+# post-deploy, scheduled and manual runs validate the live Pages site.
 on:
   # After every Pages deploy. (Actions-based Pages builds do not emit the
   # page_build event, so trigger on the deploy workflow finishing instead.)
@@ -41,16 +45,29 @@ jobs:
           ffmpeg -loglevel error -loop 1 -i person.jpg -t 3 -r 15 \
             -vf "crop=480:640:208:480,scale=480:640" -pix_fmt yuv420p person.y4m
           ls -la person.jpg person.y4m
-      - name: Wait for the deployed app
+      - name: Pick the target build
+        # Push runs (PR checks) validate the candidate build from the checkout;
+        # deploy/scheduled/manual runs validate the live site.
         run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "BASE_URL=http://127.0.0.1:8123/" >> "$GITHUB_ENV"
+          else
+            echo "BASE_URL=https://arii.github.io/posture-guard/" >> "$GITHUB_ENV"
+          fi
+      - name: Wait for the target app
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            (cd docs && nohup python3 -m http.server 8123 >/dev/null 2>&1 &)
+          fi
+          ok=0
           for i in $(seq 1 30); do
-            curl -fsS -o /dev/null "https://arii.github.io/posture-guard/app/posture-core.js" && exit 0
-            sleep 10
+            curl -fsS -o /dev/null "${BASE_URL}app/posture-core.js" && { ok=1; break; }
+            sleep 2
           done
-          exit 1
+          [ "$ok" = 1 ]
       - name: Run the live-site check
         timeout-minutes: 5
-        run: node tests/e2e/live-site.mjs https://arii.github.io/posture-guard/ "$PWD/person.y4m" live-site-report
+        run: node tests/e2e/live-site.mjs "$BASE_URL" "$PWD/person.y4m" live-site-report
       - name: Upload screenshots and report
         if: always()
         uses: actions/upload-artifact@v4
