@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Renders every line in docs/app/voice-lines.js to MP3 with Kokoro-82M
 // (Apache-2.0, https://huggingface.co/hexgrad/Kokoro-82M) via kokoro-js, for

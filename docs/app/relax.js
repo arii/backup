@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Anti-bracing: "good" posture held by squeezing (shoulders hiked toward the
 // ears, chest held rigid) passes the angle checks yet leaves the upper traps

@@ -59,3 +59,13 @@
   - Tests: `tests/test_cues.py`, property P7 (mirror invariance), audio and pipeline
     tests, JS golden parity on the cue.
   - _Requirements: 9_
+
+## Follow-on specs
+These specs extend the work above. Items marked `[x]` in them are implemented on branch
+`feat/onboarding-specs-feedback`; unchecked items are spec only.
+- `.kiro/specs/onboarding-and-setup/`: first-run walkthrough, setup check, troubleshooting.
+- `.kiro/specs/safety-and-disclaimers/`: safety notice, acknowledgement, claims discipline.
+- `.kiro/specs/feedback-design/`: cue, praise, reminder and sound rules from the research.
+- `.kiro/specs/progress-review/`: personal progress; opt-in social leaderboard is spec only.
+- `.kiro/specs/wellness-tools/`: breathing, face tension, stretch, eye and movement tools.
+- Research: `docs/research/feedback-and-habit-formation.md`.

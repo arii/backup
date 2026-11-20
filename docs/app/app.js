@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for
@@ -11,10 +12,21 @@ import {
 } from "./posture-core.js";
 import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
+import {
+  DIAGNOSIS_TEXT, Diagnosis, markOnboarded, needsAckOnly, ONBOARDING_STEPS, PRACTICE_STEPS,
+  RELAX_SAFETY, SAFETY_POINTS, SAFETY_SHORT, SetupCheck, shouldShowOnboarding,
+} from "./onboarding.js";
+import { exportJson, summarize } from "./progress.js";
+import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import {
+  BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
+} from "./privacy.js";
+import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
-const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+// Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
+const TASKS_VISION = new URL("./vendor", import.meta.url).href;
+const MODEL_URL = `${TASKS_VISION}/pose_landmarker_lite.task`;
 const VISIBLE_FPS = 15; // detection rate while the tab is visible
 const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
 const DEMO_CYCLE_S = 20; // synthetic demo: 20 s good, 20 s slouch
@@ -31,7 +43,9 @@ function loadStore() {
   try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; }
 }
 const store = loadStore();
+let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
+  if (deleted) return;
   try { localStorage.setItem(STORE, JSON.stringify(store)); } catch { /* quota: keep in memory */ }
 }
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -64,6 +78,15 @@ $("voice-text").value = settings.voiceText;
 $("voice-text").addEventListener("change", (e) => {
   settings.voiceText = e.target.value.trim() || DEFAULT_PROMPT;
   store.voiceText = settings.voiceText; save();
+});
+
+settings.coachingLevel = normalizeLevel(store.coachingLevel);
+const policy = new FeedbackPolicy(settings.coachingLevel);
+$("coaching-level").value = settings.coachingLevel;
+$("coaching-level").addEventListener("change", (e) => {
+  settings.coachingLevel = normalizeLevel(e.target.value);
+  policy.setLevel(settings.coachingLevel);
+  store.coachingLevel = settings.coachingLevel; save();
 });
 
 function allowed(nudge) {
@@ -226,14 +249,14 @@ function speakSystem(text) {
 }
 
 function speak(text) {
-  if (test || paused) return; // a line queued just before a pause or silent test must not play
+  if (test || practice || paused) return; // a line queued just before a pause or silent test must not play
   stopSpeech();
   const sel = selectedVoice();
   const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
   document.dispatchEvent(new CustomEvent("pg:speak", { detail: { text, engine: file ? "kokoro" : "system" } }));
   if (!file) return speakSystem(text);
   loadClip(`./voice/${file}`).then((buffer) => {
-    if (paused || test) return;
+    if (paused || test || practice) return;
     const ac = ensureAudio();
     const src = ac.createBufferSource();
     src.buffer = buffer;
@@ -258,8 +281,10 @@ async function restoreSound(kind) {
   const dataUrl = store[`${kind}Sound`];
   if (!dataUrl) return;
   try {
-    const bytes = await (await fetch(dataUrl)).arrayBuffer();
-    custom[kind] = await ensureAudio().decodeAudioData(bytes);
+    // Decode the base64 payload directly: fetch(data:) is blocked by connect-src 'self'.
+    const bin = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    custom[kind] = await ensureAudio().decodeAudioData(bytes.buffer);
   } catch { delete store[`${kind}Sound`]; save(); }
 }
 
@@ -311,11 +336,24 @@ function reminderText(nudge, cue) {
   return BANNERS[nudge];
 }
 
+let episode = 0; // counts slouch episodes, for the coaching policy
+let lastBad = false;
+
+function showReminderNote(on) { $("reminder-note").classList.toggle("show", on); }
+
 function fire(nudge, cue) {
-  if (test) return; // silent test: withhold every cue
+  if (test || practice) return; // silent test or practice: withhold every cue
   if (breath.active) return; // a breath check is talking; posture cues wait ~9 s
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
-  if (reminder) reminderCount += 1;
+  const nowS = performance.now() / 1000;
+  if (reminder) {
+    const verdict = policy.onReminder(nowS, { episodeId: episode, voice: nudge === Nudge.VOICE });
+    if (verdict.capped) { showReminderNote(true); return; } // too many in an hour: stay quiet
+    if (nudge === Nudge.VOICE && !verdict.voice) nudge = Nudge.CHIME; // light: chime instead of voice
+    reminderCount += 1;
+  } else if (nudge === Nudge.POSITIVE_CHIME && !policy.onPraise("timed")) {
+    return; // light coaching: no timed praise
+  }
   const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise()
     : nudge === Nudge.RECOVERY ? nextRecovery() : null;
   const text = praise || reminderText(nudge, cue);
@@ -385,7 +423,7 @@ const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
 let goodSinceBreath = 0;
 let relaxLastT = null;
-settings.relaxReminders = store.relaxReminders !== false; // default on
+Object.assign(settings, resolveSettings(store)); // relaxReminders and pauseShortcut: on for new users, stored choices kept
 
 /** Relax lines are spoken unless the mode is silent (chime-only still talks
  *  here: a breath check without words is not a check). */
@@ -410,7 +448,7 @@ const VERDICT_TEXT = {
 };
 
 function startBreathCheck() {
-  if (test || paused || breath.active || !loopsStarted) return;
+  if (test || practice || paused || breath.active || !loopsStarted) return;
   ensureAudio();
   goodSinceBreath = 0;
   breath.start(performance.now() / 1000, bracing.value);
@@ -420,7 +458,7 @@ function startBreathCheck() {
 }
 
 function relaxStep(landmarks, state, now) {
-  if (test) { relaxLastT = null; return; }
+  if (test || practice) { relaxLastT = null; return; }
   const ratio = neckRatio(landmarks);
   const good = state === State.GOOD;
   const flagged = bracing.update(ratio, now, good && !breath.active);
@@ -452,6 +490,20 @@ function relaxStep(landmarks, state, now) {
     : v < ref * 0.88 ? "creeping up" : "relaxed";
 }
 
+// Controls that need frames from the camera or the demo stay disabled until tracking starts.
+const NEEDS_TRACKING = ["breath-check", "calib-good", "calib-bad"];
+const READY_TITLE = { "breath-check": "Breathe in: if your shoulders rise, you are bracing" };
+function setTrackingControls(on) {
+  for (const id of NEEDS_TRACKING) {
+    const el = $(id);
+    el.disabled = !on;
+    if (!on) el.title = NEEDS_TRACKING_TIP;
+    else if (READY_TITLE[id]) el.title = READY_TITLE[id];
+    else el.removeAttribute("title");
+  }
+  $("pre-start-note").hidden = on;
+}
+
 $("breath-check").addEventListener("click", startBreathCheck);
 $("relax-reminders").checked = settings.relaxReminders;
 $("relax-reminders").addEventListener("change", (e) => {
@@ -470,6 +522,7 @@ let test = null; // { minutes, elapsed, good, bad } while a test runs
 
 function startTest() {
   if (test) return finishTest(true);
+  if (practice) stopPractice();
   test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
   breath.cancel();
   stopSpeech();
@@ -492,6 +545,7 @@ function finishTest(stoppedEarly) {
     store.tests = store.tests.slice(-50);
     save();
     $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
+    renderProgress();
     playGood();
   } else {
     $("test-status").textContent = stoppedEarly ? "Test stopped, not saved." : "Not enough tracked time to score; not saved.";
@@ -524,6 +578,27 @@ function renderTest() {
 
 $("test-start").addEventListener("click", () => { ensureAudio(); startTest(); });
 
+const DAY_SAVE_S = 15;
+let lastDaySave = 0;
+
+/** Effort-based praise at 5, 15, 30 and 60 continuous good minutes (banner and chime;
+ *  spoken only when spoken praise is on, using the existing praise clips). */
+function fireMilestone(minute) {
+  if (test || practice || paused || breath.active || !policy.onPraise("milestone")) return;
+  const banner = $("banner");
+  banner.textContent = MILESTONE_TEXT[minute];
+  banner.classList.remove("relax");
+  banner.classList.add("positive", "show");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove("show"), 6000);
+  if (!allowed(Nudge.POSITIVE_CHIME)) return;
+  playGood();
+  if (settings.spokenPraise && settings.mode === "chime_and_voice") {
+    const line = nextPraise();
+    setTimeout(() => speak(line), custom.good ? 400 : 850);
+  }
+}
+
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
@@ -535,13 +610,18 @@ function account(state, now) {
       if (test.elapsed >= test.minutes * 60) finishTest(false);
       return;
     }
+    if (practice) { session.lastT = now; return; } // practice records nothing
     const day = (store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 });
     if (state === State.GOOD) {
       session.good += dt; day.good += dt; session.streak += dt;
       session.best = Math.max(session.best, session.streak);
+      const milestone = policy.onGood(now, dt);
+      if (milestone !== null) fireMilestone(milestone);
     } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
       session.bad += dt; day.bad += dt; session.streak = 0;
+      policy.onBad();
     }
+    if (now - lastDaySave >= DAY_SAVE_S) { lastDaySave = now; save(); } // keep daily totals across reloads
   }
   session.lastT = now;
 }
@@ -584,26 +664,26 @@ function wireColor(state, result) {
   return state === State.GOOD ? WIRE.good : WIRE.slate;
 }
 
-function drawSkeleton(landmarks, color) {
-  const w = (canvas.width = canvas.clientWidth);
-  const h = (canvas.height = canvas.clientHeight);
-  ctx.clearRect(0, 0, w, h);
+function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
+  const w = (cv.width = cv.clientWidth);
+  const h = (cv.height = cv.clientHeight);
+  c.clearRect(0, 0, w, h);
   if (!landmarks) return;
-  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 4;
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 4 * scale;
   for (const [a, b] of SKELETON) {
     const p = landmarks[a], q = landmarks[b];
     if (![p.x, p.y, q.x, q.y].every(Number.isFinite)) continue;
-    ctx.beginPath(); ctx.moveTo(p.x * w, p.y * h); ctx.lineTo(q.x * w, q.y * h); ctx.stroke();
+    c.beginPath(); c.moveTo(p.x * w, p.y * h); c.lineTo(q.x * w, q.y * h); c.stroke();
   }
   const le = landmarks[7], re = landmarks[8];
   if ([le.x, le.y, re.x, re.y].every(Number.isFinite)) { // head outline between the ears
     const r = Math.hypot((re.x - le.x) * w, (re.y - le.y) * h) * 0.75;
-    ctx.beginPath(); ctx.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI); ctx.stroke();
+    c.beginPath(); c.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI); c.stroke();
   }
   for (const i of TRACKED) {
     const p = landmarks[i];
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    ctx.beginPath(); ctx.arc(p.x * w, p.y * h, 6, 0, 2 * Math.PI); ctx.fill();
+    c.beginPath(); c.arc(p.x * w, p.y * h, 6 * scale, 0, 2 * Math.PI); c.fill();
   }
 }
 
@@ -663,9 +743,27 @@ function renderHold(hold) {
   bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
 }
 
+// Compact live views inside the practice and setup panels, so the skeleton and
+// needle sit next to the instructions. Hidden and skipped during the silent test.
+const MINI_VIEWS = ["practice", "setup"].map((pre) => {
+  const cv = $(`${pre}-mini-canvas`);
+  return { pre, cv, c: cv.getContext("2d"), rotor: $(`${pre}-needle-rotor`), root: $(`${pre}-mini`) };
+});
+
+function renderMiniViews(landmarks, color, needle) {
+  const open = { practice: !!practice, setup: $("setup-panel").open };
+  const draw = new Set(miniViewsToDraw(MINI_VIEWS.map((m) => m.pre), open, needle));
+  for (const m of MINI_VIEWS) {
+    if (!draw.has(m.pre)) continue;
+    drawSkeleton(landmarks, color, m.cv, m.c, MINI_SCALE);
+    m.rotor.setAttribute("transform", needleTransform(needle));
+  }
+}
+
 function render(out, landmarks) {
   const { result, transition, needle, cue, hold } = out;
   renderFix(transition.state, result, cue, hold);
+  if (practice) renderPractice(result);
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
@@ -674,7 +772,11 @@ function render(out, landmarks) {
     ? "settling in"
     : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  const settling = !test && !practice && badge.textContent === "settling in";
+  $("settling-note").hidden = !settling;
+  badge.title = settling ? $("settling-note").textContent : "";
   if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
+  if (practice) { badge.textContent = "practice"; badge.className = "badge practice"; }
   $("warnings").textContent = causeFor(result, landmarks);
   const cfg = DEFAULTS.scoring;
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
@@ -685,7 +787,7 @@ function render(out, landmarks) {
     el.classList.toggle("over", v !== null && Math.abs(v) > cfg[key]);
   }
   if (needle !== null) {
-    $("needle-rotor").setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+    $("needle-rotor").setAttribute("transform", needleTransform(needle));
     // The threshold needle averages all metrics, so a single-metric slouch
     // sits mid-dial: the label follows the state machine, the needle shows how far.
     const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
@@ -694,9 +796,12 @@ function render(out, landmarks) {
     $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
   }
   drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
+  renderMiniViews(landmarks, test ? WIRE.slate : wireColor(transition.state, result), test ? null : needle);
   renderTest();
   renderCalibration();
+  updateFirstRunLive(result, landmarks);
   renderStats();
+  if (Date.now() - lastProgressRender > 10000) renderProgress();
 }
 
 // -- frame loop ----------------------------------------------------------------
@@ -732,9 +837,11 @@ let paused = false;
 function setPaused(on) {
   if (!loopsStarted || on === paused) return;
   paused = on;
+  save(); // flush daily totals when pausing
   const stream = video.srcObject;
   if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
   if (on) {
+    if (practice) stopPractice();
     breath.cancel();
     stopSpeech();
     $("banner").classList.remove("show");
@@ -749,17 +856,28 @@ function setPaused(on) {
     session.lastT = null;
     lastFrameT = null;
     fpsEma = 0;
+    setup.reset();
   }
   $("pause").textContent = on ? "Resume" : "Pause";
   $("pause").setAttribute("aria-pressed", String(on));
 }
 
 $("pause").addEventListener("click", () => setPaused(!paused));
+// WCAG 2.1.4: the single-key shortcut can be turned off.
+const PAUSE_TITLE = "Pause tracking and all sounds";
+function renderPauseShortcut() {
+  $("pause-shortcut").checked = settings.pauseShortcut;
+  $("pause").title = settings.pauseShortcut
+    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)` : PAUSE_TITLE;
+}
+renderPauseShortcut();
+$("pause-shortcut").addEventListener("change", (e) => {
+  settings.pauseShortcut = e.target.checked;
+  store.pauseShortcut = settings.pauseShortcut; save();
+  renderPauseShortcut();
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "p" && e.key !== "P") return;
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-  setPaused(!paused);
+  if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
 });
 
 function step() {
@@ -786,6 +904,9 @@ function step() {
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
   const out = engine.process(landmarks, now);
+  const slouching = out.transition.state === State.BAD_CHIME || out.transition.state === State.BAD_VOICE;
+  if (slouching && !lastBad) episode += 1; // a new slouch episode
+  lastBad = slouching;
   for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
@@ -795,6 +916,14 @@ function step() {
     $("fps").textContent = fpsEma.toFixed(0);
   }
   lastFrameT = now;
+  if (!document.hidden) { // a throttled background tab has a low fps that says nothing about the setup
+    const { result } = out;
+    renderSetup(setup.update({
+      reason: result.kind === "unreliable" ? result.reason : null,
+      state: out.transition.state, fps: fpsEma, metricsPresent: result.kind === "scored",
+    }, now));
+  }
+  showReminderNote(policy.isCapped(now));
   if (!document.hidden) render(out, landmarks);
 }
 
@@ -881,10 +1010,18 @@ function showError(message) {
 // includes video, images, landmarks or stored sounds.
 
 const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
+// Issue title from a "HH:MM:SS message" entry: drop the time, cut at a word boundary.
+function bugTitle(entry, max = 71) {
+  const msg = entry.slice(9);
+  if (msg.length <= max) return msg;
+  const cut = msg.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 1)).trimEnd()}...`;
+}
+
 const problems = []; // last few errors, newest last
 
 function logProblem(message) {
-  problems.push(`${new Date().toISOString().slice(11, 19)} ${String(message).slice(0, 300)}`);
+  problems.push(`${new Date().toISOString().slice(11, 19)} ${sanitizeError(message)}`);
   if (problems.length > 8) problems.shift();
 }
 window.addEventListener("error", (e) => logProblem(e.message || e.error || "error"));
@@ -895,11 +1032,9 @@ function webglInfo() {
     const c = document.createElement("canvas");
     const gl = c.getContext("webgl2") || c.getContext("webgl");
     if (!gl) return typeof OffscreenCanvas !== "undefined" && webglCanvas() ? "offscreen only" : "unavailable";
-    const ext = gl.getExtension("WEBGL_debug_renderer_info");
-    const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-    return `${gl instanceof WebGL2RenderingContext ? "WebGL2" : "WebGL1"} (${renderer})`;
+    return webglSummary(gl); // no GPU renderer string: it adds to a browser fingerprint
   } catch (err) {
-    return `probe failed: ${err.message || err}`;
+    return `probe failed: ${sanitizeError(err.message || err)}`;
   }
 }
 
@@ -918,21 +1053,15 @@ function bugReportUrl() {
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
   ].join("\n");
-  const errs = problems.length ? problems.join("\n") : "(none)";
-  const body = [
-    "**What happened?**", "", "", "",
-    "**What did you expect?**", "", "", "",
-    "**Steps to reproduce** (webcam or demo? what posture?)", "", "1. ", "",
-    "<details><summary>Diagnostics (filled in by the app, no video or images)</summary>", "",
-    diag, "", "Recent errors:", "```", errs, "```", "</details>",
-  ].join("\n");
-  const title = problems.length ? `Bug: ${problems[problems.length - 1].slice(9, 80)}` : "Bug: ";
+  const body = buildBugReportBody({ diag, problems });
+  const title = problems.length ? `Bug: ${bugTitle(problems[problems.length - 1])}` : "Bug: ";
   const params = new URLSearchParams({ title, body: body.slice(0, 6000), labels: "bug" });
   return `${ISSUE_URL}?${params}`;
 }
 
 // Fill the link at click time so it carries the current state.
 for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-link")]) {
+  link.title = BUG_LINK_TIP;
   link.addEventListener("click", () => { link.href = bugReportUrl(); });
 }
 
@@ -940,7 +1069,10 @@ for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-l
  *  screen back with the reason, and leave the demo available. */
 function stopCamera(err) {
   setPaused(false);
+  if (practice) stopPractice();
+  setup.reset();
   $("pause").disabled = true;
+  setTrackingControls(false);
   poseLandmarker = null;
   const stream = video.srcObject;
   if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -963,6 +1095,9 @@ function begin(source) {
   restoreSound("bad"); restoreSound("good");
   $("pause").disabled = false;
   $("test-start").disabled = false;
+  setTrackingControls(true);
+  $("state-badge").focus(); // the Start button is gone: move focus to the status badge
+  maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   requestAnimationFrame(visibleLoop);
@@ -996,7 +1131,7 @@ $("start-camera").addEventListener("click", async () => {
     if (err instanceof NoWebGLError) {
       showWebGLHelp(true);
     } else {
-      showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
+      showError(cameraErrorMessage(err));
     }
     $("start-demo").disabled = false;
     applyWebGLState();
@@ -1014,6 +1149,374 @@ $("start-demo").addEventListener("click", () => {
   begin("demo");
 });
 
+// -- first-run guide ------------------------------------------------------------
+// Shown once, on the first Start (store.firstRunDone): check framing, record
+// good and slouch posture, then hear what the sounds mean. "Show the intro
+// again" in the Not working? panel brings it back.
+
+const FIRST_RUN = [
+  {
+    title: "Check your framing",
+    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
+  },
+  {
+    title: "Calibrate to your posture",
+    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
+  },
+  {
+    title: "You're set",
+    intro: "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
+      "Take a silent test first for a baseline. Here is what the sounds mean:",
+  },
+];
+const firstRun = { step: 0, open: false };
+let firstRunLive = null; // the element updated every frame on the current step
+
+function firstRunButton(label, onClick, secondary = true) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (secondary) b.className = "secondary";
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderFirstRun() {
+  const step = FIRST_RUN[firstRun.step];
+  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${FIRST_RUN.length}`;
+  $("first-run-heading").textContent = step.title;
+  const body = $("first-run-body");
+  const intro = document.createElement("div");
+  intro.className = "note";
+  intro.style.marginTop = "0";
+  intro.textContent = step.intro;
+  const parts = [intro];
+  firstRunLive = null;
+  if (firstRun.step === 0) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "framing";
+    firstRunLive.setAttribute("aria-live", "polite");
+    parts.push(firstRunLive);
+  } else if (firstRun.step === 1) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "note";
+    firstRunLive.setAttribute("aria-live", "polite");
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Record good posture", () => engine.calibration.start("good"), false),
+      firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
+    );
+    parts.push(row, firstRunLive);
+  } else {
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
+      firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
+      firstRunButton("Play a voice line", () => { ensureAudio(); speak(TEST_LINE); }),
+    );
+    parts.push(row);
+  }
+  body.replaceChildren(...parts);
+  $("first-run-back").hidden = firstRun.step === 0;
+  $("first-run-next").textContent = firstRun.step === FIRST_RUN.length - 1 ? "Done" : "Next";
+  $("first-run-skip").hidden = firstRun.step === FIRST_RUN.length - 1;
+}
+
+function openFirstRun(step = 0) {
+  firstRun.open = true;
+  firstRun.step = step;
+  $("first-run").hidden = false;
+  renderFirstRun();
+}
+
+function closeFirstRun() {
+  firstRun.open = false;
+  firstRunLive = null;
+  $("first-run").hidden = true;
+  if (!store.firstRunDone) { store.firstRunDone = true; save(); }
+}
+
+function maybeStartFirstRun() {
+  if (!store.firstRunDone && !firstRun.open) openFirstRun();
+}
+
+/** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
+function updateFirstRunLive(result, landmarks) {
+  if (!firstRun.open || !firstRunLive) return;
+  if (firstRun.step === 0) {
+    const ok = result.kind === "scored";
+    firstRunLive.className = ok ? "framing ok" : "framing";
+    firstRunLive.textContent = ok
+      ? "Head and shoulders in view \u2713"
+      : causeFor(result, landmarks) || "Looking for you...";
+  } else if (firstRun.step === 1) {
+    firstRunLive.textContent = $("calib-status").textContent;
+  }
+}
+
+$("first-run-next").addEventListener("click", () => {
+  if (firstRun.step >= FIRST_RUN.length - 1) { closeFirstRun(); $("state-badge").focus(); return; }
+  firstRun.step += 1; renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-back").addEventListener("click", () => {
+  firstRun.step = Math.max(0, firstRun.step - 1); renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-skip").addEventListener("click", () => { closeFirstRun(); $("state-badge").focus(); });
+$("intro-again").addEventListener("click", () => {
+  if (!loopsStarted) { $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing."; return; }
+  openFirstRun();
+  $("first-run").scrollIntoView({ block: "nearest" });
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
+});
+
+// -- onboarding, safety notice and help -----------------------------------------
+// First run: a three-step card in the start overlay (how it works, what you will
+// see and hear, safety notice). The Start buttons stay hidden until the notice is
+// acknowledged (store.ackVersion). Help replays it any time. Text lives in
+// onboarding.js; see .kiro/specs/onboarding-and-setup.
+
+const LAST_STEP = ONBOARDING_STEPS.length - 1;
+const ob = { step: needsAckOnly(store) ? LAST_STEP : 0, ackOnly: needsAckOnly(store) };
+
+function fillList(ul, points) {
+  ul.replaceChildren(...points.map((text) => { const li = document.createElement("li"); li.textContent = text; return li; }));
+}
+
+function renderOnboardingStep() {
+  const step = ONBOARDING_STEPS[ob.step];
+  const last = ob.step === LAST_STEP;
+  $("ob-count").textContent = ob.ackOnly ? "Safety notice" : `Step ${ob.step + 1} of ${ONBOARDING_STEPS.length}`;
+  $("ob-title").textContent = step.title;
+  fillList($("ob-body"), step.points);
+  $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
+  $("ob-next").hidden = last;
+  $("ob-ack").hidden = !last;
+}
+
+function showStartControls() {
+  const need = shouldShowOnboarding(store);
+  $("onboarding").hidden = !need;
+  $("start-intro").hidden = need;
+  $("start-title").hidden = $("start-tagline").hidden = need; // make room for the card
+  $("start-actions").hidden = need;
+  if (need) renderOnboardingStep();
+}
+
+$("ob-next").addEventListener("click", () => { ob.step = Math.min(LAST_STEP, ob.step + 1); renderOnboardingStep(); $("ob-title").focus(); });
+$("ob-back").addEventListener("click", () => { ob.step = Math.max(0, ob.step - 1); renderOnboardingStep(); $("ob-title").focus(); });
+$("ob-ack").addEventListener("click", () => {
+  markOnboarded(store); save();
+  showStartControls();
+  ($("start-camera").disabled ? $("start-demo") : $("start-camera")).focus();
+});
+showStartControls();
+
+function openHelp() {
+  const body = $("help-body");
+  body.replaceChildren();
+  for (const step of ONBOARDING_STEPS) {
+    const h = document.createElement("h3"); h.textContent = step.title;
+    const ul = document.createElement("ul"); fillList(ul, step.points);
+    body.append(h, ul);
+  }
+  $("help-msg").textContent = "";
+  $("help-dialog").showModal();
+}
+$("help-btn").addEventListener("click", openHelp);
+$("help-close").addEventListener("click", () => $("help-dialog").close());
+$("help-notworking").addEventListener("click", () => {
+  $("help-dialog").close();
+  $("setup-panel").open = true;
+  $("setup-panel").scrollIntoView({ block: "nearest" });
+  $("setup-panel").querySelector("summary").focus();
+});
+$("help-practice").addEventListener("click", () => {
+  const msg = startPractice();
+  $("help-msg").textContent = msg;
+  if (!msg) { $("help-dialog").close(); $("practice-next").focus(); }
+});
+
+fillList($("safety-list"), SAFETY_POINTS);
+$("safety-footer").textContent = SAFETY_SHORT;
+$("relax-safety").textContent = RELAX_SAFETY;
+$("safety-link").addEventListener("click", (e) => { e.preventDefault(); $("safety-dialog").showModal(); });
+$("safety-close").addEventListener("click", () => $("safety-dialog").close());
+
+// -- setup check ("Not working?") ----------------------------------------------------
+
+const setup = new SetupCheck();
+let setupShown = null;
+
+function renderSetup({ diagnosis, fixes }) {
+  if (diagnosis === setupShown) return;
+  setupShown = diagnosis;
+  const status = $("setup-status");
+  status.textContent = DIAGNOSIS_TEXT[diagnosis];
+  status.className = diagnosis === Diagnosis.OK ? "ok" : diagnosis === Diagnosis.CHECKING ? "" : "fault";
+  fillList($("setup-fixes"), fixes);
+  if (fixes.length) $("setup-panel").open = true;
+}
+
+// -- learn the cues (practice) ---------------------------------------------------------
+// Steps through each cue and lights the matching tile. Silent like the retention
+// test: no sounds, no reminders, and nothing is added to the daily totals.
+
+let practice = null; // { i } while practising
+let practiceLive = "";
+
+function renderPracticeStep() {
+  const step = PRACTICE_STEPS[practice.i];
+  $("practice-count").textContent = `Step ${practice.i + 1} of ${PRACTICE_STEPS.length}`;
+  $("practice-text").textContent = step.text;
+  $("practice-next").textContent = practice.i === PRACTICE_STEPS.length - 1 ? "Finish" : "Next";
+  practiceLive = "";
+}
+
+function startPractice() {
+  if (!loopsStarted) return "Start the webcam or the demo first, then you can practise the cues.";
+  if (paused) return "Resume tracking first.";
+  if (test) return "Stop the silent test first.";
+  if (practice) return "";
+  $("practice-breath").hidden = true;
+  breath.cancel();
+  stopSpeech();
+  $("banner").classList.remove("show");
+  practice = { i: 0 };
+  document.body.classList.add("practicing");
+  renderPracticeStep();
+  return "";
+}
+
+function stopPractice() {
+  practice = null;
+  document.body.classList.remove("practicing");
+  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) $(`t-${metric}`).classList.remove("focus");
+  engine.restart(); // practice postures must not carry into a reminder
+  bracing.reset();
+  relaxLastT = null;
+  session.lastT = null;
+  setup.reset();
+}
+
+function renderPractice(result) {
+  const step = PRACTICE_STEPS[practice.i];
+  const cfg = DEFAULTS.scoring;
+  let live;
+  if (!step.metric) {
+    live = "Hold this for a moment. The tiles show your angles.";
+  } else {
+    const v = result.kind === "scored" && (step.metric !== "trunk_lean" || result.trunk_lean_available)
+      ? result[`${step.metric}_deg`] : null;
+    live = v !== null && Math.abs(v) > cfg[`${step.metric}_deg`]
+      ? "That is what this cue looks like. Sit tall again, then press Next."
+      : "Try it. The highlighted tile lights up when it is past your threshold.";
+  }
+  if (live !== practiceLive) { practiceLive = live; $("practice-live").textContent = live; }
+  $("fix-title").textContent = "Practice";
+  $("fix-how").textContent = "";
+  $("fix-box").className = "fix active";
+  $("hold-bar").className = "hold idle";
+  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
+    $(`t-${metric}`).classList.toggle("focus", metric === step.metric);
+  }
+}
+
+$("practice-start").addEventListener("click", () => {
+  const msg = startPractice();
+  $("practice-msg").textContent = msg;
+  if (!msg) $("practice-next").focus();
+});
+$("practice-next").addEventListener("click", () => {
+  if (!practice) return;
+  if (practice.i >= PRACTICE_STEPS.length - 1) {
+    stopPractice();
+    $("practice-msg").textContent = "Practice finished. Want to try a breath check next?";
+    $("practice-breath").hidden = false;
+    return;
+  }
+  practice.i += 1;
+  renderPracticeStep();
+});
+$("practice-stop").addEventListener("click", () => { stopPractice(); $("practice-msg").textContent = "Practice stopped."; });
+$("practice-breath").addEventListener("click", () => {
+  $("practice-breath").hidden = true;
+  $("practice-msg").textContent = "";
+  startBreathCheck();
+});
+
+// -- your progress -----------------------------------------------------------------------
+// A personal review of coached time per day and the silent-test trend. Aggregation
+// is in progress.js. No streaks, no ranking; see .kiro/specs/progress-review.
+
+let lastProgressRender = 0;
+const minutesText = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`);
+
+function renderProgress() {
+  lastProgressRender = Date.now();
+  const s = summarize(store, Date.now());
+  $("progress-empty").textContent = s.empty ? "Nothing tracked yet. Your progress will appear after your first session." : "";
+  const days = $("progress-days");
+  days.hidden = s.empty;
+  days.replaceChildren(...s.days.map((d) => {
+    const row = document.createElement("div");
+    row.className = "day-row";
+    row.setAttribute("role", "listitem");
+    const label = document.createElement("span");
+    label.textContent = new Date(`${d.date}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" });
+    const bar = document.createElement("div");
+    bar.className = "score-bar";
+    const fill = document.createElement("div");
+    fill.style.width = `${d.pct ?? 0}%`;
+    bar.append(fill);
+    const text = document.createElement("span");
+    text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
+    if (d.pct === null) text.className = "nodata";
+    row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
+    row.append(label, bar, text);
+    return row;
+  }));
+  $("progress-total").textContent = s.empty ? "" : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
+  const parts = [];
+  if (s.tests.length) parts.push(`Silent tests, oldest to newest: ${s.tests.map((t) => `${t.pct}%`).join(" \u2192 ")}.`);
+  else if (!s.empty) parts.push("No silent tests yet. Take one for a baseline.");
+  if (s.coached_pct_7d !== null) parts.push(`With coaching over the last 7 days: ${s.coached_pct_7d}%.`);
+  $("progress-tests").textContent = parts.join(" ");
+  const suggest = s.try_light && settings.coachingLevel !== "light";
+  $("progress-suggest").textContent = suggest
+    ? "Your latest silent score is at least as good as your coached score. You could try light coaching."
+    : "";
+  $("progress-light").hidden = !suggest;
+}
+
+$("progress-light").addEventListener("click", () => {
+  $("coaching-level").value = "light";
+  $("coaching-level").dispatchEvent(new Event("change"));
+  renderProgress();
+  $("progress-msg").textContent = "Switched to light coaching. Change it back under Reminders & sounds.";
+});
+
+$("progress-export").addEventListener("click", () => {
+  const url = URL.createObjectURL(new Blob([exportJson(store)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "posture-guard-progress.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  $("progress-msg").textContent = "Exported your daily totals and silent tests.";
+});
+
+$("progress-delete").addEventListener("click", () => {
+  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests and uploaded sounds)? This cannot be undone.")) return;
+  deleted = true; // stop any pending save from writing it back
+  clearStoredData(localStorage);
+  location.reload();
+});
+
 renderCalibration();
 renderStats();
 renderTest();
+renderProgress();
+window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });

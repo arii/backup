@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """The committed browser golden timeline must match the current Python pipeline.
 
 tests/fixtures/browser_golden.json is what the browser port

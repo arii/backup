@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Every sentence the app can say on its own. scripts/render-voice.mjs renders
 // each one to an MP3 with Kokoro-82M (a natural-sounding open TTS model) into

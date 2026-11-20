@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """Posture cues: say *what* is off and *how* to fix it, not just "fix your posture".
 
 posture_cue picks the metric that is furthest past its band - either the raw

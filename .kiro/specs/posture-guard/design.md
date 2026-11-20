@@ -34,7 +34,7 @@ FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine 
   `posture_needle.py`, `calibration.py` and `PosturePipeline.process_once` (as
   `PostureEngine.process(landmarks, now)`).
 - `app.js`: `getUserMedia` -> `PoseLandmarker.detectForVideo` (tasks-vision 0.10.14
-  from jsDelivr, lite model, GPU with CPU fallback) at 15 fps while visible; a
+  self-hosted under docs/app/vendor/, lite model, GPU with CPU fallback) at 15 fps while visible; a
   Blob worker's `setInterval` drives ~5 fps ticks while hidden (rAF and page timers
   are throttled in background tabs; the state machine is frame-rate independent).
   Missing `visibility` on a landmark is treated as 1.

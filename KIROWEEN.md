@@ -2,7 +2,7 @@
 
 **Posture to die for.** (Please don't.) Leave a browser tab open; your webcam
 watches how you sit, chimes when you slouch, and tells you out loud what to fix.
-Nothing leaves your computer.
+Your camera feed never leaves your browser.
 
 - **Category:** Frankenstein
 - **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
@@ -96,6 +96,21 @@ What the Kiro phase changed (PRs #19 onward):
   truth, injected timestamps (no wall-clock reads in the logic), frame-rate-
   independent smoothing, lazy hardware imports, and keeping the browser port in
   sync with Python.
+- **Follow-on specs.** Five more spec folders under `.kiro/specs/`
+  (`onboarding-and-setup`, `progress-review`, `wellness-tools`,
+  `safety-and-disclaimers`, `feedback-design`), each with EARS requirements, a design
+  and a task list. Built tasks are checked. Spec-only tasks stay unchecked and are
+  labelled.
+- **Research-driven feedback.** [`docs/research/feedback-and-habit-formation.md`](docs/research/feedback-and-habit-formation.md)
+  maps motor-learning and habit research to design rules: specific, task-focused
+  cues, opt-in earned praise, lower-intensity (Light) coaching, a silent retention
+  test, an hourly reminder cap, and no shame or streak-loss messages. Some sources
+  were verified from abstracts or page text, others from citation metadata only, and
+  the document says which.
+- **Safety stance.** A versioned first-run acknowledgement, a footer notice and
+  disclaimers on every doc surface; the wording is a draft for a lawyer to review.
+- **Steering additions.** `.kiro/steering/architecture.md` now has rules for safety
+  claims and feedback design.
 - **Hooks.** `.kiro/hooks/pytest-on-change.json` runs `pytest` when package or
   test files are saved; `.kiro/hooks/browser-parity-on-change.json` runs the
   browser parity tests when the JavaScript core or its fixture changes.
@@ -130,16 +145,35 @@ What the Kiro phase changed (PRs #19 onward):
   real MediaPipe and OpenCV packages.
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
-  playing a photo of a person, so the real pose model loads from the CDN and
+  playing a photo of a person, so the real pose model loads from the self-hosted vendor files and
   detects her. Screenshots are kept as a workflow artifact.
 
 ## Known limitations
 
+- **Not medical advice.** Posture Guard is a wellness tool, not a medical device. It
+  tells users not to hold a rigid posture and to stop and see a clinician for pain,
+  numbness or dizziness. The wording is a draft that a lawyer should review before any
+  wider launch.
+
+- **No clinical validation.** Nothing in the app or the research notes has been
+  clinically validated. The research is mostly lab motor learning and workplace
+  studies, and several citations were checked from metadata only.
+- **Webcam accuracy.** A 2D webcam estimate depends on lighting, angle, clothing and
+  body shape. "Good" is relative to the user's own calibration.
+- **Spec only, not built:** the social leaderboard, face and jaw tension prompts, eye
+  breaks and blink reminders, neck and shoulder stretch prompts, the microbreak
+  timer and the guided breathing exercise. Built: onboarding, safety acknowledgement,
+  Help, *Not working?*, *Learn the cues*, the personal progress panel, Light coaching,
+  milestone praise and the hourly reminder cap.
+- **Desktop app.** The Python dashboard does not have the onboarding or progress
+  panel.
+- **E2E scripts.** `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` hard-code
+  onboarding version 1 and ack version 1. Update them when those versions change.
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.
-- **CDN dependency.** The browser app downloads the MediaPipe runtime and model
-  from jsDelivr and Google's model bucket; video and landmarks never leave the tab.
+- **Self-hosted runtime.** The browser app serves the MediaPipe runtime and model
+  from its own site (`docs/app/vendor/`); video and landmarks never leave the tab.
 
 ## Submission checklist
 
@@ -161,7 +195,7 @@ What the Kiro phase changed (PRs #19 onward):
 2. **0:20** Sit up straight: the badge reads GOOD POSTURE, the skeleton is green.
 3. **0:40** Slouch: the needle swings right, the chime plays and the *What to fix*
    box says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
-   Drop one shoulder to show "Right shoulder dropped".
+   Drop one shoulder to show "Shoulders uneven".
 4. **1:10** Sit up: the recovery chime and "Back to good posture".
 5. **1:30** Record good and slouch posture; show the calibrated needle.
 6. **1:50** Switch tabs: reminders still fire in the background.
@@ -170,3 +204,16 @@ What the Kiro phase changed (PRs #19 onward):
    and the `.kiro/` spec, steering and hooks that were the lightning.
 8. **2:40** The build history: the RealSense prototype first, the amputation, then
    the webcam and browser version with Kiro. End on "It's alive."
+
+## Owner checklist
+
+Items only the repository owner can do (from issue #30 and the license review):
+
+- [ ] Switch the repository default branch to `main` (Settings, Branches).
+- [ ] Check WebGL in your own Chrome (`chrome://gpu`) and open the live app once.
+- [ ] Run a manual test with a real webcam: record good posture, slouch, hear the voice.
+- [ ] Record the demo video voiceover and your own webcam clip, then replace the sample photo footage. See the likeness warning in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- [ ] Replace the sample photo `id_fail_distant_waist_up.jpg` used by CI and the video with your own or a cleared image.
+- [ ] Confirm Remotion's free tier covers you, or buy a license.
+- [ ] Submit on Devpost (deadline Dec 4, 2026, 2:00 PM PT) and add the YouTube link.
+- [ ] Run a trademark search on "Posture Guard" before any commercial use.

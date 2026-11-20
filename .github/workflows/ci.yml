@@ -36,6 +36,57 @@ jobs:
       - name: Browser core parity + properties
         run: node --test "tests/js/*.test.mjs"
 
+  vendored-files:
+    # The app is self-hosted (issue #45): vendored MediaPipe files must exist
+    # and match the sha256 values recorded in docs/app/vendor/README.md.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify vendored files and checksums
+        working-directory: docs/app/vendor
+        run: |
+          test -s LICENSE
+          for f in vision_bundle.mjs pose_landmarker_lite.task \
+                   wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+            sum=$(sha256sum "$f" | cut -d' ' -f1)
+            grep -q "$sum" README.md || { echo "checksum not in README: $f"; exit 1; }
+          done
+      - name: No third-party hosts in the app
+        run: |
+          if grep -rnE "cdn\.jsdelivr\.net|storage\.googleapis\.com" docs/app/*.js docs/app/index.html; then
+            echo "app must not load from third-party hosts"; exit 1
+          fi
+
+  e2e-local:
+    # Serve docs/ locally and run the browser e2e (CSP, vendored files, reflow,
+    # first run) before merge, not only after deploy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright Chromium
+        timeout-minutes: 8
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Serve docs/ and run the e2e
+        timeout-minutes: 8
+        run: |
+          (cd docs && nohup python3 -m http.server 8123 >/dev/null 2>&1 &)
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:8123/app/posture-core.js && break
+            sleep 1
+          done
+          node tests/e2e/live-site.mjs http://127.0.0.1:8123/ "" e2e-report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-local-report
+          path: e2e-report
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:
