@@ -134,11 +134,20 @@ class CalibrationConfig:
 
 @dataclass(frozen=True)
 class PositiveChimeConfig:
-    """Positive reinforcement: an upbeat chime after posture stays GOOD for
-    `every_seconds`; the timer restarts each time it plays."""
+    """Positive reinforcement while posture stays GOOD.
+
+    Dense-to-lean schedule: the first praise comes `first_after_seconds` into
+    a GOOD streak, each later gap is the previous one times `growth`, capped at
+    `every_seconds`. `jitter` (0..0.5) varies each gap by up to that fraction
+    on a fixed pattern, so praise is not clockwork (variable-interval) yet stays
+    deterministic. The schedule restarts dense with every new GOOD streak.
+    first_after_seconds = null keeps a fixed every_seconds interval."""
 
     enabled: bool = True
     every_seconds: float = 120.0
+    first_after_seconds: float | None = None
+    growth: float = 1.5
+    jitter: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -232,6 +241,18 @@ def validate(config: AppConfig) -> AppConfig:
         raise ConfigError("calibration.window_s: must be > 0")
     if config.state.smoothing_window_s < 0:
         raise ConfigError("state.smoothing_window_s: must be >= 0")
+    pc = config.feedback.positive_chime
+    if pc.every_seconds <= 0:
+        raise ConfigError("feedback.positive_chime.every_seconds: must be > 0")
+    if pc.first_after_seconds is not None and not 0 < pc.first_after_seconds <= pc.every_seconds:
+        raise ConfigError(
+            "feedback.positive_chime.first_after_seconds: "
+            "need 0 < first_after_seconds <= every_seconds"
+        )
+    if pc.growth < 1:
+        raise ConfigError("feedback.positive_chime.growth: must be >= 1")
+    if not 0 <= pc.jitter <= 0.5:
+        raise ConfigError("feedback.positive_chime.jitter: must be between 0 and 0.5")
     return config
 
 

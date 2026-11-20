@@ -95,6 +95,60 @@ try {
     await page.close();
   }
 
+  // 2b. Praise, voice choice, pause and bug report, on the demo with an 8x
+  // clock (so the 20 s first praise lands inside the demo's 20 s good half)
+  // and a recording speechSynthesis stub with a robotic and a natural voice.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      const realNow = performance.now.bind(performance);
+      const t0 = realNow();
+      performance.now = () => t0 + (realNow() - t0) * 8;
+      const voices = [
+        { name: "eSpeak English", lang: "en-US", localService: true, default: true },
+        { name: "Google US English", lang: "en-US", localService: false, default: false },
+      ];
+      window.__spoken = [];
+      const ss = new EventTarget();
+      ss.getVoices = () => voices;
+      ss.speak = (u) => window.__spoken.push({ text: u.text, voice: u.voice && u.voice.name });
+      ss.cancel = () => {};
+      Object.defineProperty(window, "speechSynthesis", { value: ss, configurable: true });
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    });
+    await page.goto(`${base}app/${bust}`);
+    const voiceNote = await page.textContent("#voice-note");
+    check("voice: prefers a natural voice over eSpeak", voiceNote.includes("Google US English"), { voiceNote });
+    await page.click("#start-demo");
+    await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }).catch(() => {});
+    const spoken = await page.evaluate(() => window.__spoken.slice());
+    check("praise: spoken during sustained good posture",
+      spoken.length >= 1 && spoken[0].voice === "Google US English" && /good|nice|posture|champion|keep/i.test(spoken[0].text),
+      spoken);
+    await page.keyboard.press("p");
+    const pausedBadge = await page.textContent("#state-badge");
+    const before = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
+    await page.waitForTimeout(4000); // sim 32 s: the whole slouch half would chime without the pause
+    const after = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
+    check("pause: no reminders or speech while paused",
+      pausedBadge === "paused" && before[0] === after[0] && before[1] === after[1], { pausedBadge, before, after });
+    await page.click("#pause");
+    await page.waitForTimeout(1500);
+    const resumed = await page.textContent("#state-badge");
+    check("pause: resume restarts tracking", resumed !== "paused", { resumed });
+    await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
+    const href = await page.getAttribute("#report-bug", "href");
+    const issue = new URL(href);
+    const body = issue.searchParams.get("body") || "";
+    check("bug report: pre-fills a GitHub issue with diagnostics",
+      issue.pathname === "/arii/posture-guard/issues/new" && body.includes("WebGL:") && body.includes("Browser:"),
+      { href: href.slice(0, 200) });
+    await page.screenshot({ path: path.join(outDir, "demo-praise-pause.png") });
+    check("praise/pause/report: no page errors", errors.length === 0, errors);
+    report.praise = { spoken, pausedBadge, resumed };
+    await page.close();
+  }
+
   // 3. Webcam mode: real model from the CDN on a fake camera.
   {
     const { page, errors } = await newPage(browser);

@@ -31,6 +31,9 @@ from posture_guard.scoring import (
 )
 
 _EPS = 1e-9  # float slack for window comparisons on the 0.1 s sample grid
+# Per-praise gap scaling, in units of positive_chime.jitter (mean 0). Fixed so
+# runs are reproducible and posture-core.js matches frame for frame.
+_JITTER_PATTERN = (0.0, -1.0, 1.0, -0.5, 0.5)
 
 
 class PostureState(Enum):
@@ -110,6 +113,7 @@ class PostureStateMachine:
         self._voice_at: float | None = None
         self._good_state_since: float | None = None  # start of the current GOOD episode
         self._positive_at: float | None = None  # last positive chime (cooldown timer)
+        self._positive_count = 0  # praises so far in the current GOOD streak
 
     @property
     def state(self) -> PostureState:
@@ -183,7 +187,9 @@ class PostureStateMachine:
             return self._update_bad(smoothed_good, now)
         transition = self._update_idle(sustaining_bad, smoothed_good, now)
         if self._state is PostureState.GOOD and self._positive.positive_chime.enabled:
-            return self._maybe_positive_chime(now)
+            # State stays GOOD for the first bad_sustain_s of a slouch; never
+            # praise during that window, only while posture is actually good.
+            return self._maybe_positive_chime(now, smoothed_good)
         return transition
 
     # -- unreliable / absent paths -------------------------------------------------
@@ -287,17 +293,36 @@ class PostureStateMachine:
             return Transition(PostureState.BAD_VOICE, Nudge.VOICE)
         return Transition(self._state, Nudge.NONE)
 
-    def _maybe_positive_chime(self, now: float) -> Transition:
-        """Positive reinforcement: while state is GOOD, fire the positive chime
-        once per every_seconds of continuously good posture. The timer restarts
-        on fire (cooldown) and on any departure from GOOD (sustained interval)."""
+    def _positive_gap(self, count: int) -> float:
+        """Seconds of GOOD before praise number `count` (0-based) of a streak.
+
+        Dense-to-lean: first_after_seconds, then x growth per praise, capped at
+        every_seconds, each scaled by a fixed jitter pattern. Without
+        first_after_seconds the gap is a fixed every_seconds."""
+        pc = self._positive.positive_chime
+        if pc.first_after_seconds is None:
+            return pc.every_seconds
+        gap = min(pc.first_after_seconds * pc.growth**count, pc.every_seconds)
+        return gap * (1 + pc.jitter * _JITTER_PATTERN[count % len(_JITTER_PATTERN)])
+
+    def _maybe_positive_chime(self, now: float, smoothed_good: bool = True) -> Transition:
+        """Positive reinforcement: while state is GOOD, praise on the schedule
+        from _positive_gap, timed from the start of the GOOD streak or the last
+        praise in it. Any departure from GOOD restarts the schedule dense. A
+        praise never follows the previous one (from any streak) sooner than the
+        first gap, so bouncing in and out of GOOD cannot spam it."""
         if self._good_state_since is None:
             self._good_state_since = now
-        every_s = self._positive.positive_chime.every_seconds
-        sustained = now - self._good_state_since >= every_s - _EPS
-        cooled = self._positive_at is None or now - self._positive_at >= every_s - _EPS
-        if sustained and cooled:
+            self._positive_count = 0
+        since = self._good_state_since
+        if self._positive_count and self._positive_at is not None:
+            since = self._positive_at
+        sustained = now - since >= self._positive_gap(self._positive_count) - _EPS
+        min_gap = self._positive_gap(0)
+        cooled = self._positive_at is None or now - self._positive_at >= min_gap - _EPS
+        if sustained and cooled and smoothed_good:
             self._positive_at = now
+            self._positive_count += 1
             return Transition(PostureState.GOOD, Nudge.POSITIVE_CHIME)
         return Transition(PostureState.GOOD, Nudge.NONE)
 
