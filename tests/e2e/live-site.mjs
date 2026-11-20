@@ -904,6 +904,73 @@ try {
     check("webcam mode has no errors", errors.length === 0, errors);
     await page.close();
   }
+  // 3b. Live preview: the video shows within 1.5 s of the click while the model is still downloading.
+  if (y4m) {
+    const { page, errors } = await newPage(browser);
+    let release = () => {};
+    const held = new Promise((r) => {
+      release = r;
+    });
+    await page.route(/pose_landmarker_lite\.task/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-camera");
+    const t0 = Date.now();
+    const shown = await page
+      .waitForFunction(
+        () => {
+          const v = document.getElementById("video");
+          if (!v || v.readyState < 2 || v.paused) return false;
+          const r = v.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !!top && !top.closest("#start-overlay");
+        },
+        null,
+        { timeout: 1500 },
+      )
+      .then(() => Date.now() - t0)
+      .catch(() => -1);
+    const during = await page.evaluate(() => ({
+      classes: document.getElementById("start-overlay").className,
+      status: document.getElementById("start-status").textContent,
+      steps: [...document.querySelectorAll("#load-steps li")].map((li) => `${li.dataset.step}:${li.className}`),
+      marks: window.__loadMarks,
+    }));
+    check("live preview: video visible within 1.5 s of the click while the model route is held", shown >= 0, {
+      shown,
+      ...during,
+    });
+    check(
+      "live preview: card is compact, camera step done, download still active",
+      /compact/.test(during.classes) &&
+        during.steps.includes("camera:done") &&
+        during.steps.includes("download:active") &&
+        /Camera is on\./.test(during.status),
+      during,
+    );
+    release();
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+        document.getElementById("start-error").textContent !== "",
+      null,
+      { timeout: 90000 },
+    );
+    const after = await page.evaluate(() => ({
+      source: document.getElementById("source").textContent,
+      marks: window.__loadMarks,
+    }));
+    check(
+      "live preview: after the route is released tracking starts and every load mark is recorded",
+      after.source === "webcam" &&
+        ["click", "streamPlaying", "downloadDone", "warmUpDone"].every((k) => after.marks?.[k] !== undefined),
+      after,
+    );
+    check("live preview has no errors", errors.length === 0, errors);
+    await page.close();
+  }
   // 4. No WebGL: a separate browser, since the flag is per launch.
   {
     const noGL = await chromium.launch({

@@ -146,6 +146,11 @@
   @media (max-width: 600px) {
     .stage { aspect-ratio: auto; min-height: 560px; }
     .stage:has(#onboarding:not([hidden])) { min-height: 860px; }
+    /* Narrow screens: the card sits below the video, so it never covers the face. */
+    .stage:has(.overlay-msg.compact) { min-height: 0; aspect-ratio: auto; display: flex; flex-direction: column; }
+    .stage:has(.overlay-msg.compact) video { position: relative; inset: auto; height: auto; aspect-ratio: 4 / 3; flex: none; }
+    .stage:has(.overlay-msg.compact) canvas { height: auto; aspect-ratio: 4 / 3; bottom: auto; }
+    .stage:has(.overlay-msg.compact) .overlay-msg.compact { position: static; max-height: none; }
     header { padding: 10px 12px; gap: 8px; }
     .stage .overlay-msg { padding: 12px; }
     .overlay-msg h2 { font-size: 20px; }
@@ -166,13 +171,20 @@
   .load-steps li.done::before { border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.5l3 3 6-7' fill='none' stroke='%234cc36a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
   .load-steps li.failed { color: var(--bad); }
   .load-steps li.failed::before { border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 3l8 8M11 3l-8 8' fill='none' stroke='%23ff5c5c' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .load-steps li { flex-wrap: wrap; }
+  .load-steps .load-why { flex: 0 0 100%; margin-left: 24px; font-size: 12px; font-weight: 400; color: var(--muted); }
   .load-steps .load-detail { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
   .load-bar { width: min(340px, 100%); height: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
   .load-bar div { height: 100%; width: 0; background: var(--good); transition: width 0.2s linear; }
+  /* Live preview: once frames play, the card shrinks to a solid strip under the video. */
+  .stage .overlay-msg.compact { inset: auto 0 0 0; max-height: 40%; padding: 10px 14px; gap: 8px; background: var(--panel); border-top: 1px solid var(--line); }
+  .overlay-msg.compact > :not(#load-steps, #load-bar, #load-hint, #start-status, #start-error) { display: none; }
+  .overlay-msg.compact .load-why { display: none; }
   #load-hint:empty { display: none; }
   @keyframes load-spin { to { transform: translateY(2px) rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
-    .load-steps li.active::before { border-right-color: var(--good); border-style: dotted; }
+    .load-steps li.active::before { border-right-color: var(--good); border-style: dotted; animation: none; }
+    .load-bar div { transition: none; }
 
     * { transition: none !important; animation: none !important; }
   }
@@ -227,6 +239,7 @@
         <p id="start-tagline" style="color:var(--warn);font-weight:600">Leave this tab open. Slouch, and it will haunt you.</p>
         <p id="start-intro">Your webcam, the pose model and the posture logic all run in this tab. No video or
           landmarks leave your computer. Sit facing the camera with your head and shoulders in view.</p>
+        <noscript><p class="error">BackUp needs JavaScript to run. Turn it on for this site, then reload the page.</p></noscript>
         <section id="onboarding" aria-labelledby="ob-title" hidden>
           <div class="step-count" id="ob-count"></div>
           <h3 id="ob-title" tabindex="-1"></h3>
@@ -244,12 +257,12 @@
         <p id="start-device-note" class="note">Works best on a laptop or desktop with a webcam.</p>
         <p id="start-status" class="note"></p>
         <ol id="load-steps" class="load-steps" hidden aria-live="polite" aria-label="Starting the webcam">
-          <li data-step="camera"><span class="load-label">Allow the camera</span> <span class="load-detail"></span></li>
-          <li data-step="download"><span class="load-label">Download the pose model</span> <span class="load-detail"></span></li>
-          <li data-step="start"><span class="load-label">Start the model on your computer</span> <span class="load-detail"></span></li>
+          <li data-step="camera"><span class="load-label">Allow the camera</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">Your browser asks first. The video stays on this computer.</span></li>
+          <li data-step="download"><span class="load-label">Download the pose model</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">A 15 MB file from this site, one time. It runs in this tab.</span></li>
+          <li data-step="start"><span class="load-label">Start the model on your computer</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">Getting ready for your graphics chip. The page may pause for a few seconds.</span></li>
         </ol>
-        <div id="load-bar" class="load-bar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
-        <p id="load-hint" class="note" aria-live="polite"></p>
+        <div id="load-bar" class="load-bar" role="progressbar" aria-label="Start-up progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
+        <p id="load-hint" class="note" role="status"></p>
         <p id="start-error" class="error"></p>
         <div id="webgl-help" role="alert">
           <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:

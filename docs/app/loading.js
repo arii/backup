@@ -88,16 +88,40 @@ const SLOW_HINTS = {
 };
 const SLOW_AFTER_S = { camera: 8, download: 12, start: 6 };
 
-/** Drives the #load-steps list: pending, active (spinner), done or failed. */
+/** Share of the overall bar each step covers. They add up to 1. */
+const WEIGHTS = { camera: 0.05, download: 0.8, start: 0.15 };
+
+/** Progress ticks closer together than this are dropped (the final one is not). */
+const PROGRESS_EVERY_MS = 250;
+
+/**
+ * Overall start-up progress, 0 to 100, from each step's fraction (0 to 1).
+ * Camera counts as done when frames play; download uses the byte progress.
+ */
+export function overallPercent(fractions) {
+  let sum = 0;
+  for (const [id, w] of Object.entries(WEIGHTS)) sum += w * Math.min(1, Math.max(0, fractions[id] || 0));
+  return Math.round(100 * sum);
+}
+
+/**
+ * Drives the #load-steps list: each step is pending, active (spinner), done or
+ * failed, and several can be active at once (camera prompt and download run
+ * in parallel). `now` and `timers` are injectable for tests.
+ */
 export class LoadSteps {
-  constructor(doc = document) {
+  constructor(doc = document, { now = () => performance.now(), timers = globalThis } = {}) {
     this.doc = doc;
+    this.now = now;
+    this.timers = timers;
     this.root = doc.getElementById("load-steps");
     this.bar = doc.getElementById("load-bar");
     this.fill = doc.getElementById("load-fill");
     this.hint = doc.getElementById("load-hint");
-    this.active = null;
-    this.timer = null;
+    this.hintTimers = new Map();
+    this.elapsedTimer = null;
+    this.fractions = {};
+    this.lastProgressAt = -Infinity;
     this.labels = new Map(
       [...this.root.querySelectorAll("[data-step]")].map((li) => [
         li.dataset.step,
@@ -116,35 +140,77 @@ export class LoadSteps {
     else overlay.removeAttribute("aria-busy");
   }
 
+  clearTimers() {
+    for (const t of this.hintTimers.values()) this.timers.clearTimeout(t);
+    this.hintTimers.clear();
+    this.timers.clearInterval(this.elapsedTimer);
+    this.elapsedTimer = null;
+  }
+
+  showOverall() {
+    const pct = overallPercent(this.fractions);
+    this.fill.style.width = `${pct}%`;
+    this.bar.setAttribute("aria-valuenow", String(pct));
+  }
+
   /** Show the list with every step pending and its default label. */
   open() {
+    this.clearTimers();
+    this.fractions = {};
+    this.lastProgressAt = -Infinity;
     for (const li of this.root.querySelectorAll("[data-step]")) {
       li.className = "pending";
       li.querySelector(".load-detail").textContent = "";
       li.querySelector(".load-label").textContent = this.labels.get(li.dataset.step);
     }
     this.root.hidden = false;
-    this.bar.hidden = true;
+    this.bar.hidden = false;
+    this.showOverall();
     this.hint.textContent = "";
     this.setBusy(true);
   }
 
-  /** Mark the current step done and make `id` the active one. */
-  step(id, detail = "") {
-    if (this.active && this.active !== id) this.item(this.active).className = "done";
-    this.active = id;
+  /** Make `id` active. Other steps keep their state, so two can run at once.
+   *  With `elapsed`, the detail counts seconds (it freezes if the page is blocked). */
+  start(id, { elapsed = false } = {}) {
     const li = this.item(id);
     li.className = "active";
-    li.querySelector(".load-detail").textContent = detail;
-    this.bar.hidden = id !== "download";
-    this.hint.textContent = "";
-    clearTimeout(this.timer);
-    this.timer = setTimeout(
-      () => {
-        this.hint.textContent = SLOW_HINTS[id] || "";
-      },
-      (SLOW_AFTER_S[id] || 10) * 1000,
+    li.querySelector(".load-detail").textContent = "";
+    this.fractions[id] = 0;
+    this.showOverall();
+    this.timers.clearTimeout(this.hintTimers.get(id));
+    this.hintTimers.set(
+      id,
+      this.timers.setTimeout(
+        () => {
+          this.hint.textContent = SLOW_HINTS[id] || "";
+        },
+        (SLOW_AFTER_S[id] || 10) * 1000,
+      ),
     );
+    if (elapsed) {
+      const t0 = this.now();
+      const detail = li.querySelector(".load-detail");
+      this.timers.clearInterval(this.elapsedTimer);
+      this.elapsedTimer = this.timers.setInterval(() => {
+        detail.textContent = `${Math.floor((this.now() - t0) / 1000)} s`;
+      }, 1000);
+    }
+  }
+
+  /** Mark `id` done. Its slow hint goes away. */
+  done(id) {
+    this.timers.clearTimeout(this.hintTimers.get(id));
+    this.hintTimers.delete(id);
+    if (id === "start") {
+      this.timers.clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
+    this.item(id).className = "done";
+    this.item(id).querySelector(".load-detail").textContent = "";
+    this.fractions[id] = 1;
+    this.showOverall();
+    this.hint.textContent = "";
   }
 
   /** Change a step's label (e.g. for the fallback model) without moving on. */
@@ -152,33 +218,42 @@ export class LoadSteps {
     this.item(id).querySelector(".load-label").textContent = text;
   }
 
+  /** Download byte progress. Ticks closer than 250 ms are dropped, except the last. */
   progress(received, total) {
+    const last = total > 0 && received >= total;
+    const t = this.now();
+    if (!last && t - this.lastProgressAt < PROGRESS_EVERY_MS) return;
+    this.lastProgressAt = t;
     const detail = this.item("download").querySelector(".load-detail");
     if (total > 0) {
-      const pct = Math.round((100 * received) / total);
-      this.fill.style.width = `${pct}%`;
-      this.bar.setAttribute("aria-valuenow", String(pct));
+      this.fractions.download = received / total;
       detail.textContent = `${mb(received)} of ${mb(total)} MB`;
     } else {
       detail.textContent = `${mb(received)} MB`;
     }
+    this.showOverall();
   }
 
   /** Done, or no longer relevant: hide the list. */
   finish() {
-    clearTimeout(this.timer);
-    this.active = null;
+    this.clearTimers();
     this.root.hidden = true;
     this.bar.hidden = true;
     this.hint.textContent = "";
     this.setBusy(false);
   }
 
-  /** Mark the active step failed and leave the list up, so it shows where. */
-  fail() {
-    clearTimeout(this.timer);
-    if (this.active) this.item(this.active).className = "failed";
-    this.active = null;
+  /** Mark step `id` (default: the first active one) failed and leave the list
+   *  up, so it shows where. Other running steps go back to pending: the retry
+   *  starts them again. */
+  fail(id = null) {
+    this.clearTimers();
+    const lis = [...this.root.querySelectorAll("[data-step]")];
+    const target = id || lis.find((li) => li.className === "active")?.dataset.step;
+    for (const li of lis) {
+      if (li.dataset.step === target) li.className = "failed";
+      else if (li.className === "active") li.className = "pending";
+    }
     this.bar.hidden = true;
     this.hint.textContent = "";
     this.setBusy(false);

@@ -7,13 +7,13 @@ Already shipped by PR #70, not repeated here: three-step start list, byte progre
 slow hints, single download as buffers, MoveNet fallback, warm-up under a spinner
 (`docs/app/loading.js`, `tests/js/loading.test.mjs`).
 
-- [ ] 1. Measure and add load marks
+- [x] 1. Measure and add load marks
   - Add `performance.now()` marks (click, stream playing, download done, warm-up done,
     first scored frame, settled) to `window.__loadMarks` and `bugReportUrl()` diagnostics.
   - [x] Keep the measurement script from this spec's baseline as `tests/e2e/measure-load.mjs`
     (optional, not run in CI). Done in FEAT-001; baseline re-measured and matches the table.
   - _Requirements: 10_
-- [ ] 2. Parallel camera and model start, live preview
+- [x] 2. Parallel camera and model start, live preview
   - `app.js` `#start-camera` handler: start `loadModel` or `loadMoveNet` before awaiting
     `getUserMedia`; cache the result for retry; show the video as soon as frames play.
   - `loading.js`: `LoadSteps.start/done` for two active steps; `overallPercent`; throttle
