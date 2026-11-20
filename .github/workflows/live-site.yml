@@ -35,7 +35,7 @@ jobs:
         # Apache-2.0 sample photo from google-ai-edge/mediapipe-samples-web,
         # cropped around the person to a webcam-like waist-up framing.
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg
           curl -fsSL -o person.jpg \
             https://raw.githubusercontent.com/google-ai-edge/mediapipe-samples-web/main/public/images/id_photos/id_fail_distant_waist_up.jpg
           ffmpeg -loglevel error -loop 1 -i person.jpg -t 3 -r 15 \
