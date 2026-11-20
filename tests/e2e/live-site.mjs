@@ -143,10 +143,11 @@ try {
       width: document.getElementById("hold-fill").style.width,
     }));
     check("hold bar fills toward the next praise", hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0, hold);
-    await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }).catch(() => {});
+    await page.waitForFunction(() => window.__spoken.some((x) => /good|posture|champion|keep|relaxed/i.test(x.text) && !/^Head|^Your|^You're leaning|^Please/.test(x.text)),
+      null, { timeout: 15000 }).catch(() => {});
     const spoken = await page.evaluate(() => window.__spoken.slice());
     check("praise: spoken with the recorded voice when opted in",
-      spoken.length >= 1 && spoken[0].engine === "kokoro" && /good|nice|posture|champion|keep/i.test(spoken[0].text),
+      spoken.some((x) => x.engine === "kokoro" && /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(x.text)),
       spoken);
     await page.keyboard.press("p");
     const pausedBadge = await page.textContent("#state-badge");
