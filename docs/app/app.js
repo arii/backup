@@ -310,6 +310,7 @@ function reminderText(nudge, cue) {
 }
 
 function fire(nudge, cue) {
+  if (test) return; // silent test: withhold every cue
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
   if (reminder) reminderCount += 1;
   const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise()
@@ -370,9 +371,81 @@ function renderCalibration() {
 const session = { good: 0, bad: 0, streak: 0, best: 0, lastT: null };
 store.days = store.days || {};
 
+// -- silent test ("Test me") ---------------------------------------------------
+// A retention test in motor-learning terms: same tracking and state machine,
+// but every cue is withheld (no sounds, speech, banners, needle, hold bar or
+// live score), so the score reflects the habit rather than the reminders.
+// Results are kept per test; coached time keeps feeding store.days.
+
+store.tests = store.tests || [];
+let test = null; // { minutes, elapsed, good, bad } while a test runs
+
+function startTest() {
+  if (test) return finishTest(true);
+  test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
+  stopSpeech();
+  document.body.classList.add("testing");
+  $("banner").classList.remove("show");
+  $("test-start").textContent = "Stop test";
+  $("test-progress-wrap").style.display = "";
+  renderTest();
+}
+
+function finishTest(stoppedEarly) {
+  const t = test;
+  test = null;
+  document.body.classList.remove("testing");
+  $("test-start").textContent = "Start silent test";
+  $("test-progress-wrap").style.display = "none";
+  const tracked = t.good + t.bad;
+  if (!stoppedEarly && tracked >= 30) {
+    store.tests.push({ at: new Date().toISOString(), minutes: t.minutes, good: Math.round(t.good), bad: Math.round(t.bad) });
+    store.tests = store.tests.slice(-50);
+    save();
+    $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
+    playGood();
+  } else {
+    $("test-status").textContent = stoppedEarly ? "Test stopped, not saved." : "Not enough tracked time to score; not saved.";
+  }
+  renderTest();
+}
+
+const pctOf = (r) => (r.good + r.bad > 0 ? Math.round((100 * r.good) / (r.good + r.bad)) : null);
+
+function renderTest() {
+  if (test) {
+    const left = Math.max(0, test.minutes * 60 - test.elapsed);
+    $("test-status").textContent = `Silent test running: ${mmss(left)} left. Sit and work as usual.`;
+    $("test-progress").style.width = `${Math.min(100, (100 * test.elapsed) / (test.minutes * 60)).toFixed(1)}%`;
+  }
+  const tests = store.tests;
+  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), { good: 0, bad: 0 });
+  const parts = [];
+  if (tests.length) {
+    const first = tests[0], last = tests[tests.length - 1];
+    parts.push(tests.length === 1
+      ? `Silent test: <b>${pctOf(last)}%</b> good`
+      : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`);
+  } else {
+    parts.push("No silent tests yet. Take one now for a baseline, then again after a few days of coaching.");
+  }
+  if (coached.good + coached.bad > 0) parts.push(`With coaching: <b>${pctOf(coached)}%</b> good`);
+  $("test-compare").innerHTML = parts.join(" &middot; ");
+}
+
+$("test-start").addEventListener("click", () => { ensureAudio(); startTest(); });
+
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
+    if (test) {
+      test.elapsed += dt;
+      if (state === State.GOOD) test.good += dt;
+      else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
+      session.lastT = now;
+      if (test.elapsed >= test.minutes * 60) finishTest(false);
+      return;
+    }
     const day = (store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 });
     if (state === State.GOOD) {
       session.good += dt; day.good += dt; session.streak += dt;
@@ -512,6 +585,7 @@ function render(out, landmarks) {
     ? "settling in"
     : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
   $("warnings").textContent = causeFor(result, landmarks);
   const cfg = DEFAULTS.scoring;
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
@@ -530,7 +604,8 @@ function render(out, landmarks) {
       ? "drifting" : "upright";
     $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
   }
-  drawSkeleton(landmarks, wireColor(transition.state, result));
+  drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
+  renderTest();
   renderCalibration();
   renderStats();
 }
@@ -780,6 +855,7 @@ function begin(source) {
   showWebGLHelp(false);
   restoreSound("bad"); restoreSound("good");
   $("pause").disabled = false;
+  $("test-start").disabled = false;
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   requestAnimationFrame(visibleLoop);
@@ -829,3 +905,4 @@ $("start-demo").addEventListener("click", () => {
 
 renderCalibration();
 renderStats();
+renderTest();

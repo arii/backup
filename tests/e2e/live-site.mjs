@@ -159,6 +159,21 @@ try {
     await page.waitForTimeout(1500);
     const resumed = await page.textContent("#state-badge");
     check("pause: resume restarts tracking", resumed !== "paused", { resumed });
+    const spokenBeforeTest = await page.evaluate(() => window.__spoken.length);
+    await page.click("#test-start");
+    await page.waitForTimeout(3000); // sim 24 s: the demo slouches in this window, yet nothing may fire
+    const silent = await page.evaluate((n) => ({
+      badge: document.getElementById("state-badge").textContent,
+      testing: document.body.classList.contains("testing"),
+      needleShown: getComputedStyle(document.querySelector(".panel.coaching")).display !== "none",
+      spoke: window.__spoken.length - n,
+      status: document.getElementById("test-status").textContent,
+    }), spokenBeforeTest);
+    check("silent test: hides feedback and stays quiet",
+      silent.badge === "silent test" && silent.testing && !silent.needleShown && silent.spoke === 0 && /left/.test(silent.status), silent);
+    await page.click("#test-start"); // stop early: not saved
+    check("silent test: stopping early is not saved",
+      (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0);
     await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
     const href = await page.getAttribute("#report-bug", "href");
     const issue = new URL(href);
