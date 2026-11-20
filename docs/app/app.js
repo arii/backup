@@ -642,26 +642,26 @@ function wireColor(state, result) {
   return state === State.GOOD ? WIRE.good : WIRE.slate;
 }
 
-function drawSkeleton(landmarks, color) {
-  const w = (canvas.width = canvas.clientWidth);
-  const h = (canvas.height = canvas.clientHeight);
-  ctx.clearRect(0, 0, w, h);
+function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
+  const w = (cv.width = cv.clientWidth);
+  const h = (cv.height = cv.clientHeight);
+  c.clearRect(0, 0, w, h);
   if (!landmarks) return;
-  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 4;
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 4 * scale;
   for (const [a, b] of SKELETON) {
     const p = landmarks[a], q = landmarks[b];
     if (![p.x, p.y, q.x, q.y].every(Number.isFinite)) continue;
-    ctx.beginPath(); ctx.moveTo(p.x * w, p.y * h); ctx.lineTo(q.x * w, q.y * h); ctx.stroke();
+    c.beginPath(); c.moveTo(p.x * w, p.y * h); c.lineTo(q.x * w, q.y * h); c.stroke();
   }
   const le = landmarks[7], re = landmarks[8];
   if ([le.x, le.y, re.x, re.y].every(Number.isFinite)) { // head outline between the ears
     const r = Math.hypot((re.x - le.x) * w, (re.y - le.y) * h) * 0.75;
-    ctx.beginPath(); ctx.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI); ctx.stroke();
+    c.beginPath(); c.arc(((le.x + re.x) / 2) * w, ((le.y + re.y) / 2) * h - r * 0.35, r, 0, 2 * Math.PI); c.stroke();
   }
   for (const i of TRACKED) {
     const p = landmarks[i];
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    ctx.beginPath(); ctx.arc(p.x * w, p.y * h, 6, 0, 2 * Math.PI); ctx.fill();
+    c.beginPath(); c.arc(p.x * w, p.y * h, 6 * scale, 0, 2 * Math.PI); c.fill();
   }
 }
 
@@ -721,6 +721,22 @@ function renderHold(hold) {
   bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
 }
 
+// Compact live views inside the practice and setup panels, so the skeleton and
+// needle sit next to the instructions. Hidden and skipped during the silent test.
+const MINI_VIEWS = ["practice", "setup"].map((pre) => {
+  const cv = $(`${pre}-mini-canvas`);
+  return { pre, cv, c: cv.getContext("2d"), rotor: $(`${pre}-needle-rotor`), root: $(`${pre}-mini`) };
+});
+
+function renderMiniViews(landmarks, color, needle) {
+  for (const m of MINI_VIEWS) {
+    const visible = m.pre === "practice" ? !!practice : $("setup-panel").open;
+    if (!visible || needle === null) continue;
+    drawSkeleton(landmarks, color, m.cv, m.c, 0.6);
+    m.rotor.setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+  }
+}
+
 function render(out, landmarks) {
   const { result, transition, needle, cue, hold } = out;
   renderFix(transition.state, result, cue, hold);
@@ -754,6 +770,7 @@ function render(out, landmarks) {
     $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
   }
   drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
+  renderMiniViews(landmarks, test ? WIRE.slate : wireColor(transition.state, result), test ? null : needle);
   renderTest();
   renderCalibration();
   renderStats();

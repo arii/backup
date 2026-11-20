@@ -106,6 +106,10 @@
   .day-row { display: grid; grid-template-columns: 44px 1fr minmax(96px, auto); gap: 8px; align-items: center; margin-top: 6px; font-size: 13px; }
   .day-row .score-bar { margin-top: 0; }
   .day-row .nodata { color: var(--muted); }
+  .mini-view { display: flex; gap: 10px; align-items: center; margin: 8px 0; }
+  .mini-canvas { width: 160px; height: 120px; flex: none; background: #0e1116; border: 1px solid var(--line); border-radius: 8px; transform: scaleX(-1); }
+  .mini-needle { width: 120px; flex: none; }
+  body.testing .mini-view { display: none; }
   #practice-panel { display: none; border-color: #6b8fd6; }
   body.practicing #practice-panel { display: block; }
   #reminder-note { display: none; color: var(--warn); font-size: 13px; margin-top: 6px; }
@@ -187,6 +191,16 @@
       <h2 id="practice-title">Learn the cues</h2>
       <div class="step-count" id="practice-count"></div>
       <div id="practice-text" style="font-weight:600;font-size:16px" aria-live="polite"></div>
+      <div class="mini-view" id="practice-mini" role="img" aria-label="Live view: your posture skeleton and needle, mirrored like a mirror">
+        <canvas id="practice-mini-canvas" class="mini-canvas"></canvas>
+        <svg viewBox="0 0 200 128" class="mini-needle" aria-hidden="true">
+          <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
+          <path d="M57 25.5 A 86 86 0 0 1 143 25.5" fill="none" stroke="#ffb340" stroke-width="14"/>
+          <path d="M143 25.5 A 86 86 0 0 1 186 100" fill="none" stroke="#ff5c5c" stroke-width="14"/>
+          <g id="practice-needle-rotor" transform="rotate(0 100 100)"><line x1="100" y1="100" x2="34" y2="100" stroke="#e8ebf0" stroke-width="5" stroke-linecap="round"/></g>
+          <circle cx="100" cy="100" r="7" fill="#e8ebf0"/>
+        </svg>
+      </div>
       <div class="note" id="practice-live" aria-live="polite"></div>
       <div class="note">Practice is silent: no sounds, no reminders, and nothing is recorded.</div>
       <div class="btn-row">
@@ -228,6 +242,16 @@
       <summary>Not working?</summary>
       <div id="setup-status" aria-live="polite">Start the camera or the demo and I will check your setup.</div>
       <ul id="setup-fixes"></ul>
+      <div class="mini-view" id="setup-mini" role="img" aria-label="Live view: your posture skeleton and needle, mirrored like a mirror">
+        <canvas id="setup-mini-canvas" class="mini-canvas"></canvas>
+        <svg viewBox="0 0 200 128" class="mini-needle" aria-hidden="true">
+          <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
+          <path d="M57 25.5 A 86 86 0 0 1 143 25.5" fill="none" stroke="#ffb340" stroke-width="14"/>
+          <path d="M143 25.5 A 86 86 0 0 1 186 100" fill="none" stroke="#ff5c5c" stroke-width="14"/>
+          <g id="setup-needle-rotor" transform="rotate(0 100 100)"><line x1="100" y1="100" x2="34" y2="100" stroke="#e8ebf0" stroke-width="5" stroke-linecap="round"/></g>
+          <circle cx="100" cy="100" r="7" fill="#e8ebf0"/>
+        </svg>
+      </div>
       <ul>
         <li>Camera at eye level, about an arm&rsquo;s length away, head and shoulders in frame.</li>
         <li>Light in front of you, not behind you. A plain background helps.</li>

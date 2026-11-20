@@ -220,7 +220,19 @@ try {
     await page.waitForTimeout(300);
     const focus = await page.evaluate(() => document.getElementById("t-head_forward").classList.contains("focus"));
     check("practice: the step highlights the matching tile", focus);
-    await page.waitForTimeout(3000); // sim 24 s: the demo slouches meanwhile, yet nothing may fire
+    const miniSeen = new Set();
+    let miniInk = false;
+    for (let i = 0; i < 12; i++) { // sim 24 s: the demo slouches meanwhile, yet nothing may fire
+      await page.waitForTimeout(250);
+      const m = await page.evaluate(() => {
+        const cv = document.getElementById("practice-mini-canvas");
+        const px = cv.width && cv.height ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
+        return { t: document.getElementById("practice-needle-rotor").getAttribute("transform"), ink: px.some((v, k) => k % 4 === 3 && v > 0), w: cv.clientWidth };
+      });
+      miniSeen.add(m.t); miniInk = miniInk || m.ink;
+    }
+    check("practice: mini skeleton canvas is drawn next to the instructions", miniInk);
+    check("practice: mini needle moves between good and slouch in the demo", miniSeen.size > 1, [...miniSeen]);
     const quiet = await page.evaluate((b) => ({
       spoken: window.__spoken.length,
       reminders: document.getElementById("reminder-count").textContent,
@@ -256,6 +268,14 @@ try {
     await page.click("#start-demo");
     await page.waitForFunction(() => /looks good/.test(document.getElementById("setup-status").textContent), null, { timeout: 20000 });
     check("not working: the demo reports that tracking looks good", true);
+    await page.click("#setup-panel summary");
+    await page.waitForTimeout(500);
+    const sm = await page.evaluate(() => {
+      const cv = document.getElementById("setup-mini-canvas");
+      return { w: cv.clientWidth, rotor: !!document.getElementById("setup-needle-rotor"),
+        ink: cv.width ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data.some((v, k) => k % 4 === 3 && v > 0) : false };
+    });
+    check("not working: the panel shows a live mini skeleton and needle", sm.w > 0 && sm.rotor && sm.ink, sm);
     await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
     check("not working: no page errors", errors.length === 0, errors);
     await page.close();

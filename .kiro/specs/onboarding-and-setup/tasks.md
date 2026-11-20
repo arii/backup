@@ -21,6 +21,9 @@ Unchecked items are **spec only**.
 - [x] 5. "Learn the cues" practice mode
   - Silent gating shared with the retention test.
   - _Requirements: 5_
+- [x] 5a. Live mini skeleton and needle in the practice and "Not working?" panels
+  - `renderMiniViews`, `.mini-view`; e2e asserts the canvas is drawn and the needle moves in the demo.
+  - _Requirements: 5a_
 - [x] 6. Accessibility pass
   - Labels, focus states, `aria-live`, Escape handling, 375 px, reduced motion.
   - _Requirements: 6_

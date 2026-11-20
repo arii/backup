@@ -39,7 +39,8 @@ browser only.
    too.
 5. **Press *Learn the cues*** to practice: sit tall, then push your head forward, tilt
    it, raise one shoulder, lean. The matching tile lights up. No sounds, nothing is
-   recorded.
+   recorded. The practice and *Not working?* panels each show a small live
+   skeleton and needle, so you can see your posture next to the instructions.
 
 Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboarding-and-setup/requirements.md).
 

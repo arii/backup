@@ -54,6 +54,12 @@ to fix it.
 2. EACH step SHALL light the matching metric tile when the live metric crosses its threshold, and SHALL advance only on user action ("Next"), never on a timer.
 3. WHILE practice mode is active, THE App SHALL play no sounds, speak nothing, and record no stats (same gating as the silent test, `body.testing`).
 
+### Requirement 5a: Live mini view (FEAT-003)
+1. WHILE practice mode is active, THE practice panel SHALL show a compact mirrored posture skeleton and a small needle gauge, fed by the same landmarks and needle value as the main stage and needle panel.
+2. WHILE the "Not working?" panel is open and tracking runs, THE panel SHALL show the same mini skeleton and needle.
+3. THE mini skeleton SHALL use the same wire colours as the main skeleton, and THE mini needle SHALL use the same rotation as the main needle.
+4. WHILE the silent test is running, THE mini views SHALL be hidden and SHALL not be drawn.
+
 ### Requirement 6: Accessibility (FEAT-003)
 1. EVERY onboarding control SHALL have a text label, a visible focus state and be reachable by keyboard in reading order.
 2. Text that changes (diagnosis, step titles) SHALL be in an `aria-live` region.

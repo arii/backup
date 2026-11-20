@@ -53,6 +53,16 @@ Reuses the `body.testing` gating (no audio, no stats, no reminders). Each step h
 target metric id (`head_forward`, `head_tilt`, `shoulder_level`, `trunk_lean`, from `CUE_METRICS`) and lights the matching
 tile via the existing metric render path. "Next" is manual.
 
+## Live mini view
+The stage is hidden behind the start overlay during onboarding and the needle panel
+sits in the other column, so instructions alone are hard to follow. The practice panel
+and the "Not working?" panel each hold a `.mini-view`: a 160x120 canvas (mirrored with
+CSS like the stage) and a small SVG gauge with the same arcs as the main needle.
+`renderMiniViews` in `app.js` runs from `render()`, reuses `drawSkeleton` (parameterised
+by canvas, context and scale) and the same `rotate((needle + 1) * 90)` transform. It
+draws only while its panel is visible and never during the silent test
+(`body.testing .mini-view` is hidden and the needle value is withheld).
+
 ## Correctness properties
 - **P1 persistence**: for any frame sequence where a fault lasts less than `persist_s`,
   the reported diagnosis never leaves its previous value.
