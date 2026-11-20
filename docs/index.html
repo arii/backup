@@ -307,7 +307,7 @@
     <div class="features">
       <div class="card">
         <h3>State-colored wireframe + root-cause pills</h3>
-        <p>The tracking skeleton changes color with posture state, and a diagnostic pill
+        <p>The tracking skeleton changes color with posture state, and a status message
            names the cause — e.g. <b>“TOP EDGE CLIPPED — TILT CAMERA UP”</b> — instead of a vague failure.</p>
       </div>
       <div class="card">
@@ -415,8 +415,8 @@ cd posture-guard
     <div class="privacy">
       <span class="dot" aria-hidden="true"></span>
       <p>
-        <b>Nothing is recorded, nothing leaves the machine.</b>
-        <span class="muted">Frames are analyzed in memory and dropped — no video or landmarks are uploaded or written to disk. The browser version downloads only the pose model and its runtime (from jsDelivr and Google's model bucket) and keeps your calibration and daily totals in the browser's local storage. The desktop version runs the model and speech locally on CPU, binds its dashboard to 127.0.0.1, and keeps working with the network unplugged.</span>
+        <b>Your camera feed is analyzed in this tab and never uploaded or saved.</b>
+        <span class="muted">To work, the page downloads the pose model and its runtime (from jsDelivr and Google), and GitHub hosts the site. Those services see your IP address like any website. Settings, calibration, scores and any sounds you upload stay in your browser's local storage until you delete them. <a href="privacy.html">Read the full privacy page</a>.</span>
       </p>
     </div>
   </section>
@@ -424,7 +424,9 @@ cd posture-guard
 
 <footer>
   Posture Guard — posture to die for.
-  <a href="https://github.com/arii/posture-guard">arii/posture-guard</a>
+  <a href="https://github.com/arii/posture-guard">arii/posture-guard</a> &middot;
+  <a href="privacy.html#about">About and safety</a> &middot;
+  <a href="privacy.html">Privacy</a>
 </footer>
 
 <script>

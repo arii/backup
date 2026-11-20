@@ -18,6 +18,9 @@ import {
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
 import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import {
+  BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
+} from "./privacy.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
@@ -1007,7 +1010,7 @@ const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
 const problems = []; // last few errors, newest last
 
 function logProblem(message) {
-  problems.push(`${new Date().toISOString().slice(11, 19)} ${String(message).slice(0, 300)}`);
+  problems.push(`${new Date().toISOString().slice(11, 19)} ${sanitizeError(message)}`);
   if (problems.length > 8) problems.shift();
 }
 window.addEventListener("error", (e) => logProblem(e.message || e.error || "error"));
@@ -1018,11 +1021,9 @@ function webglInfo() {
     const c = document.createElement("canvas");
     const gl = c.getContext("webgl2") || c.getContext("webgl");
     if (!gl) return typeof OffscreenCanvas !== "undefined" && webglCanvas() ? "offscreen only" : "unavailable";
-    const ext = gl.getExtension("WEBGL_debug_renderer_info");
-    const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-    return `${gl instanceof WebGL2RenderingContext ? "WebGL2" : "WebGL1"} (${renderer})`;
+    return webglSummary(gl); // no GPU renderer string: it adds to a browser fingerprint
   } catch (err) {
-    return `probe failed: ${err.message || err}`;
+    return `probe failed: ${sanitizeError(err.message || err)}`;
   }
 }
 
@@ -1041,14 +1042,7 @@ function bugReportUrl() {
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
   ].join("\n");
-  const errs = problems.length ? problems.join("\n") : "(none)";
-  const body = [
-    "**What happened?**", "", "", "",
-    "**What did you expect?**", "", "", "",
-    "**Steps to reproduce** (webcam or demo? what posture?)", "", "1. ", "",
-    "<details><summary>Diagnostics (filled in by the app, no video or images)</summary>", "",
-    diag, "", "Recent errors:", "```", errs, "```", "</details>",
-  ].join("\n");
+  const body = buildBugReportBody({ diag, problems });
   const title = problems.length ? `Bug: ${problems[problems.length - 1].slice(9, 80)}` : "Bug: ";
   const params = new URLSearchParams({ title, body: body.slice(0, 6000), labels: "bug" });
   return `${ISSUE_URL}?${params}`;
@@ -1056,6 +1050,7 @@ function bugReportUrl() {
 
 // Fill the link at click time so it carries the current state.
 for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-link")]) {
+  link.title = BUG_LINK_TIP;
   link.addEventListener("click", () => { link.href = bugReportUrl(); });
 }
 
@@ -1502,9 +1497,9 @@ $("progress-export").addEventListener("click", () => {
 });
 
 $("progress-delete").addEventListener("click", () => {
-  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals and tests)? This cannot be undone.")) return;
+  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests and uploaded sounds)? This cannot be undone.")) return;
   deleted = true; // stop any pending save from writing it back
-  try { localStorage.removeItem(STORE); } catch { /* storage unavailable */ }
+  clearStoredData(localStorage);
   location.reload();
 });
 
