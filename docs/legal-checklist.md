@@ -16,7 +16,7 @@ review), **Future** (a feature that does not exist yet).
 | Public biometric retention and destruction statement | Done | `docs/privacy.html#biometric` |
 | Store derived scores only, never landmark arrays or embeddings; no identity matching | Done | Daily totals and counters only; stated in the privacy page |
 | Face tension tool: use Face Landmarker blendshapes, not meshes or embeddings | Future | Rule added to `.kiro/specs/wellness-tools/requirements.md` (requirement 1.11) |
-| Posture tracking itself reads ear, eye and nose points from the pose model. Decide whether it needs the same opt-in. | Needs lawyer | The consent gate currently covers the shoulder and breathing features only |
+| Posture tracking itself reads ear, eye and nose points from the pose model. Decide whether it needs the same opt-in. | Decided, lawyer to confirm | Decision: no second consent dialog for basic tracking. Before the first camera start the app shows the on-device statement and the first-visit notice with an "I understand" step (`docs/app/onboarding.js`), then the browser asks for camera permission, which is a separate explicit per-site opt-in. Processing is in the tab only and stores derived totals. The dated consent record covers the extra shoulder and breathing features. A lawyer should confirm this is enough for BIPA-style rules. |
 | Whether the "capable of identifying" test or Zellmer v. Meta defenses fit this app | Needs lawyer | |
 
 ## Gap 2: consumer health data (Washington MHMDA, Nevada, Connecticut)

@@ -29,6 +29,8 @@
 // 4c. Consent (issue #51): the breath check and breathing moments ask first,
 //    declining stores nothing, withdrawing and Delete my data remove the record.
 // 4d. Share menu (issue #49) without navigator.share: plain links, no third-party request.
+//    Share your score: too little data gives a hint; after a minute of demo a
+//    1200x630 PNG card is drawn and downloadable (no camera frame in it).
 // 4e. Sponsor card (issue #49): shown once after seeded sustained use, never
 //    after 3 showings, Don't ask again, Maybe later, the first week, or in a silent test.
 // 4f. Open Graph tags, privacy page sections and footer links (issues #49, #51).
@@ -783,11 +785,12 @@ try {
         await page.reload();
         await page.click("#start-camera");
         await page.waitForFunction(
-          () => !/Starting|Loading/i.test(document.getElementById("source").textContent) && document.getElementById("source").textContent !== "",
+          () => document.getElementById("source").textContent === "webcam" && document.getElementById("m-head_forward_deg").textContent !== "-",
           null, { timeout: 60000 },
         ).catch(() => {});
         const cam = await ui(page);
-        check("offline: webcam mode starts and the pose model loads without a network", !cam.startError, cam);
+        check("offline: webcam mode starts and pose detection finds the person without a network",
+          !cam.startError && cam.source === "webcam" && cam.headForward !== "-", cam);
       }
       check("offline: no failed requests", failedReqs.length === 0, failedReqs.slice(0, 5));
       check("offline: no page errors", errors.length === 0, errors);
@@ -874,6 +877,33 @@ try {
     check("share: a valid Mastodon server gives a link to that host", !masto.hidden && masto.host === "fosstodon.org", masto);
     await page.screenshot({ path: path.join(outDir, "share-dialog.png") });
     check("share: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4d2. Share your score card (issue #49 part 4).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#share-btn");
+    await page.click("#share-card-btn");
+    check("share card: too little tracked time gives a hint and no card",
+      /at least a minute/.test(await page.textContent("#share-msg")) && await page.evaluate(() => document.getElementById("share-card-wrap").hidden));
+    await page.click("#share-close");
+    await page.click("#start-demo");
+    await page.waitForTimeout(66000);
+    await page.click("#share-btn");
+    await page.click("#share-card-btn");
+    const card = await page.evaluate(() => {
+      const c = document.getElementById("share-card");
+      return { shown: !document.getElementById("share-card-wrap").hidden, w: c.width, h: c.height, label: c.getAttribute("aria-label") };
+    });
+    check("share card: a 1200x630 card with alt text is shown after a minute of tracking",
+      card.shown && card.w === 1200 && card.h === 630 && /good posture this session/.test(card.label || ""), card);
+    await page.waitForTimeout(300);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#share-card-download")]);
+    check("share card: Download PNG saves backup-score.png", dl.suggestedFilename() === "backup-score.png");
+    await page.locator("#share-card").screenshot({ path: path.join(outDir, "share-card.png") });
+    check("share card: no page errors", errors.length === 0, errors);
     await page.close();
   }
 
