@@ -43,20 +43,21 @@ function check(name, ok, detail) {
 const ONBOARDED = 1;
 const ACKED = 1;
 
-async function newPage(browser, { fresh = false, viewport = { width: 1280, height: 900 } } = {}) {
+async function newPage(browser, { fresh = false, guide = false, viewport = { width: 1280, height: 900 } } = {}) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
-    await context.addInitScript(([onboarded, ackVersion]) => {
+    await context.addInitScript(([onboarded, ackVersion, firstRunDone]) => {
       try {
         if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
         sessionStorage.setItem("pg-e2e-acked", "1");
         const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
         s.onboarded = Math.max(s.onboarded || 0, onboarded);
         s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
+        if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
         localStorage.setItem("posture-guard:v1", JSON.stringify(s));
       } catch { /* storage unavailable */ }
-    }, [ONBOARDED, ACKED]);
+    }, [ONBOARDED, ACKED, !guide]);
   }
   const page = await context.newPage();
   const errors = [];
@@ -258,6 +259,87 @@ try {
     }));
     check("progress: delete clears the stored data and shows onboarding again", gone.card && !(gone.stored || "").includes("days"), gone);
     check("progress/practice: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 2e. Issues #38, #39, #46: first-run guide, controls gated on tracking,
+  // 320 px reflow, banner and label semantics, optional P shortcut, focus.
+  {
+    const { page, errors } = await newPage(browser, { guide: true, viewport: { width: 320, height: 640 } });
+    await page.goto(`${base}app/${bust}`);
+    const noScroll = () => page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
+    }));
+    const startW = await noScroll();
+    await page.screenshot({ path: path.join(outDir, "app-320-start.png"), fullPage: true });
+    check("reflow: no horizontal scroll at 320 px on the start screen", startW.scrollWidth <= startW.innerWidth, startW);
+    check("start screen says it works best on a laptop or desktop",
+      /laptop or desktop with a webcam/i.test(await page.textContent("#start-overlay")));
+    const pre = await page.evaluate(() => ({
+      breath: document.getElementById("breath-check").disabled,
+      good: document.getElementById("calib-good").disabled,
+      bad: document.getElementById("calib-bad").disabled,
+      tip: document.getElementById("calib-good").title,
+      bannerRole: document.getElementById("banner").getAttribute("role"),
+      bannerLive: document.getElementById("banner").getAttribute("aria-live"),
+      badLabel: document.querySelector('label[for="bad-file"]')?.textContent,
+      goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
+      mode: /Chime only still speaks/.test(document.getElementById("mode-note").textContent),
+    }));
+    check("controls: breath check and record buttons are disabled before start, with a tooltip",
+      pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip), pre);
+    check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
+    check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
+    check("chime-only note explains breath lines", pre.mode, pre);
+    await page.click("#start-demo");
+    await page.waitForTimeout(1500);
+    const post = await page.evaluate(() => ({
+      breath: document.getElementById("breath-check").disabled,
+      good: document.getElementById("calib-good").disabled,
+      bad: document.getElementById("calib-bad").disabled,
+      focus: document.activeElement && document.activeElement.id,
+      guide: !document.getElementById("first-run").hidden,
+      framing: document.querySelector("#first-run-body .framing")?.textContent,
+    }));
+    check("controls: enabled after the demo starts", !post.breath && !post.good && !post.bad, post);
+    check("a11y: focus moves to the status badge after Start", post.focus === "state-badge", post);
+    check("first run: the guide card appears after Start with live framing",
+      post.guide && /in view/.test(post.framing || ""), post);
+    await page.click("#first-run-next");
+    check("first run: step 2 offers calibration",
+      (await page.textContent("#first-run-heading")) === "Calibrate to your posture" && await page.isVisible("#first-run-body button"));
+    await page.click("#first-run-next");
+    check("first run: step 3 plays the sounds and mentions keeping the tab open",
+      /Leave this tab open/.test(await page.textContent("#first-run-body")) && (await page.locator("#first-run-body button").count()) === 3);
+    await page.click("#first-run-next");
+    const done = await page.evaluate(() => ({
+      hidden: document.getElementById("first-run").hidden,
+      flag: JSON.parse(localStorage.getItem("posture-guard:v1")).firstRunDone === true,
+    }));
+    check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
+    await page.click("#setup-panel summary");
+    await page.click("#intro-again");
+    check("first run: Show the intro again reopens it", !(await page.evaluate(() => document.getElementById("first-run").hidden)));
+    const dashW = await noScroll();
+    await page.screenshot({ path: path.join(outDir, "app-320-dashboard.png"), fullPage: true });
+    check("reflow: no horizontal scroll at 320 px on the dashboard", dashW.scrollWidth <= dashW.innerWidth, dashW);
+    // P shortcut: pauses by default, ignored once turned off, and the choice is stored.
+    await page.click("#first-run-skip");
+    await page.keyboard.press("p");
+    check("shortcut: P pauses by default", (await page.textContent("#pause")) === "Resume");
+    await page.keyboard.press("p");
+    await page.check("#pause-shortcut", { force: true });
+    await page.uncheck("#pause-shortcut", { force: true });
+    await page.locator("body").press("p");
+    check("shortcut: P does nothing once turned off", (await page.textContent("#pause")) === "Pause");
+    check("shortcut: the setting is stored",
+      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).pauseShortcut)) === false);
+    // Reduced motion: no transitions on the hold bar, score bar or banner.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const motion = await page.evaluate(() => ["hold-fill", "banner", "good-bar"].map((id) =>
+      getComputedStyle(document.getElementById(id)).transitionDuration));
+    check("a11y: prefers-reduced-motion disables transitions", motion.every((d) => d === "0s"), motion);
+    check("320 px: no page errors", errors.length === 0, errors);
     await page.close();
   }
 

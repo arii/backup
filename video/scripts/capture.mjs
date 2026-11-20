@@ -39,6 +39,7 @@ async function record(name, args, script) {
       const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
       s.onboarded = Math.max(s.onboarded || 0, 1);
       s.ackVersion = Math.max(s.ackVersion || 0, 1);
+      s.firstRunDone = true; // skip the first-run guide card
       localStorage.setItem("posture-guard:v1", JSON.stringify(s));
     } catch { /* storage unavailable */ }
   });

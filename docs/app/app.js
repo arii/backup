@@ -17,6 +17,7 @@ import {
   RELAX_SAFETY, SAFETY_POINTS, SAFETY_SHORT, SetupCheck, shouldShowOnboarding,
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
+import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
@@ -416,7 +417,7 @@ const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
 let goodSinceBreath = 0;
 let relaxLastT = null;
-settings.relaxReminders = store.relaxReminders !== false; // default on
+Object.assign(settings, resolveSettings(store)); // relaxReminders and pauseShortcut: on for new users, stored choices kept
 
 /** Relax lines are spoken unless the mode is silent (chime-only still talks
  *  here: a breath check without words is not a check). */
@@ -481,6 +482,20 @@ function relaxStep(landmarks, state, now) {
   const v = bracing.value;
   $("relax-shoulders").textContent = ref === null || v === null ? "learning your relaxed shoulders..."
     : v < ref * 0.88 ? "creeping up" : "relaxed";
+}
+
+// Controls that need frames from the camera or the demo stay disabled until tracking starts.
+const NEEDS_TRACKING = ["breath-check", "calib-good", "calib-bad"];
+const READY_TITLE = { "breath-check": "Breathe in: if your shoulders rise, you are bracing" };
+function setTrackingControls(on) {
+  for (const id of NEEDS_TRACKING) {
+    const el = $(id);
+    el.disabled = !on;
+    if (!on) el.title = NEEDS_TRACKING_TIP;
+    else if (READY_TITLE[id]) el.title = READY_TITLE[id];
+    else el.removeAttribute("title");
+  }
+  $("pre-start-note").hidden = on;
 }
 
 $("breath-check").addEventListener("click", startBreathCheck);
@@ -751,6 +766,9 @@ function render(out, landmarks) {
     ? "settling in"
     : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  const settling = !test && !practice && badge.textContent === "settling in";
+  $("settling-note").hidden = !settling;
+  badge.title = settling ? $("settling-note").textContent : "";
   if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
   if (practice) { badge.textContent = "practice"; badge.className = "badge practice"; }
   $("warnings").textContent = causeFor(result, landmarks);
@@ -775,6 +793,7 @@ function render(out, landmarks) {
   renderMiniViews(landmarks, test ? WIRE.slate : wireColor(transition.state, result), test ? null : needle);
   renderTest();
   renderCalibration();
+  updateFirstRunLive(result, landmarks);
   renderStats();
   if (Date.now() - lastProgressRender > 10000) renderProgress();
 }
@@ -838,11 +857,21 @@ function setPaused(on) {
 }
 
 $("pause").addEventListener("click", () => setPaused(!paused));
+// WCAG 2.1.4: the single-key shortcut can be turned off.
+const PAUSE_TITLE = "Pause tracking and all sounds";
+function renderPauseShortcut() {
+  $("pause-shortcut").checked = settings.pauseShortcut;
+  $("pause").title = settings.pauseShortcut
+    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)` : PAUSE_TITLE;
+}
+renderPauseShortcut();
+$("pause-shortcut").addEventListener("change", (e) => {
+  settings.pauseShortcut = e.target.checked;
+  store.pauseShortcut = settings.pauseShortcut; save();
+  renderPauseShortcut();
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "p" && e.key !== "P") return;
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-  setPaused(!paused);
+  if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
 });
 
 function step() {
@@ -1037,6 +1066,7 @@ function stopCamera(err) {
   if (practice) stopPractice();
   setup.reset();
   $("pause").disabled = true;
+  setTrackingControls(false);
   poseLandmarker = null;
   const stream = video.srcObject;
   if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -1059,6 +1089,9 @@ function begin(source) {
   restoreSound("bad"); restoreSound("good");
   $("pause").disabled = false;
   $("test-start").disabled = false;
+  setTrackingControls(true);
+  $("state-badge").focus(); // the Start button is gone: move focus to the status badge
+  maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   requestAnimationFrame(visibleLoop);
@@ -1092,7 +1125,7 @@ $("start-camera").addEventListener("click", async () => {
     if (err instanceof NoWebGLError) {
       showWebGLHelp(true);
     } else {
-      showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
+      showError(cameraErrorMessage(err));
     }
     $("start-demo").disabled = false;
     applyWebGLState();
@@ -1108,6 +1141,128 @@ $("start-demo").addEventListener("click", () => {
   video.style.display = "none";
   $("demo-note").style.display = "block";
   begin("demo");
+});
+
+// -- first-run guide ------------------------------------------------------------
+// Shown once, on the first Start (store.firstRunDone): check framing, record
+// good and slouch posture, then hear what the sounds mean. "Show the intro
+// again" in the Not working? panel brings it back.
+
+const FIRST_RUN = [
+  {
+    title: "Check your framing",
+    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
+  },
+  {
+    title: "Calibrate to your posture",
+    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
+  },
+  {
+    title: "You're set",
+    intro: "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
+      "Take a silent test first for a baseline. Here is what the sounds mean:",
+  },
+];
+const firstRun = { step: 0, open: false };
+let firstRunLive = null; // the element updated every frame on the current step
+
+function firstRunButton(label, onClick, secondary = true) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (secondary) b.className = "secondary";
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderFirstRun() {
+  const step = FIRST_RUN[firstRun.step];
+  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${FIRST_RUN.length}`;
+  $("first-run-heading").textContent = step.title;
+  const body = $("first-run-body");
+  const intro = document.createElement("div");
+  intro.className = "note";
+  intro.style.marginTop = "0";
+  intro.textContent = step.intro;
+  const parts = [intro];
+  firstRunLive = null;
+  if (firstRun.step === 0) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "framing";
+    firstRunLive.setAttribute("aria-live", "polite");
+    parts.push(firstRunLive);
+  } else if (firstRun.step === 1) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "note";
+    firstRunLive.setAttribute("aria-live", "polite");
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Record good posture", () => engine.calibration.start("good"), false),
+      firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
+    );
+    parts.push(row, firstRunLive);
+  } else {
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
+      firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
+      firstRunButton("Play a voice line", () => { ensureAudio(); speak(TEST_LINE); }),
+    );
+    parts.push(row);
+  }
+  body.replaceChildren(...parts);
+  $("first-run-back").hidden = firstRun.step === 0;
+  $("first-run-next").textContent = firstRun.step === FIRST_RUN.length - 1 ? "Done" : "Next";
+  $("first-run-skip").hidden = firstRun.step === FIRST_RUN.length - 1;
+}
+
+function openFirstRun(step = 0) {
+  firstRun.open = true;
+  firstRun.step = step;
+  $("first-run").hidden = false;
+  renderFirstRun();
+}
+
+function closeFirstRun() {
+  firstRun.open = false;
+  firstRunLive = null;
+  $("first-run").hidden = true;
+  if (!store.firstRunDone) { store.firstRunDone = true; save(); }
+}
+
+function maybeStartFirstRun() {
+  if (!store.firstRunDone && !firstRun.open) openFirstRun();
+}
+
+/** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
+function updateFirstRunLive(result, landmarks) {
+  if (!firstRun.open || !firstRunLive) return;
+  if (firstRun.step === 0) {
+    const ok = result.kind === "scored";
+    firstRunLive.className = ok ? "framing ok" : "framing";
+    firstRunLive.textContent = ok
+      ? "Head and shoulders in view \u2713"
+      : causeFor(result, landmarks) || "Looking for you...";
+  } else if (firstRun.step === 1) {
+    firstRunLive.textContent = $("calib-status").textContent;
+  }
+}
+
+$("first-run-next").addEventListener("click", () => {
+  if (firstRun.step >= FIRST_RUN.length - 1) { closeFirstRun(); $("state-badge").focus(); return; }
+  firstRun.step += 1; renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-back").addEventListener("click", () => {
+  firstRun.step = Math.max(0, firstRun.step - 1); renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-skip").addEventListener("click", () => { closeFirstRun(); $("state-badge").focus(); });
+$("intro-again").addEventListener("click", () => {
+  if (!loopsStarted) { $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing."; return; }
+  openFirstRun();
+  $("first-run").scrollIntoView({ block: "nearest" });
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
 });
 
 // -- onboarding, safety notice and help -----------------------------------------
@@ -1130,10 +1285,7 @@ function renderOnboardingStep() {
   $("ob-title").textContent = step.title;
   fillList($("ob-body"), step.points);
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
-  window.addEventListener("pagehide", save);
-document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
-
-$("ob-next").hidden = last;
+  $("ob-next").hidden = last;
   $("ob-ack").hidden = !last;
 }
 
@@ -1221,6 +1373,7 @@ function startPractice() {
   if (paused) return "Resume tracking first.";
   if (test) return "Stop the silent test first.";
   if (practice) return "";
+  $("practice-breath").hidden = true;
   breath.cancel();
   stopSpeech();
   $("banner").classList.remove("show");
@@ -1271,11 +1424,21 @@ $("practice-start").addEventListener("click", () => {
 });
 $("practice-next").addEventListener("click", () => {
   if (!practice) return;
-  if (practice.i >= PRACTICE_STEPS.length - 1) { stopPractice(); $("practice-msg").textContent = "Practice finished."; return; }
+  if (practice.i >= PRACTICE_STEPS.length - 1) {
+    stopPractice();
+    $("practice-msg").textContent = "Practice finished. Want to try a breath check next?";
+    $("practice-breath").hidden = false;
+    return;
+  }
   practice.i += 1;
   renderPracticeStep();
 });
 $("practice-stop").addEventListener("click", () => { stopPractice(); $("practice-msg").textContent = "Practice stopped."; });
+$("practice-breath").addEventListener("click", () => {
+  $("practice-breath").hidden = true;
+  $("practice-msg").textContent = "";
+  startBreathCheck();
+});
 
 // -- your progress -----------------------------------------------------------------------
 // A personal review of coached time per day and the silent-test trend. Aggregation
@@ -1349,3 +1512,5 @@ renderCalibration();
 renderStats();
 renderTest();
 renderProgress();
+window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
