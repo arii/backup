@@ -56,6 +56,15 @@ const VENDORED = [
   "wasm/vision_wasm_nosimd_internal.js", "wasm/vision_wasm_nosimd_internal.wasm",
 ];
 
+/** Node-side fetch that always reads the body. An unread body leaves the
+ *  socket paused, and when python's http.server then closes the connection,
+ *  undici crashes the whole script with assert(!this.paused) (#58). */
+async function fetchStatus(url) {
+  const res = await fetch(url, { headers: { connection: "close" } });
+  const bytes = (await res.arrayBuffer()).byteLength;
+  return { ok: res.ok, status: res.status, type: res.headers.get("content-type") || "", bytes };
+}
+
 function check(name, ok, detail) {
   report.checks.push({ name, ok, detail });
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` - ${JSON.stringify(detail)}` : ""}`);
@@ -939,8 +948,8 @@ try {
       return [k, m && m.content];
     })));
     check("landing: Open Graph and Twitter card tags are present", Object.values(og).every(Boolean) && og["twitter:card"] === "summary_large_image", og);
-    const img = await fetch(`${base}assets/og-image.png${bust}`);
-    check("landing: og-image.png is served", img.ok && /image\/png/.test(img.headers.get("content-type") || ""), { status: img.status });
+    const img = await fetchStatus(`${base}assets/og-image.png${bust}`);
+    check("landing: og-image.png is served", img.ok && /image\/png/.test(img.type), { status: img.status });
     check("landing: footer links to the Consumer Health Data Privacy Policy",
       (await page.locator('footer a[href="privacy.html#consumer-health-data"]').count()) === 1);
     await page.goto(`${base}privacy.html${bust}`);
@@ -963,7 +972,7 @@ try {
   {
     const missing = [];
     for (const f of VENDORED) {
-      const res = await fetch(`${base}app/vendor/${f}${bust}`);
+      const res = await fetchStatus(`${base}app/vendor/${f}${bust}`);
       if (!res.ok) missing.push(`${f} ${res.status}`);
     }
     check("vendored MediaPipe files are served", missing.length === 0, missing);
