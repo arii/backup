@@ -1,11 +1,11 @@
 {
-  "version": "a266281b4196808b",
-  "totalBytes": 26235245,
+  "version": "e2581efa10385c35",
+  "totalBytes": 32841162,
   "files": [
     {
       "url": "app.js",
-      "size": 90600,
-      "sha256": "a22bcf5f71f84cd9b986fb3c7210c0c109ae424d6f59ca97d50b4ae6048273db"
+      "size": 92791,
+      "sha256": "f38b3b8cdda13eb529d79b6fc5c30e39f4669daf0de3f97c92c4a51e41b5006c"
     },
     {
       "url": "breaks.js",
@@ -29,13 +29,18 @@
     },
     {
       "url": "index.html",
-      "size": 40057,
-      "sha256": "2695aa87cbd9a46056544f8bffea74767afbdacaabb7abaae778bad9d2041fa2"
+      "size": 40473,
+      "sha256": "f3e6f115b17001ad86ecf20b5ba2142ceec239bc08d136831f88d79c944e676b"
     },
     {
       "url": "mini-view.js",
       "size": 1004,
       "sha256": "2d91899c371de85af5e90c251342573b57755046f2f5b4a28ce934431b4e2290"
+    },
+    {
+      "url": "movenet-adapter.js",
+      "size": 2486,
+      "sha256": "2a1ab262e003033547ca65fce782ac4f738cc71b0de2fe2a30610ff6ee275040"
     },
     {
       "url": "offline.js",
@@ -96,6 +101,36 @@
       "url": "vendor/LICENSE",
       "size": 12331,
       "sha256": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8"
+    },
+    {
+      "url": "vendor/movenet/group1-shard1of2.bin",
+      "size": 4194304,
+      "sha256": "b42c3232bf13b0efc691d3f0693dd3fc74404f709b1deee0a271828af6dbbea2"
+    },
+    {
+      "url": "vendor/movenet/group1-shard2of2.bin",
+      "size": 455912,
+      "sha256": "8253ab965aa3122c08f331777ca395ce9ca19bb9e7cb278b99de1c46dbdeb6dc"
+    },
+    {
+      "url": "vendor/movenet/model.json",
+      "size": 168013,
+      "sha256": "c65a3447162efa0c42af29498a4b151f4415b36ff3ae6fae2b28a32e840dcbfb"
+    },
+    {
+      "url": "vendor/movenet/movenet_bundle.mjs",
+      "size": 1046878,
+      "sha256": "6a2b4906222a28ed24b2ff18501b0f0f81223d36496d2ca072857a958990eec1"
+    },
+    {
+      "url": "vendor/movenet/tfjs-backend-wasm-simd.wasm",
+      "size": 424594,
+      "sha256": "77ebb28a6d34f371dbbf2086b7f2de8994acd8ea5a3cf1fa24d2c26c840cac7b"
+    },
+    {
+      "url": "vendor/movenet/tfjs-backend-wasm.wasm",
+      "size": 311123,
+      "sha256": "70a5d516060464e5269f01c74bac1772d6b8ab6cb612acf16b5cdaf61f78d892"
     },
     {
       "url": "vendor/pose_landmarker_lite.task",

@@ -203,6 +203,7 @@
           <button id="prompt-never" class="link">Don&rsquo;t show this again</button>
         </div>
       </div>
+      <div id="lowpower-note" class="note" role="status" style="position:absolute;left:12px;top:10px;right:12px;display:none;background:rgba(0,0,0,.7);color:var(--warn);padding:4px 8px;border-radius:6px">WebGL is off: using the simpler fallback model. Tracking is less accurate and slower.</div>
       <div id="demo-note" class="note" style="position:absolute;left:12px;bottom:10px;display:none">Demo: 20 s good posture, then 20 s slouching, repeating</div>
       <div class="overlay-msg" id="start-overlay">
         <h2 id="start-title">BackUp: Posture to Die For.</h2>
@@ -227,14 +228,14 @@
         <p id="start-status" class="note"></p>
         <p id="start-error" class="error"></p>
         <div id="webgl-help" role="alert">
-          <b>Your browser has WebGL turned off, and the pose model needs it.</b>
+          <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:
           <ul>
             <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
             <li><b>Linux / Wayland:</b> start the browser with <code>--ozone-platform=x11</code>.</li>
             <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
             <li>Strict privacy settings, some extensions, remote desktops and virtual machines can also block WebGL; try another browser or machine.</li>
           </ul>
-          <p style="margin-top:8px">Then reload this page. <i>Try the demo</i> works without WebGL. Still stuck? <a href="https://github.com/arii/posture-guard/issues/new" class="report-bug-link" target="_blank" rel="noopener">Report a bug</a>.</p>
+          <p style="margin-top:8px">Then reload this page. Still stuck? <a href="https://github.com/arii/posture-guard/issues/new" class="report-bug-link" target="_blank" rel="noopener">Report a bug</a>.</p>
         </div>
       </div>
     </div>
@@ -344,7 +345,7 @@
         <li>Camera at eye level, about an arm&rsquo;s length away, head and shoulders in frame.</li>
         <li>Light in front of you, not behind you. A plain background helps.</li>
         <li>Calibrate to your desk below if &ldquo;good&rdquo; and &ldquo;slouch&rdquo; look wrong for you.</li>
-        <li>Pose tracking needs WebGL. See the steps on the start screen if the webcam button is disabled.</li>
+        <li>Without WebGL the webcam uses a simpler, less accurate fallback. Turn WebGL on (see the start screen) for the best tracking.</li>
       </ul>
       <div class="btn-row">
         <button class="secondary" id="practice-start">Learn the cues</button>

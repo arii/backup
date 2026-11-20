@@ -15,8 +15,9 @@
 //    the real tasks-vision bundle, WASM and pose model load from app/vendor/ and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
-// 4. Webcam mode with WebGL blocked on every canvas type: the app must explain
-//    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
+// 4. Webcam mode with WebGL blocked on every canvas type: the app explains how
+//    to turn it on, still starts the camera on the MoveNet WASM fallback, shows
+//    the reduced accuracy notice and does not throw. (--disable-3d-apis
 //    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
 //    runs on it.)
 // 4a. Breaks & prompts (issue #49): demo mode with ?clockScale=600 (the prompt
@@ -651,7 +652,8 @@ try {
   // 4. No WebGL: a separate browser, since the flag is per launch.
   {
     const noGL = await chromium.launch({
-      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+        ...(y4m ? [`--use-file-for-fake-video-capture=${y4m}`] : [])],
     });
     try {
       const { page, errors } = await newPage(noGL);
@@ -671,7 +673,7 @@ try {
         return { banner: getComputedStyle(el).display, text: el.textContent };
       });
       check("no WebGL: landing page shows the warning banner",
-        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /demo/i.test(landing.text), landing);
+        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /fallback|simpler/i.test(landing.text), landing);
       await page.goto(`${base}app/${bust}`);
       const gl = await page.evaluate(() => Boolean(
         document.createElement("canvas").getContext("webgl") ||
@@ -679,27 +681,35 @@ try {
       const cam = await page.evaluate(() => {
         const btn = document.getElementById("start-camera");
         const helpEl = document.getElementById("webgl-help");
-        if (!btn || !helpEl) return { text: "", disabled: false, help: "element-missing" };
+        if (!btn || !helpEl) return { text: "", disabled: true, help: "element-missing" };
         return { text: btn.textContent, disabled: btn.disabled, help: getComputedStyle(helpEl).display };
       });
-      check("no WebGL: camera button shows the WebGL message on load",
-        /needs WebGL/i.test(cam.text) && cam.disabled && cam.help === "block", cam);
-      await page.click("#start-camera", { force: true, timeout: 2000 }).catch(() => {});
-      await page.waitForTimeout(1500);
-      const s = await page.evaluate(() => {
-        const helpEl = document.getElementById("webgl-help");
-        const overlayEl = document.getElementById("start-overlay");
-        const video = document.getElementById("video");
-        if (!helpEl || !overlayEl || !video) return { help: "element-missing", overlay: "element-missing", streams: -1 };
-        return {
-          help: getComputedStyle(helpEl).display,
-          overlay: getComputedStyle(overlayEl).display,
-          streams: video.srcObject === null ? 0 : 1,
-        };
+      check("no WebGL: camera button stays enabled and the notice explains the fallback",
+        !gl && !cam.disabled && /webcam/i.test(cam.text) && cam.help === "block", cam);
+      const t0 = Date.now();
+      await page.click("#start-camera");
+      await page.waitForFunction(
+        () => getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+          document.getElementById("start-error").textContent !== "",
+        null, { timeout: 120000 },
+      );
+      const s = await ui(page);
+      const note = await page.evaluate(() => {
+        const el = document.getElementById("lowpower-note");
+        return { display: getComputedStyle(el).display, text: el.textContent };
       });
+      await page.waitForTimeout(8000); // let MoveNet run on the looping fake camera frame
+      const seen = await ui(page);
       await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
-      check("no WebGL: explains how to turn it on", !gl && s.help === "block" && s.overlay !== "none", { gl, ...s });
-      check("no WebGL: camera not opened", s.streams === 0, s);
+      report.noWebgl = { s, note, seen, seconds: (Date.now() - t0) / 1000 };
+      check("no WebGL: webcam starts on the MoveNet fallback",
+        s.overlay === "none" && s.source === "webcam" && s.startError === "", s);
+      check("no WebGL: shows the reduced accuracy notice",
+        note.display === "block" && /less accurate/i.test(note.text), note);
+      if (y4m) {
+        check("no WebGL: fallback finds the person on the fake camera feed",
+          seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-", seen);
+      }
       check("no WebGL: no page errors", errors.length === 0, errors);
       await page.close();
     } finally {

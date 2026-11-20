@@ -32,7 +32,10 @@ jobs:
           test -s LICENSE
           for f in vision_bundle.mjs pose_landmarker_lite.task \
                    wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
-                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm \
+                   movenet/movenet_bundle.mjs movenet/model.json \
+                   movenet/group1-shard1of2.bin movenet/group1-shard2of2.bin \
+                   movenet/tfjs-backend-wasm.wasm movenet/tfjs-backend-wasm-simd.wasm; do
             sum=$(sha256sum "$f" | cut -d' ' -f1)
             grep -q "$sum" README.md || { echo "checksum not in README: $f"; exit 1; }
           done

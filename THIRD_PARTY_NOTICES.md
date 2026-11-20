@@ -10,6 +10,8 @@ projects' own pages and should be re-checked before commercial use.
 |---|---|---|---|
 | `@mediapipe/tasks-vision` 0.10.14 (JavaScript bundle and WASM runtime) | `docs/app/vendor/` | Apache-2.0 | Unmodified copies, with hashes in [`docs/app/vendor/README.md`](docs/app/vendor/README.md). License text: [`docs/app/vendor/LICENSE`](docs/app/vendor/LICENSE). |
 | MediaPipe Pose Landmarker (lite) model, `pose_landmarker_lite.task` | `docs/app/vendor/` | Apache-2.0 per Google's MediaPipe documentation and model card | Downloaded from `storage.googleapis.com/mediapipe-models` and self-hosted. Confirm against the official model card before commercial use. |
+| TensorFlow.js (`@tensorflow/tfjs-core`, `tfjs-converter`, `tfjs-backend-cpu`, `tfjs-backend-wasm`) 4.22.0 and `@tensorflow-models/pose-detection` 2.1.3, bundled with esbuild into `movenet_bundle.mjs`, plus the two `tfjs-backend-wasm` binaries | `docs/app/vendor/movenet/` | Apache-2.0 | Used only when WebGL is unavailable. Hashes and build steps in [`docs/app/vendor/README.md`](docs/app/vendor/README.md). License text: [`docs/app/vendor/LICENSE`](docs/app/vendor/LICENSE). |
+| MoveNet SinglePose Lightning v4 model (TF.js format) | `docs/app/vendor/movenet/` | Apache-2.0 per the model's Kaggle page | Downloaded once from the TF Hub / Kaggle Models link in the vendor README and self-hosted. Confirm against the model card before commercial use. |
 | Kokoro-82M voices `af_heart` and `am_michael` | Generated MP3s in `docs/app/voice/` | Apache-2.0 ([model card](https://huggingface.co/hexgrad/Kokoro-82M)) | The committed audio is generated output. The `kokoro-js`, transformers.js and onnxruntime packages run only in CI (`scripts/render-voice.mjs`) and are not shipped. |
 
 ## Used to build the demo video

@@ -282,17 +282,17 @@
         <a class="btn" href="#how">How it works</a>
       </div>
       <p class="requirements" id="requirements"><b>Requirements:</b> a webcam, a recent Chrome, Edge or Firefox,
-        and <b>hardware acceleration / WebGL turned on</b>. Everything runs in your browser and no video is uploaded.</p>
+        and <b>hardware acceleration / WebGL turned on</b> for best accuracy (without it the webcam uses a simpler, slower fallback). Everything runs in your browser and no video is uploaded.</p>
       <p class="requirements" id="safety-note"><b>Safety:</b> BackUp is a wellness tool, not medical advice or a medical device.
         Do not hold a rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.</p>
       <div id="webgl-warning" role="alert">
-        <b>WebGL is turned off in this browser, and the pose model needs it.</b>
+        <b>WebGL is turned off in this browser.</b> The webcam will still work, with a simpler, less accurate pose model on your CPU. For the best results, turn it on:
         <ul>
           <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
           <li><b>Linux / Wayland:</b> start the browser with <code>--ozone-platform=x11</code>.</li>
           <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
         </ul>
-        <p style="margin-top:8px">Or <a href="./app/">open the app and try the demo</a>, which works without WebGL.</p>
+        <p style="margin-top:8px">Or <a href="./app/">open the app</a>: the webcam fallback and the demo both work without WebGL.</p>
       </div>
     </div>
     <figure class="hero-shot">

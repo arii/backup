@@ -18,7 +18,7 @@ what you will see and hear, and a safety notice). The *Help* button replays it, 
 <img src="docs/assets/app-phone.png" alt="The browser app at phone width" width="240">
 
 The app needs a webcam (or use the demo), a recent Chrome, Edge or Firefox, and
-hardware acceleration (WebGL) turned on. Released under the [MIT License](LICENSE).
+hardware acceleration (WebGL) turned on for best accuracy (without it the webcam uses a simpler, slower fallback). Released under the [MIT License](LICENSE).
 Third-party credits: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 [![Sponsor on GitHub](https://img.shields.io/badge/%E2%99%A5-Sponsor-ea4aaa)](https://github.com/sponsors/arii)
 BackUp is free and built by one person. If it is useful to you, you can
@@ -136,8 +136,10 @@ Why these parts don't normally fit, and the stitches that hold them:
 Press *Start with webcam*, leave the tab open, and it chimes when you slouch.
 
 **Requirements:** a webcam, a recent Chrome, Edge or Firefox, and **hardware
-acceleration / WebGL turned on**. Everything runs in your browser and no video is
-uploaded. If WebGL is off, the site says so up front and *Try the demo* still works.
+acceleration / WebGL turned on** for best accuracy. Everything runs in your browser and no
+video is uploaded. If WebGL is off, the site says so up front and the webcam switches to a
+simpler fallback (TF.js MoveNet on the WASM/CPU backend). It is less accurate and slower,
+and an on-screen notice says so. *Try the demo* works either way.
 To turn it on in Chrome or Edge, open `chrome://settings/system`, enable *Use
 graphics acceleration when available*, relaunch, and check `chrome://gpu`. On
 Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
@@ -172,7 +174,7 @@ GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
 ### Offline mode (opt-in)
 
 Select **Make available offline** in the app's Offline mode section. The browser
-downloads about 25 MB (app code, the MediaPipe runtime and pose model, voice clips)
+downloads about 31 MB (app code, the MediaPipe runtime and pose model, the no-WebGL fallback model, voice clips)
 and the app then says "Offline mode is ready. You can disconnect Wi-Fi now."
 Nothing is downloaded until you select the button. Video is never stored, with or
 without offline mode; the cache holds only the app's own files. To remove it, use
