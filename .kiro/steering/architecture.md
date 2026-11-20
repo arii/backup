@@ -49,6 +49,8 @@
 - `node --test "tests/js/*.test.mjs"` (Node 22, `node:test`, no dependencies). Every
   module has a `tests/js/<name>.test.mjs`. Randomized properties use a seeded RNG, never
   `Math.random`, and no test may be skipped.
+- `npm run check` also runs Biome lint and format and fallow dead-code (config in `biome.json`,
+  `.fallowrc.json`). Do not export symbols only to test them from nowhere; fallow flags them.
 - New behavior in `posture-core.js` needs a unit, property or golden-timeline test.
 - `tests/e2e/live-site.mjs` is the Playwright end-to-end check (CSP, vendored files,
   reflow, first run). CI serves `docs/` locally and runs it.

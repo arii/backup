@@ -37,6 +37,21 @@ jobs:
       - name: Offline precache list is current
         run: node scripts/gen-precache.mjs --check
 
+  lint:
+    # Biome lint and format, and fallow dead-code (config: biome.json, .fallowrc.json).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run deadcode
+
   vendored-files:
     # The app is self-hosted (issue #45): vendored MediaPipe files must exist
     # and match the sha256 values recorded in docs/app/vendor/README.md.

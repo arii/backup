@@ -260,6 +260,7 @@ docs/app/              # app.js (UI, state), posture-core.js (scoring, state mac
                        #   consent, offline, share, sponsor, relax, onboarding, progress, feedback)
 docs/app/vendor/       # self-hosted MediaPipe runtime and pose model
 docs/research/         # feedback and habit-formation research notes
+biome.json, .fallowrc.json, package.json   # dev tooling config (lint, format, dead code)
 scripts/               # gen-precache.mjs (offline file list), render-voice.mjs (Kokoro clips)
 tests/js/              # node:test unit, property and golden-timeline tests
 tests/e2e/             # Playwright check of the live site (see Development)
@@ -328,12 +329,18 @@ Voice timing and the feedback mode can also be changed live in the app's setting
 
 ## Development
 
-Needs Node 22. No build step and no dependencies for the app or its tests.
+Needs Node 22. No build step and no dependencies for the app or its tests. The root
+`package.json` only holds dev tooling: [Biome](https://biomejs.dev) (lint and format) and
+[fallow](https://github.com/fallow-rs/fallow) (dead code). Run `npm install` once to use them.
 
 ```bash
 node --test "tests/js/*.test.mjs"   # unit, property and golden-timeline tests
 node scripts/gen-precache.mjs       # after ANY change under docs/app/ (CI runs it with --check)
 python3 -m http.server 8000 --directory docs   # serve the app locally (any static server works)
+npm run lint          # biome lint
+npm run format        # biome format --write (format:check only verifies)
+npm run deadcode      # fallow dead-code (unused files, exports, dependencies)
+npm run check         # all of the above plus tests and the precache check
 ```
 
 `tests/js/fixtures/golden-timeline.json` is a frozen recording of a scripted session
@@ -345,7 +352,7 @@ identical states, reminders and reasons, and metrics and needle within 1e-9. If 
 change behavior on purpose, update the expected values in the fixture to match and say
 why in the commit.
 
-CI runs the node tests, the precache check, the vendored-file checksums, a local
+CI runs lint, format and dead-code checks, the node tests, the precache check, the vendored-file checksums, a local
 Playwright e2e and ShellCheck on every push to every branch. After each GitHub Pages
 deploy, the `live-site` workflow opens the deployed app in Chromium and runs demo mode
 and webcam mode (with a fake camera playing a drawn cartoon figure).
