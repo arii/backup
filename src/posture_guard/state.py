@@ -318,7 +318,8 @@ class PostureStateMachine:
         if self._positive_count and self._positive_at is not None:
             since = self._positive_at
         sustained = now - since >= self._positive_gap(self._positive_count) - _EPS
-        cooled = self._positive_at is None or now - self._positive_at >= self._positive_gap(0) - _EPS
+        min_gap = self._positive_gap(0)
+        cooled = self._positive_at is None or now - self._positive_at >= min_gap - _EPS
         if sustained and cooled and smoothed_good:
             self._positive_at = now
             self._positive_count += 1
