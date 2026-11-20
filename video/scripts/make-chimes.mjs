@@ -11,7 +11,9 @@ const RATE = 44100;
 
 function wav(samples) {
   const data = Buffer.alloc(samples.length * 2);
-  samples.forEach((s, i) => data.writeInt16LE(Math.trunc(s * 32767), i * 2));
+  samples.forEach((s, i) => {
+    data.writeInt16LE(Math.trunc(s * 32767), i * 2);
+  });
   const head = Buffer.alloc(44);
   head.write("RIFF", 0);
   head.writeUInt32LE(36 + data.length, 4);

@@ -146,7 +146,8 @@ export class BreathCheck {
     if (ratio !== null && t >= inhale_s + exhale_s - settle_record_s) this.settle.push(ratio);
     if (t < inhale_s + exhale_s) return null;
     this.phase = "idle";
-    return (this.result = this.verdict());
+    this.result = this.verdict();
+    return this.result;
   }
 
   verdict() {

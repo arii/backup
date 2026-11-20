@@ -321,7 +321,7 @@ export const History: React.FC = () => {
           <div style={{ fontSize: 60, fontWeight: 700, marginBottom: 10 }}>Case history</div>
         </Rise>
         {steps.map(([date, what, accent], i) => (
-          <Rise key={i} delay={Math.round((0.6 + i * 2.2) * fps)}>
+          <Rise key={what} delay={Math.round((0.6 + i * 2.2) * fps)}>
             <div style={{ display: "flex", gap: 40, alignItems: "center", width: 1500, textAlign: "left" }}>
               <div style={{ fontSize: 46, fontWeight: 800, color: accent, minWidth: 220, fontFamily: mono }}>{date}</div>
               <div style={{ fontSize: 42, borderLeft: `6px solid ${accent}`, paddingLeft: 30 }}>{what}</div>

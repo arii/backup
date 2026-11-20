@@ -65,7 +65,9 @@ test("golden timeline replays identically", () => {
     if (e.kind === "scored") {
       const m = out.result;
       [m.head_forward_deg, m.trunk_lean_deg, m.head_tilt_deg, m.shoulder_level_deg]
-        .forEach((v, k) => close(v, e.metrics[k], `${where} metric ${k}`));
+        .forEach((v, k) => {
+          close(v, e.metrics[k], `${where} metric ${k}`);
+        });
       assert.equal(m.trunk_lean_available, e.trunk_ok, `${where} trunk_ok`);
     } else {
       assert.equal(out.result.reason, e.reason, `${where} reason`);
@@ -83,7 +85,7 @@ test("golden timeline replays identically", () => {
     assert.deepEqual(cue, e.cue, `${where} cue`);
     if (e.spoken.length) assert.deepEqual(e.spoken, [out.cue.say], `${where} spoken`);
   });
-  const cues = new Set(golden.frames.map((f) => f.expect.cue && f.expect.cue.id));
+  const cues = new Set(golden.frames.map((f) => f.expect.cue?.id));
   for (const id of ["head_forward:-", "head_tilt:left", "shoulder_level:right"]) {
     assert.ok(cues.has(id), `golden timeline covers cue ${id}`);
   }

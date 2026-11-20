@@ -11,7 +11,7 @@
 // changes whenever a precached file changes, which makes the browser update it.
 // Plain script (not a module): the constants below mirror offline.js.
 
-const PRECACHE_VERSION = "7710af81a5339090";
+const PRECACHE_VERSION = "98df2e3020e71ef7";
 const CACHE_PREFIX = "posture-guard-";
 // One cache per release. The worker only ever reads and writes its own cache,
 // so an update never changes what the currently active worker serves.
@@ -84,7 +84,7 @@ async function precacheAll() {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     precacheAll().then(() => self.skipWaiting()).catch(async (err) => {
-      await broadcast({ type: "offline-error", message: String(err && err.message || err) });
+      await broadcast({ type: "offline-error", message: String(err?.message || err) });
       throw err; // fail the install: no half-installed worker
     }),
   );

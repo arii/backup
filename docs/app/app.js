@@ -217,7 +217,7 @@ let voices = [];
 
 fetch("./voice/manifest.json")
   .then((r) => (r.ok ? r.json() : null))
-  .then((m) => { clipManifest = m && m.voices ? m : null; refreshVoices(); })
+  .then((m) => { clipManifest = m?.voices ? m : null; refreshVoices(); })
   .catch(() => {});
 
 const kokoroVoices = () => Object.keys(VOICES).filter((id) => clipManifest?.voices[id]);
@@ -892,7 +892,7 @@ function openShare() {
 $("share-btn").addEventListener("click", openShare);
 $("share-native").addEventListener("click", async () => {
   try { await navigator.share(nativeSharePayload(shareUrl(location.href))); } catch (e) {
-    if (!e || e.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
+    if (e?.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
   }
 });
 $("share-close").addEventListener("click", () => $("share-dialog").close());
@@ -910,7 +910,7 @@ $("share-card-btn").addEventListener("click", () => {
   canvas.toBlob((b) => {
     cardBlob = b;
     const file = b && new File([b], "backup-score.png", { type: "image/png" });
-    $("share-card-share").hidden = !(file && navigator.canShare && navigator.canShare({ files: [file] }));
+    $("share-card-share").hidden = !(file && navigator.canShare?.({ files: [file] }));
   }, "image/png");
 });
 $("share-card-download").addEventListener("click", () => {
@@ -925,7 +925,7 @@ $("share-card-share").addEventListener("click", async () => {
   if (!cardBlob) return;
   try {
     await navigator.share({ files: [new File([cardBlob], "backup-score.png", { type: "image/png" })], text: SHARE_TEXT });
-  } catch (e) { if (!e || e.name !== "AbortError") $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead."; }
+  } catch (e) { if (e?.name !== "AbortError") $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead."; }
 });
 $("share-instance").addEventListener("input", () => {
   renderShareLinks();
@@ -1049,7 +1049,9 @@ function account(state, now) {
       return;
     }
     if (practice) { session.lastT = now; return; } // practice records nothing
-    const day = (store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 });
+    const dayKey = todayKey();
+    store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0 };
+    const day = store.days[dayKey];
     if (state === State.GOOD) {
       session.good += dt; day.good += dt; session.streak += dt;
       session.best = Math.max(session.best, session.streak);
@@ -1104,8 +1106,10 @@ function wireColor(state, result) {
 }
 
 function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
-  const w = (cv.width = cv.clientWidth);
-  const h = (cv.height = cv.clientHeight);
+  cv.width = cv.clientWidth;
+  cv.height = cv.clientHeight;
+  const w = cv.width;
+  const h = cv.height;
   c.clearRect(0, 0, w, h);
   if (!landmarks) return;
   c.strokeStyle = color; c.fillStyle = color; c.lineWidth = 4 * scale;
@@ -1340,7 +1344,7 @@ function step() {
       stopCamera(err); // e.g. the GPU context was lost: stop instead of throwing every frame
       return;
     }
-    const first = res.landmarks && res.landmarks[0];
+    const first = res.landmarks?.[0];
     // Some tasks-vision builds omit visibility; absent means "detected".
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
@@ -1539,7 +1543,7 @@ function stopCamera(err) {
   setTrackingControls(false);
   poseLandmarker = null;
   const stream = video.srcObject;
-  if (stream) stream.getTracks().forEach((t) => t.stop());
+  if (stream) for (const t of stream.getTracks()) t.stop();
   video.srcObject = null;
   lowAccuracy = false;
   $("lowpower-note").style.display = "none";
@@ -1606,7 +1610,7 @@ $("start-camera").addEventListener("click", async () => {
   } catch (err) {
     $("start-status").textContent = "";
     const stream = video.srcObject;
-    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (stream) for (const t of stream.getTracks()) t.stop();
     video.srcObject = null;
     poseLandmarker = null;
     showError(cameraErrorMessage(err));
@@ -2100,7 +2104,7 @@ async function refreshOffline() {
     offline.totalBytes = pre.totalBytes;
     const base = new URL("./", location.href).href;
     const cached = cache ? (await cache.keys()).map((r) => r.url.startsWith(base) ? r.url.slice(base.length) : r.url) : [];
-    offline.ready = isOfflineReady(pre, cached, meta && meta.version);
+    offline.ready = isOfflineReady(pre, cached, meta?.version);
     offline.stale = offline.registered && !offline.ready;
   } catch {
     // Offline and not cached, or precache.json unreadable: keep whatever we knew.

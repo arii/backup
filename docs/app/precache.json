@@ -1,11 +1,11 @@
 {
-  "version": "7710af81a5339090",
-  "totalBytes": 32842820,
+  "version": "98df2e3020e71ef7",
+  "totalBytes": 32842801,
   "files": [
     {
       "url": "app.js",
-      "size": 92522,
-      "sha256": "e070b6a94c120d165a140558f940923c5e9ac757b48f86724eac1ab8f30f251c"
+      "size": 92534,
+      "sha256": "4bf35d10b66f98d57199fe2573444004085806e4913eb1fd5659b38c69fee40f"
     },
     {
       "url": "breaks.js",
@@ -19,8 +19,8 @@
     },
     {
       "url": "consent.js",
-      "size": 2328,
-      "sha256": "e71d7eeeb12074e4d880e3db6e4b25c05aa70d5f05cf7861a0195c299608f088"
+      "size": 2320,
+      "sha256": "5de5f0063c83cbef4ee0be22ea4a9c203c436bdf5d55d34b2284bc49a8b5275c"
     },
     {
       "url": "feedback.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "movenet-adapter.js",
-      "size": 3457,
-      "sha256": "e83c42ffcd6889b381c0581b00a0c17422740e01607cfbc25b67b81e69febe87"
+      "size": 3459,
+      "sha256": "25aef8a4f3d6c2dfa5b4e536b621e7a2c62fcce4e9de1702bc21ccebd966ac01"
     },
     {
       "url": "offline.js",
@@ -74,13 +74,13 @@
     },
     {
       "url": "relax.js",
-      "size": 7152,
-      "sha256": "73c41142842853cd8cdfdf6f788858a9330d00d935626a3f0b779f9b5a666e85"
+      "size": 7167,
+      "sha256": "de1cb679827121d656e9556706f1c5c4f965550f55c88883a66618e7dc2ea017"
     },
     {
       "url": "settings.js",
-      "size": 2652,
-      "sha256": "543585971352741e7fae708a693e48c1f954cd3a15bfe447664443c73560672f"
+      "size": 2646,
+      "sha256": "d1a79639f5f1bbbd8b73a0dc1fa05a19bc4d225ebaf2a07fbacf12a5d611d054"
     },
     {
       "url": "share.js",
@@ -94,8 +94,8 @@
     },
     {
       "url": "sponsor.js",
-      "size": 4205,
-      "sha256": "2ae4e72b0133b61a49981b73242f13a2b34ded8c4cd39d5f1b7b0fafbc9ca7f8"
+      "size": 4171,
+      "sha256": "d267174b4ad2fba3e3d59fac26a7c37dc969894362a450c812c65263646775c3"
     },
     {
       "url": "vendor/LICENSE",

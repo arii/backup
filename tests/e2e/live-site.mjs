@@ -441,7 +441,7 @@ try {
       breath: document.getElementById("breath-check").disabled,
       good: document.getElementById("calib-good").disabled,
       bad: document.getElementById("calib-bad").disabled,
-      focus: document.activeElement && document.activeElement.id,
+      focus: document.activeElement?.id,
       guide: !document.getElementById("first-run").hidden,
       framing: document.querySelector("#first-run-body .framing")?.textContent,
     }));
@@ -794,7 +794,7 @@ try {
       const failedReqs = [];
       page.on("requestfailed", (r) => failedReqs.push(r.url()));
       const resp = await page.goto(`${base}app/?offline=1`).catch((e) => ({ err: String(e) }));
-      check("offline: the app reloads with the network off", !!resp && !resp.err, resp && resp.err);
+      check("offline: the app reloads with the network off", !!resp && !resp.err, resp?.err);
       await page.click("#start-demo");
       await page.waitForTimeout(3000);
       const off = await ui(page);
@@ -993,7 +993,7 @@ try {
     await page.goto(base + bust);
     const og = await page.evaluate(() => Object.fromEntries(["og:title", "og:description", "og:image", "twitter:card", "twitter:image"].map((k) => {
       const m = document.querySelector(`meta[property="${k}"], meta[name="${k}"]`);
-      return [k, m && m.content];
+      return [k, m?.content];
     })));
     check("landing: Open Graph and Twitter card tags are present", Object.values(og).every(Boolean) && og["twitter:card"] === "summary_large_image", og);
     const img = await fetchStatus(`${base}assets/og-image.png${bust}`);

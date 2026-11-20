@@ -156,7 +156,7 @@ export const Figure: React.FC<{
         <line x1={240} y1={430} x2={250} y2={570} />
       </g>
       {[110, 290, 140, 260].map((x, i) => (
-        <circle key={i} cx={x} cy={i < 2 ? 250 : 430} r={11} fill={stroke} />
+        <circle key={x} cx={x} cy={i < 2 ? 250 : 430} r={11} fill={stroke} />
       ))}
       {bolts ? (
         <g fill="#9aa3ad" stroke="#555c66" strokeWidth={3}>

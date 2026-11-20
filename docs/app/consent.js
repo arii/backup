@@ -24,7 +24,7 @@ export const CONSENT_CHECKBOX = "I agree to turn on these features.";
 
 /** True when the stored consent is for the current text. */
 export function hasConsent(store) {
-  const c = store && store.consent;
+  const c = store?.consent;
   return !!c && Number(c.version) >= CONSENT_VERSION && typeof c.at === "string" && !Number.isNaN(Date.parse(c.at));
 }
 

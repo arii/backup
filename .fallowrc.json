@@ -9,5 +9,9 @@
   "ignorePatterns": [
     "docs/app/vendor/**",
     "docs/app/voice/**"
+  ],
+  "ignoreDependencies": [
+    "kokoro-js",
+    "playwright"
   ]
 }
