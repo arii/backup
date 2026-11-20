@@ -120,6 +120,13 @@ try {
     const voiceNote = await page.textContent("#voice-note");
     check("voice: prefers a natural voice over eSpeak", voiceNote.includes("Google US English"), { voiceNote });
     await page.click("#start-demo");
+    await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
+    const hold = await page.evaluate(() => ({
+      cls: document.getElementById("hold-bar").className,
+      text: document.getElementById("hold-text").textContent,
+      width: document.getElementById("hold-fill").style.width,
+    }));
+    check("hold bar fills toward the next praise", hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0, hold);
     await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }).catch(() => {});
     const spoken = await page.evaluate(() => window.__spoken.slice());
     check("praise: spoken during sustained good posture",

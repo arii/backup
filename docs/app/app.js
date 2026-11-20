@@ -422,7 +422,7 @@ function causeFor(result, landmarks) {
 
 /** The "what to fix" box: shown while a reminder is active or a metric is past
  *  its threshold; quiet (and green) when posture is good. */
-function renderFix(state, result, cue) {
+function renderFix(state, result, cue, hold) {
   const box = $("fix-box");
   const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
   const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
@@ -430,7 +430,7 @@ function renderFix(state, result, cue) {
   if ((bad || drifting) && cue) {
     title = cue.title; how = cue.fix; cls = "active";
   } else if (bad) {
-    title = "Almost there"; how = "Hold that position for a few seconds."; cls = "active";
+    title = "Almost there"; cls = "active"; // the hold bar shows how long is left
   } else if (state === State.GOOD) {
     title = "Looking good"; cls = "ok";
   } else {
@@ -442,11 +442,30 @@ function renderFix(state, result, cue) {
   for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
     $(`t-${metric}`).classList.toggle("focus", cls === "active" && cue !== null && cue.metric === metric);
   }
+  renderHold(hold);
+}
+
+// Fill-on-hold bar: fills while you hold a posture, so "hold it" shows how
+// long is left instead of saying "a few seconds".
+const HOLD_TEXT = {
+  recover: (s) => `Hold it… reminder clears in ${s}`,
+  confirm: (s) => `Hold it… good posture in ${s}`,
+  slipping: (s) => `Slouching… reminder in ${s}`,
+  praise: (s) => `Good posture held… next “looking good” in ${s}`,
+};
+function renderHold(hold) {
+  const bar = $("hold-bar");
+  if (!hold) { bar.className = "hold idle"; return; }
+  const secs = hold.remaining >= 10 ? `${Math.ceil(hold.remaining)} s` : `${hold.remaining.toFixed(1)} s`;
+  bar.className = `hold ${hold.kind === "slipping" ? "warn" : "good"}`;
+  $("hold-fill").style.width = `${(hold.fraction * 100).toFixed(1)}%`;
+  $("hold-text").textContent = HOLD_TEXT[hold.kind](secs);
+  bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
 }
 
 function render(out, landmarks) {
-  const { result, transition, needle, cue } = out;
-  renderFix(transition.state, result, cue);
+  const { result, transition, needle, cue, hold } = out;
+  renderFix(transition.state, result, cue, hold);
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
