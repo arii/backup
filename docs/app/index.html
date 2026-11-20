@@ -40,6 +40,7 @@
   #banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 8px 18px; border-radius: 999px; background: var(--warn); color: #3a2503; font-weight: 700; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
   #banner.show { opacity: 1; }
   #banner.positive { background: var(--good); color: #0b2412; }
+  #banner.relax { background: #6b8fd6; color: #0d1830; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
   .panel h2 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
   .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -174,6 +175,17 @@
         <div class="tile" id="t-shoulder_level"><div class="label">Shoulder level</div><div class="value" id="m-shoulder_level_deg">-</div></div>
         <div class="tile" id="t-trunk_lean"><div class="label">Trunk lean</div><div class="value" id="m-trunk_lean_deg">-</div></div>
       </div>
+    </div>
+    <div class="panel coaching">
+      <h2>Relax, don&rsquo;t brace</h2>
+      <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
+        to look upright overworks your upper back. Lift your chest a little and let your shoulders hang.</div>
+      <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
+      <div class="btn-row">
+        <button id="breath-check" class="secondary" title="Breathe in: if your shoulders rise, you are bracing">Breath check</button>
+      </div>
+      <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing.</div>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture</label>
     </div>
     <div class="panel">
       <h2>Calibrate to your desk</h2>

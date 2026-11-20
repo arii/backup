@@ -160,6 +160,14 @@ try {
     await page.waitForTimeout(1500);
     const resumed = await page.textContent("#state-badge");
     check("pause: resume restarts tracking", resumed !== "paused", { resumed });
+    await page.click("#breath-check"); // 9 s real-time phases are on the 8x clock: ~1.2 s
+    await page.waitForFunction(() => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent), null, { timeout: 8000 }).catch(() => {});
+    const breathOut = await page.evaluate(() => ({
+      status: document.getElementById("relax-status").textContent,
+      lines: window.__spoken.filter((x) => /breath|shoulders/i.test(x.text)).map((x) => `${x.engine}: ${x.text}`),
+    }));
+    check("breath check: prompts in, out, then gives a verdict with the recorded voice",
+      /Relaxed and stacked/.test(breathOut.status) && breathOut.lines.length >= 3 && breathOut.lines.every((l) => l.startsWith("kokoro")), breathOut);
     const spokenBeforeTest = await page.evaluate(() => window.__spoken.length);
     await page.click("#test-start");
     await page.waitForTimeout(3000); // sim 24 s: the demo slouches in this window, yet nothing may fire
