@@ -95,6 +95,107 @@ try {
     await page.close();
   }
 
+  // 2b. Praise, voice choice, pause and bug report, on the demo with an 8x
+  // clock (so the 20 s first praise lands inside the demo's 20 s good half)
+  // and a recording speechSynthesis stub with a robotic and a natural voice.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      const realNow = performance.now.bind(performance);
+      const t0 = realNow();
+      performance.now = () => t0 + (realNow() - t0) * 8;
+      const voices = [
+        { name: "eSpeak English", lang: "en-US", localService: true, default: true },
+        { name: "Google US English", lang: "en-US", localService: false, default: false },
+      ];
+      window.__spoken = [];
+      const ss = new EventTarget();
+      ss.getVoices = () => voices;
+      ss.speak = () => {};
+      ss.cancel = () => {};
+      Object.defineProperty(window, "speechSynthesis", { value: ss, configurable: true });
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+      // The app announces each spoken line and whether it used a clip.
+      document.addEventListener("pg:speak", (e) => window.__spoken.push(e.detail));
+    });
+    await page.goto(`${base}app/${bust}`);
+    await page.waitForFunction(() => document.getElementById("voice-note").textContent.includes("Kokoro"), null, { timeout: 10000 }).catch(() => {});
+    const voice = await page.evaluate(() => ({
+      note: document.getElementById("voice-note").textContent,
+      selected: document.getElementById("voice-pick").value,
+      praiseDefault: document.getElementById("spoken-praise").checked,
+    }));
+    check("voice: recorded Kokoro voice is the default", voice.selected.startsWith("kokoro:") && voice.note.includes("Kokoro"), voice);
+    check("voice: spoken praise is off by default", voice.praiseDefault === false, voice);
+    const clip = await page.evaluate(async () => {
+      const m = await (await fetch("./voice/manifest.json")).json();
+      const file = m.voices.af_heart["Looking good."];
+      const r = await fetch(`./voice/${file}`);
+      return { file, status: r.status, type: r.headers.get("content-type"), bytes: (await r.arrayBuffer()).byteLength };
+    });
+    check("voice: clips are deployed", clip.status === 200 && clip.bytes > 2000, clip);
+    await page.check("#spoken-praise"); // opt in, to check praise is spoken with a clip
+    await page.click("#start-demo");
+    await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
+    const hold = await page.evaluate(() => ({
+      cls: document.getElementById("hold-bar").className,
+      text: document.getElementById("hold-text").textContent,
+      width: document.getElementById("hold-fill").style.width,
+    }));
+    check("hold bar fills toward the next praise", hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0, hold);
+    await page.waitForFunction(() => window.__spoken.some((x) => /good|posture|champion|keep|relaxed/i.test(x.text) && !/^Head|^Your|^You're leaning|^Please/.test(x.text)),
+      null, { timeout: 15000 }).catch(() => {});
+    const spoken = await page.evaluate(() => window.__spoken.slice());
+    check("praise: spoken with the recorded voice when opted in",
+      spoken.some((x) => x.engine === "kokoro" && /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(x.text)),
+      spoken);
+    await page.keyboard.press("p");
+    const pausedBadge = await page.textContent("#state-badge");
+    const before = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
+    await page.waitForTimeout(4000); // sim 32 s: the whole slouch half would chime without the pause
+    const after = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
+    check("pause: no reminders or speech while paused",
+      pausedBadge === "paused" && before[0] === after[0] && before[1] === after[1], { pausedBadge, before, after });
+    await page.click("#pause");
+    await page.waitForTimeout(1500);
+    const resumed = await page.textContent("#state-badge");
+    check("pause: resume restarts tracking", resumed !== "paused", { resumed });
+    await page.click("#breath-check"); // 9 s real-time phases are on the 8x clock: ~1.2 s
+    await page.waitForFunction(() => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent), null, { timeout: 8000 }).catch(() => {});
+    const breathOut = await page.evaluate(() => ({
+      status: document.getElementById("relax-status").textContent,
+      lines: window.__spoken.filter((x) => /breath|shoulders/i.test(x.text)).map((x) => `${x.engine}: ${x.text}`),
+    }));
+    check("breath check: prompts in, out, then gives a verdict with the recorded voice",
+      /Relaxed and stacked/.test(breathOut.status) && breathOut.lines.length >= 3 && breathOut.lines.every((l) => l.startsWith("kokoro")), breathOut);
+    const spokenBeforeTest = await page.evaluate(() => window.__spoken.length);
+    await page.click("#test-start");
+    await page.waitForTimeout(3000); // sim 24 s: the demo slouches in this window, yet nothing may fire
+    const silent = await page.evaluate((n) => ({
+      badge: document.getElementById("state-badge").textContent,
+      testing: document.body.classList.contains("testing"),
+      needleShown: getComputedStyle(document.querySelector(".panel.coaching")).display !== "none",
+      spoke: window.__spoken.length - n,
+      status: document.getElementById("test-status").textContent,
+    }), spokenBeforeTest);
+    check("silent test: hides feedback and stays quiet",
+      silent.badge === "silent test" && silent.testing && !silent.needleShown && silent.spoke === 0 && /left/.test(silent.status), silent);
+    await page.click("#test-start"); // stop early: not saved
+    check("silent test: stopping early is not saved",
+      (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0);
+    await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
+    const href = await page.getAttribute("#report-bug", "href");
+    const issue = new URL(href);
+    const body = issue.searchParams.get("body") || "";
+    check("bug report: pre-fills a GitHub issue with diagnostics",
+      issue.pathname === "/arii/posture-guard/issues/new" && body.includes("WebGL:") && body.includes("Browser:"),
+      { href: href.slice(0, 200) });
+    await page.screenshot({ path: path.join(outDir, "demo-praise-pause.png") });
+    check("praise/pause/report: no page errors", errors.length === 0, errors);
+    report.praise = { spoken, pausedBadge, resumed };
+    await page.close();
+  }
+
   // 3. Webcam mode: real model from the CDN on a fake camera.
   {
     const { page, errors } = await newPage(browser);

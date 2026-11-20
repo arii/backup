@@ -56,14 +56,30 @@ class AudioStatus:
     player: str | None = None  # "paplay" | "aplay" | None before the first play
 
 
+# Reminder "uh-oh": two notes stepping DOWN a tritone (E5 -> B-flat 4), the
+# classic "wrong answer" interval, so it can't be mistaken for the rising
+# good-posture arpeggio. Odd harmonics give it a reedy, buzzer-like edge.
+# docs/app/app.js plays the same notes, durations and harmonics.
+BAD_NOTES = ((659.25, 0.18), (466.16, 0.42))
+BAD_HARMONICS = ((1, 1.0), (3, 0.35), (5, 0.15))
+
+
 def _render_chime(path: Path) -> None:
-    """Two-tone chime (660 -> 990 Hz) with exponential decay, 16-bit mono WAV."""
+    """Falling two-note "uh-oh" (659 -> 466 Hz) with exponential decay, 16-bit mono WAV."""
     samples: list[float] = []
-    for freq, seconds in ((660.0, 0.15), (990.0, 0.25)):
+    # Normalize to the waveform's true peak (as Web Audio's createPeriodicWave
+    # does), so the reminder is as loud as a pure-sine chime would be.
+    norm = max(
+        abs(sum(amp * math.sin(k * 2 * math.pi * j / 1000) for k, amp in BAD_HARMONICS))
+        for j in range(1000)
+    )
+    for freq, seconds in BAD_NOTES:
         total = int(SAMPLE_RATE * seconds)
         for i in range(total):
             decay = math.exp(-3.0 * i / total)
-            samples.append(0.6 * decay * math.sin(2 * math.pi * freq * i / SAMPLE_RATE))
+            phase = 2 * math.pi * freq * i / SAMPLE_RATE
+            wave_sum = sum(amp * math.sin(k * phase) for k, amp in BAD_HARMONICS)
+            samples.append(0.6 * decay * wave_sum / norm)
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(1)
         handle.setsampwidth(2)
@@ -73,7 +89,7 @@ def _render_chime(path: Path) -> None:
 
 def _render_positive_chime(path: Path) -> None:
     """Bright ascending major arpeggio (C5-E5-G5-C6, ~0.8 s), 16-bit mono WAV —
-     deliberately distinct from the falling two-tone reminder chime."""
+     deliberately distinct from the falling "uh-oh" reminder."""
     samples: list[float] = []
     for freq in (523.25, 659.25, 783.99, 1046.50):
         total = int(SAMPLE_RATE * 0.2)

@@ -3,12 +3,14 @@
 //
 // Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for
-// chimes, speechSynthesis for the spoken prompt, localStorage for settings,
+// chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
 
 import {
   DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED,
 } from "./posture-core.js";
+import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
+import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
 
 const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 const MODEL_URL =
@@ -38,8 +40,9 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 
 const settings = {
   mode: store.mode || "chime_and_voice",
-  voiceText: store.voiceText || "Please fix your posture",
+  voiceText: store.voiceText || DEFAULT_PROMPT,
   specificCues: store.specificCues !== false, // default on
+  spokenPraise: store.spokenPraise === true, // default off: opt in
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
@@ -52,9 +55,14 @@ $("specific-cues").addEventListener("change", (e) => {
   settings.specificCues = e.target.checked;
   store.specificCues = settings.specificCues; save();
 });
+$("spoken-praise").checked = settings.spokenPraise;
+$("spoken-praise").addEventListener("change", (e) => {
+  settings.spokenPraise = e.target.checked;
+  store.spokenPraise = settings.spokenPraise; save();
+});
 $("voice-text").value = settings.voiceText;
 $("voice-text").addEventListener("change", (e) => {
-  settings.voiceText = e.target.value.trim() || "Please fix your posture";
+  settings.voiceText = e.target.value.trim() || DEFAULT_PROMPT;
   store.voiceText = settings.voiceText; save();
 });
 
@@ -82,14 +90,24 @@ function ensureAudio() {
   return audioCtx;
 }
 
-function tones(freqs, seconds) {
+// harmonics: [[k, amplitude], ...] for a custom timbre; omitted = pure sine.
+function tones(freqs, seconds, harmonics = null) {
   const ac = ensureAudio();
+  let wave = null;
+  if (harmonics) {
+    const n = Math.max(...harmonics.map(([k]) => k)) + 1;
+    const real = new Float32Array(n);
+    const imag = new Float32Array(n); // sine terms, as in audio.py
+    for (const [k, amp] of harmonics) imag[k] = amp;
+    wave = ac.createPeriodicWave(real, imag); // peak-normalized, like audio.py
+  }
   let t = ac.currentTime + 0.02;
   freqs.forEach((f, i) => {
     const dur = seconds[i];
     const osc = ac.createOscillator();
     const gain = ac.createGain();
-    osc.type = "sine";
+    if (wave) osc.setPeriodicWave(wave);
+    else osc.type = "sine";
     osc.frequency.value = f;
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
@@ -109,15 +127,127 @@ function playBuffer(buffer) {
   src.start();
 }
 
-// Same tones as audio.py: falling-then-rising two-tone reminder, C-major arpeggio reward.
-const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([660, 990], [0.15, 0.25]));
+// Same tones as audio.py: a falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
+// down, reedy odd harmonics) and a rising C-major arpeggio reward.
+const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
+const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS));
 const playGood = () => (custom.good ? playBuffer(custom.good) : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
 
-function speak(text) {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+// -- voice --------------------------------------------------------------------
+// Default: clips pre-rendered with Kokoro-82M (docs/app/voice, see
+// voice-lines.js), which sound like a person. Lines without a clip (a custom
+// prompt) and the "System:" choices use speechSynthesis; for those, rank the
+// installed voices and avoid OS fallbacks like eSpeak, which sound robotic.
+
+const ROBOTIC = /espeak|e-speak|mbrola|festival|pico|flite|rhvoice/i;
+function voiceScore(v, lang) {
+  let s = 0;
+  if (/natural|neural|online/i.test(v.name)) s += 8;
+  if (/^google/i.test(v.name)) s += 6;
+  if (/premium|enhanced|siri/i.test(v.name)) s += 5;
+  if (/samantha|ava|allison|karen|daniel|serena|aria|jenny|guy|libby|sonia/i.test(v.name)) s += 2;
+  if (!v.localService) s += 1; // network voices are usually the neural ones
+  if (ROBOTIC.test(v.name)) s -= 10;
+  if (v.lang && v.lang.toLowerCase() === lang.toLowerCase()) s += 3;
+  else if (v.lang && v.lang.slice(0, 2).toLowerCase() === lang.slice(0, 2).toLowerCase()) s += 2;
+  else s -= 20; // wrong language: never pick it automatically
+  return s;
 }
+
+const KOKORO = "kokoro:";
+let clipManifest = null; // { voices: { af_heart: { text: "af_heart/x.mp3" } } }
+const clipCache = new Map(); // url -> Promise<AudioBuffer>
+let clipSource = null; // the clip playing now, so a new line can cut it off
+let voices = [];
+
+fetch("./voice/manifest.json")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((m) => { clipManifest = m && m.voices ? m : null; refreshVoices(); })
+  .catch(() => {});
+
+const kokoroVoices = () => Object.keys(VOICES).filter((id) => clipManifest?.voices[id]);
+/** Selected voice: "kokoro:<id>" or a system voice name. Default: first Kokoro voice. */
+function selectedVoice() {
+  const want = store.voiceName;
+  if (want?.startsWith(KOKORO) && kokoroVoices().includes(want.slice(KOKORO.length))) return want;
+  if (want && voices.some((v) => v.name === want)) return want;
+  return kokoroVoices().length ? KOKORO + kokoroVoices()[0] : (voices[0]?.name ?? "");
+}
+function chosenVoice() { // best or selected system voice (for fallback speech)
+  const sel = selectedVoice();
+  return voices.find((v) => v.name === sel) || voices[0] || null;
+}
+
+function refreshVoices() {
+  const lang = navigator.language || "en-US";
+  voices = "speechSynthesis" in window
+    ? window.speechSynthesis.getVoices().slice().sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
+    : [];
+  const pick = $("voice-pick");
+  pick.replaceChildren();
+  for (const id of kokoroVoices()) pick.add(new Option(VOICES[id], KOKORO + id));
+  for (const v of voices) pick.add(new Option(`System: ${v.name} (${v.lang})`, v.name));
+  const sel = selectedVoice();
+  pick.value = sel;
+  const best = voices[0];
+  $("voice-note").textContent = sel.startsWith(KOKORO)
+    ? "Recorded natural voice (Kokoro). A custom spoken prompt uses your browser's voice."
+    : !voices.length ? "No voice available in this browser."
+      : best && voiceScore(best, lang) <= 0
+        ? "Only basic system voices are installed here, so they may sound robotic. Pick a natural voice above."
+        : `Using ${(chosenVoice() || best).name}.`;
+}
+if ("speechSynthesis" in window) {
+  refreshVoices();
+  window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
+}
+$("voice-pick").addEventListener("change", (e) => {
+  store.voiceName = e.target.value; save(); refreshVoices();
+});
+
+function loadClip(url) {
+  if (!clipCache.has(url)) {
+    clipCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => ensureAudio().decodeAudioData(b)));
+  }
+  return clipCache.get(url);
+}
+
+function stopSpeech() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (clipSource) { try { clipSource.stop(); } catch { /* already ended */ } clipSource = null; }
+}
+
+function speakSystem(text) {
+  if (!("speechSynthesis" in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  const v = chosenVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  window.speechSynthesis.speak(u);
+}
+
+function speak(text) {
+  if (test || paused) return; // a line queued just before a pause or silent test must not play
+  stopSpeech();
+  const sel = selectedVoice();
+  const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
+  document.dispatchEvent(new CustomEvent("pg:speak", { detail: { text, engine: file ? "kokoro" : "system" } }));
+  if (!file) return speakSystem(text);
+  loadClip(`./voice/${file}`).then((buffer) => {
+    if (paused || test) return;
+    const ac = ensureAudio();
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ac.destination);
+    src.onended = () => { if (clipSource === src) clipSource = null; };
+    clipSource = src;
+    src.start();
+  }).catch(() => speakSystem(text)); // clip missing or undecodable
+}
+
+let praiseIndex = 0;
+const nextPraise = () => PRAISE[praiseIndex++ % PRAISE.length];
+let recoveryIndex = 0;
+const nextRecovery = () => RECOVERY_PRAISE[recoveryIndex++ % RECOVERY_PRAISE.length];
 
 async function decodeFile(file) {
   const ac = ensureAudio();
@@ -151,6 +281,7 @@ for (const kind of ["bad", "good"]) {
   });
 }
 $("test-bad").addEventListener("click", () => playBad());
+$("test-voice").addEventListener("click", () => { ensureAudio(); speak(TEST_LINE); });
 $("test-good").addEventListener("click", () => playGood());
 $("clear-sounds").addEventListener("click", () => {
   custom.bad = custom.good = null;
@@ -181,9 +312,13 @@ function reminderText(nudge, cue) {
 }
 
 function fire(nudge, cue) {
+  if (test) return; // silent test: withhold every cue
+  if (breath.active) return; // a breath check is talking; posture cues wait ~9 s
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
   if (reminder) reminderCount += 1;
-  const text = reminderText(nudge, cue);
+  const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise()
+    : nudge === Nudge.RECOVERY ? nextRecovery() : null;
+  const text = praise || reminderText(nudge, cue);
   const banner = $("banner");
   banner.textContent = text;
   banner.classList.toggle("positive", !reminder);
@@ -193,7 +328,13 @@ function fire(nudge, cue) {
   if (!allowed(nudge)) return; // silent / chime-only: still a visible event
   if (nudge === Nudge.VOICE) speak(settings.specificCues && cue ? cue.say : settings.voiceText);
   else if (nudge === Nudge.CHIME) playBad();
-  else playGood();
+  else {
+    playGood();
+    // Spoken praise rides on "Chime + voice": after the arpeggio (~0.8 s).
+    if (praise && settings.spokenPraise && settings.mode === "chime_and_voice") {
+      setTimeout(() => speak(praise), custom.good ? 400 : 850);
+    }
+  }
   if (notifyEnabled && document.hidden && reminder) {
     new Notification("Posture Guard", { body: text, silent: true });
   }
@@ -233,9 +374,167 @@ function renderCalibration() {
 const session = { good: 0, bad: 0, streak: 0, best: 0, lastT: null };
 store.days = store.days || {};
 
+// -- relax, don't brace -----------------------------------------------------------
+// Good posture should be a relaxed stack, not a squeeze. relax.js watches the
+// ears-to-shoulders gap for shoulders creeping up while posture reads good,
+// and runs the breath check ("if your shoulders rise when you breathe in, you
+// are bracing"). See relax.js for the measurement.
+
+const bracing = new BracingMonitor();
+const breath = new BreathCheck();
+const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
+let goodSinceBreath = 0;
+let relaxLastT = null;
+settings.relaxReminders = store.relaxReminders !== false; // default on
+
+/** Relax lines are spoken unless the mode is silent (chime-only still talks
+ *  here: a breath check without words is not a check). */
+function sayRelax(line) {
+  if (settings.mode !== "silent") speak(line);
+}
+
+function showRelaxBanner(text) {
+  const banner = $("banner");
+  banner.textContent = text;
+  banner.classList.remove("positive");
+  banner.classList.add("show", "relax");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove("show", "relax"), 6000);
+}
+
+const VERDICT_TEXT = {
+  rose: "Shoulders rose on the breath in: you were bracing. Let them hang and breathe into your belly.",
+  held: "Shoulders dropped when you let go: you were holding them up. That lower spot is where they belong.",
+  relaxed: "Relaxed and stacked. Your shoulders stayed put through the breath.",
+  unclear: "Couldn't see your shoulders clearly. Face the camera and try again.",
+};
+
+function startBreathCheck() {
+  if (test || paused || breath.active || !loopsStarted) return;
+  ensureAudio();
+  goodSinceBreath = 0;
+  breath.start(performance.now() / 1000, bracing.value);
+  $("relax-status").textContent = "Breathe in slowly...";
+  sayRelax(RELAX_LINES.inhale);
+  showRelaxBanner("Breath check: slow, deep breath in");
+}
+
+function relaxStep(landmarks, state, now) {
+  if (test) { relaxLastT = null; return; }
+  const ratio = neckRatio(landmarks);
+  const good = state === State.GOOD;
+  const flagged = bracing.update(ratio, now, good && !breath.active);
+  if (flagged && settings.relaxReminders && !breath.active) {
+    showRelaxBanner(RELAX_LINES.bracing);
+    sayRelax(RELAX_LINES.bracing);
+    store.bracingCount = (store.bracingCount || 0) + 1; save();
+  }
+  if (breath.active) {
+    const step = breath.update(bracing.value, now);
+    if (step === "exhale") {
+      $("relax-status").textContent = "Breathe out and let your shoulders drop...";
+      sayRelax(RELAX_LINES.exhale);
+      showRelaxBanner("Breathe out, let your shoulders drop");
+    } else if (step) {
+      if (step.kind !== "unclear" && step.kind !== "rose") bracing.pinRelaxed(step.relaxed);
+      $("relax-status").textContent = VERDICT_TEXT[step.kind];
+      sayRelax(RELAX_LINES[step.kind]);
+      $("banner").classList.remove("show", "relax");
+    }
+  } else if (good && settings.relaxReminders && relaxLastT !== null) {
+    goodSinceBreath += Math.min(1, Math.max(0, now - relaxLastT));
+    if (goodSinceBreath >= AUTO_BREATH_S) startBreathCheck();
+  }
+  relaxLastT = now;
+  const ref = bracing.reference;
+  const v = bracing.value;
+  $("relax-shoulders").textContent = ref === null || v === null ? "learning your relaxed shoulders..."
+    : v < ref * 0.88 ? "creeping up" : "relaxed";
+}
+
+$("breath-check").addEventListener("click", startBreathCheck);
+$("relax-reminders").checked = settings.relaxReminders;
+$("relax-reminders").addEventListener("change", (e) => {
+  settings.relaxReminders = e.target.checked;
+  store.relaxReminders = settings.relaxReminders; save();
+});
+
+// -- silent test ("Test me") ---------------------------------------------------
+// A retention test in motor-learning terms: same tracking and state machine,
+// but every cue is withheld (no sounds, speech, banners, needle, hold bar or
+// live score), so the score reflects the habit rather than the reminders.
+// Results are kept per test; coached time keeps feeding store.days.
+
+store.tests = store.tests || [];
+let test = null; // { minutes, elapsed, good, bad } while a test runs
+
+function startTest() {
+  if (test) return finishTest(true);
+  test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
+  breath.cancel();
+  stopSpeech();
+  document.body.classList.add("testing");
+  $("banner").classList.remove("show");
+  $("test-start").textContent = "Stop test";
+  $("test-progress-wrap").style.display = "";
+  renderTest();
+}
+
+function finishTest(stoppedEarly) {
+  const t = test;
+  test = null;
+  document.body.classList.remove("testing");
+  $("test-start").textContent = "Start silent test";
+  $("test-progress-wrap").style.display = "none";
+  const tracked = t.good + t.bad;
+  if (!stoppedEarly && tracked >= 30) {
+    store.tests.push({ at: new Date().toISOString(), minutes: t.minutes, good: Math.round(t.good), bad: Math.round(t.bad) });
+    store.tests = store.tests.slice(-50);
+    save();
+    $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
+    playGood();
+  } else {
+    $("test-status").textContent = stoppedEarly ? "Test stopped, not saved." : "Not enough tracked time to score; not saved.";
+  }
+  renderTest();
+}
+
+const pctOf = (r) => (r.good + r.bad > 0 ? Math.round((100 * r.good) / (r.good + r.bad)) : null);
+
+function renderTest() {
+  if (test) {
+    const left = Math.max(0, test.minutes * 60 - test.elapsed);
+    $("test-status").textContent = `Silent test running: ${mmss(left)} left. Sit and work as usual.`;
+    $("test-progress").style.width = `${Math.min(100, (100 * test.elapsed) / (test.minutes * 60)).toFixed(1)}%`;
+  }
+  const tests = store.tests;
+  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), { good: 0, bad: 0 });
+  const parts = [];
+  if (tests.length) {
+    const first = tests[0], last = tests[tests.length - 1];
+    parts.push(tests.length === 1
+      ? `Silent test: <b>${pctOf(last)}%</b> good`
+      : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`);
+  } else {
+    parts.push("No silent tests yet. Take one now for a baseline, then again after a few days of coaching.");
+  }
+  if (coached.good + coached.bad > 0) parts.push(`With coaching: <b>${pctOf(coached)}%</b> good`);
+  $("test-compare").innerHTML = parts.join(" &middot; ");
+}
+
+$("test-start").addEventListener("click", () => { ensureAudio(); startTest(); });
+
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
+    if (test) {
+      test.elapsed += dt;
+      if (state === State.GOOD) test.good += dt;
+      else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
+      session.lastT = now;
+      if (test.elapsed >= test.minutes * 60) finishTest(false);
+      return;
+    }
     const day = (store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 });
     if (state === State.GOOD) {
       session.good += dt; day.good += dt; session.streak += dt;
@@ -323,7 +622,7 @@ function causeFor(result, landmarks) {
 
 /** The "what to fix" box: shown while a reminder is active or a metric is past
  *  its threshold; quiet (and green) when posture is good. */
-function renderFix(state, result, cue) {
+function renderFix(state, result, cue, hold) {
   const box = $("fix-box");
   const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
   const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
@@ -331,9 +630,9 @@ function renderFix(state, result, cue) {
   if ((bad || drifting) && cue) {
     title = cue.title; how = cue.fix; cls = "active";
   } else if (bad) {
-    title = "Almost there"; how = "Hold that position for a few seconds."; cls = "active";
+    title = "Almost there"; cls = "active"; // the hold bar shows how long is left
   } else if (state === State.GOOD) {
-    title = "Looking good"; cls = "ok";
+    title = "Looking good"; how = "Stay soft: shoulders heavy, breathing easy."; cls = "ok";
   } else {
     title = "What to fix shows up here";
   }
@@ -343,11 +642,30 @@ function renderFix(state, result, cue) {
   for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
     $(`t-${metric}`).classList.toggle("focus", cls === "active" && cue !== null && cue.metric === metric);
   }
+  renderHold(hold);
+}
+
+// Fill-on-hold bar: fills while you hold a posture, so "hold it" shows how
+// long is left instead of saying "a few seconds".
+const HOLD_TEXT = {
+  recover: (s) => `Hold it… reminder clears in ${s}`,
+  confirm: (s) => `Hold it… good posture in ${s}`,
+  slipping: (s) => `Slouching… reminder in ${s}`,
+  praise: (s) => `Good posture held… next “looking good” in ${s}`,
+};
+function renderHold(hold) {
+  const bar = $("hold-bar");
+  if (!hold) { bar.className = "hold idle"; return; }
+  const secs = hold.remaining >= 10 ? `${Math.ceil(hold.remaining)} s` : `${hold.remaining.toFixed(1)} s`;
+  bar.className = `hold ${hold.kind === "slipping" ? "warn" : "good"}`;
+  $("hold-fill").style.width = `${(hold.fraction * 100).toFixed(1)}%`;
+  $("hold-text").textContent = HOLD_TEXT[hold.kind](secs);
+  bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
 }
 
 function render(out, landmarks) {
-  const { result, transition, needle, cue } = out;
-  renderFix(transition.state, result, cue);
+  const { result, transition, needle, cue, hold } = out;
+  renderFix(transition.state, result, cue, hold);
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
@@ -356,6 +674,7 @@ function render(out, landmarks) {
     ? "settling in"
     : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
   $("warnings").textContent = causeFor(result, landmarks);
   const cfg = DEFAULTS.scoring;
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
@@ -374,7 +693,8 @@ function render(out, landmarks) {
       ? "drifting" : "upright";
     $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
   }
-  drawSkeleton(landmarks, wireColor(transition.state, result));
+  drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
+  renderTest();
   renderCalibration();
   renderStats();
 }
@@ -402,7 +722,48 @@ function demoPose(t) {
   return lm;
 }
 
+// -- pause ----------------------------------------------------------------------
+// Paused: no pose tracking, no reminders or praise, no stats, and the camera
+// track is disabled (the picture goes black; most browsers turn the camera
+// light off). Resuming starts fresh so paused time can never fire a reminder.
+
+let paused = false;
+
+function setPaused(on) {
+  if (!loopsStarted || on === paused) return;
+  paused = on;
+  const stream = video.srcObject;
+  if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
+  if (on) {
+    breath.cancel();
+    stopSpeech();
+    $("banner").classList.remove("show");
+    const badge = $("state-badge");
+    badge.textContent = "paused";
+    badge.className = "badge paused";
+    $("fps").textContent = "-";
+  } else {
+    engine.restart();
+    bracing.reset();
+    relaxLastT = null;
+    session.lastT = null;
+    lastFrameT = null;
+    fpsEma = 0;
+  }
+  $("pause").textContent = on ? "Resume" : "Pause";
+  $("pause").setAttribute("aria-pressed", String(on));
+}
+
+$("pause").addEventListener("click", () => setPaused(!paused));
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "p" && e.key !== "P") return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+  setPaused(!paused);
+});
+
 function step() {
+  if (paused) return;
   const nowMs = performance.now();
   const now = nowMs / 1000;
   let landmarks = null;
@@ -427,6 +788,7 @@ function step() {
   const out = engine.process(landmarks, now);
   for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
+  relaxStep(landmarks, out.transition.state, now);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -507,11 +869,78 @@ async function loadModel(canvas) {
   }
 }
 
-function showError(message) { $("start-error").textContent = message; }
+function showError(message) {
+  $("start-error").textContent = message;
+  if (message) logProblem(message);
+}
+
+// -- bug reports ----------------------------------------------------------------
+// "Report a bug" opens GitHub's new-issue form pre-filled with what a
+// maintainer needs: browser, WebGL, app state, settings and recent errors.
+// No login or backend; the user reviews and submits it on GitHub. Never
+// includes video, images, landmarks or stored sounds.
+
+const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
+const problems = []; // last few errors, newest last
+
+function logProblem(message) {
+  problems.push(`${new Date().toISOString().slice(11, 19)} ${String(message).slice(0, 300)}`);
+  if (problems.length > 8) problems.shift();
+}
+window.addEventListener("error", (e) => logProblem(e.message || e.error || "error"));
+window.addEventListener("unhandledrejection", (e) => logProblem(`unhandled: ${e.reason?.message || e.reason}`));
+
+function webglInfo() {
+  try {
+    const c = document.createElement("canvas");
+    const gl = c.getContext("webgl2") || c.getContext("webgl");
+    if (!gl) return typeof OffscreenCanvas !== "undefined" && webglCanvas() ? "offscreen only" : "unavailable";
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    return `${gl instanceof WebGL2RenderingContext ? "WebGL2" : "WebGL1"} (${renderer})`;
+  } catch (err) {
+    return `probe failed: ${err.message || err}`;
+  }
+}
+
+function bugReportUrl() {
+  const cal = engine.calibration.status;
+  const v = chosenVoice();
+  const diag = [
+    `- Page: ${location.origin}${location.pathname}`,
+    `- Browser: ${navigator.userAgent}`,
+    `- Language: ${navigator.language} | Screen: ${screen.width}x${screen.height} @${devicePixelRatio}x`,
+    `- WebGL: ${webglInfo()}`,
+    `- Source: ${$("source").textContent} | State: ${$("state-badge").textContent} | fps: ${$("fps").textContent} | paused: ${paused}`,
+    `- Mode: ${settings.mode} | specific cues: ${settings.specificCues} | spoken praise: ${settings.spokenPraise}`,
+    `- Voice: ${selectedVoice() || "none"}${v ? ` | system fallback ${v.name} (${v.lang})` : ""} | ${voices.length} system voices | clips ${clipManifest ? "loaded" : "missing"}`,
+    `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
+    `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
+    `- Reminders this session: ${reminderCount}`,
+  ].join("\n");
+  const errs = problems.length ? problems.join("\n") : "(none)";
+  const body = [
+    "**What happened?**", "", "", "",
+    "**What did you expect?**", "", "", "",
+    "**Steps to reproduce** (webcam or demo? what posture?)", "", "1. ", "",
+    "<details><summary>Diagnostics (filled in by the app, no video or images)</summary>", "",
+    diag, "", "Recent errors:", "```", errs, "```", "</details>",
+  ].join("\n");
+  const title = problems.length ? `Bug: ${problems[problems.length - 1].slice(9, 80)}` : "Bug: ";
+  const params = new URLSearchParams({ title, body: body.slice(0, 6000), labels: "bug" });
+  return `${ISSUE_URL}?${params}`;
+}
+
+// Fill the link at click time so it carries the current state.
+for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-link")]) {
+  link.addEventListener("click", () => { link.href = bugReportUrl(); });
+}
 
 /** Tracking failed after it started: release the camera, bring the start
  *  screen back with the reason, and leave the demo available. */
 function stopCamera(err) {
+  setPaused(false);
+  $("pause").disabled = true;
   poseLandmarker = null;
   const stream = video.srcObject;
   if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -532,6 +961,8 @@ function begin(source) {
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
   restoreSound("bad"); restoreSound("good");
+  $("pause").disabled = false;
+  $("test-start").disabled = false;
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   requestAnimationFrame(visibleLoop);
@@ -585,3 +1016,4 @@ $("start-demo").addEventListener("click", () => {
 
 renderCalibration();
 renderStats();
+renderTest();

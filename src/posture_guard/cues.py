@@ -32,8 +32,8 @@ _METRICS = ("head_forward", "head_tilt", "shoulder_level", "trunk_lean")
 class PostureCue:
     metric: str  # head_forward | head_tilt | shoulder_level | trunk_lean
     side: str | None  # "left" | "right" (the person's own side), None if sideless
-    title: str  # short label, e.g. "Right shoulder dropped"
-    fix: str  # what to do, e.g. "Lift your right shoulder ..."
+    title: str  # short label, e.g. "Shoulders uneven"
+    fix: str  # what to do, e.g. "Level your shoulders ..."
     say: str  # spoken prompt
 
     @property
@@ -60,22 +60,24 @@ def _text(metric: str, side: str) -> tuple[str, str, str]:
             "Tuck your chin and bring your ears back over your shoulders.",
             "Head forward. Tuck your chin and bring your ears back over your shoulders.",
         )
+    # Sideways cues name the area, not a side (see posture-core.js cueText).
+    del side
     if metric == "head_tilt":
         return (
-            f"Head tilted toward your {side} shoulder",
+            "Head tilted",
             "Straighten your neck so your ears are level.",
-            f"Your head is tilted to the {side}. Straighten your neck.",
+            "Your head is tilted. Straighten your neck.",
         )
     if metric == "shoulder_level":
         return (
-            f"{side.capitalize()} shoulder dropped",
-            f"Lift your {side} shoulder and take your weight off that elbow.",
-            f"Your {side} shoulder is low. Level your shoulders.",
+            "Shoulders uneven",
+            "Level your shoulders and take your weight off your elbow.",
+            "Your shoulders are uneven. Level them out.",
         )
     return (
-        f"Leaning to your {side}",
+        "Leaning sideways",
         "Sit up straight with your weight even on both hips.",
-        f"You're leaning to the {side}. Sit up straight.",
+        "You're leaning to one side. Sit up straight.",
     )
 
 

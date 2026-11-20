@@ -102,6 +102,7 @@ SCRIPT: list[tuple[str, float, str | None]] = [
     ("good_mirror", 3.0, None),   # mirrored framing stays GOOD
     ("shrug_mirror", 3.0, None),  # uneven shoulders, mirrored -> chime
     ("good_mirror", 4.0, None),
+    ("good", 100.0, None),        # long good streak: dense-to-lean praise (~15, ~32, ~74 s)
 ]
 
 

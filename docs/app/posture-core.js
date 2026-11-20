@@ -18,6 +18,7 @@ export const RIGHT_HIP = 24;
 export const TRACKED = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP];
 
 const EPS = 1e-9; // state.py _EPS (window comparisons)
+const JITTER_PATTERN = [0.0, -1.0, 1.0, -0.5, 0.5]; // state.py _JITTER_PATTERN
 const NEEDLE_EPS = 1e-9; // posture_needle.py _EPS
 const RAD_TO_DEG = 180 / Math.PI; // CPython math.degrees: x * (180 / pi)
 
@@ -46,7 +47,7 @@ export const DEFAULTS = Object.freeze({
     no_person_timeout_s: 2.0,
   },
   feedback: {
-    positive_chime: { enabled: true, every_seconds: 120 },
+    positive_chime: { enabled: true, every_seconds: 90, first_after_seconds: 15, growth: 1.5, jitter: 0.25 },
     recovery_chime: { enabled: true },
   },
   needle: { tau_s: 0.5 },
@@ -318,6 +319,7 @@ export class PostureStateMachine {
     this.voiceAt = null;
     this.goodStateSince = null;
     this.positiveAt = null;
+    this.positiveCount = 0; // praises so far in the current GOOD streak
   }
 
   setBaselineAnchor(m) {
@@ -354,7 +356,8 @@ export class PostureStateMachine {
 
     if (BAD_STATES.has(this.state)) return this.updateBad(smoothedGood, now);
     const tr = this.updateIdle(sustainingBad, smoothedGood, now);
-    if (this.state === State.GOOD && this.positive.enabled) return this.maybePositiveChime(now);
+    // Never praise during the bad_sustain_s window where state is still GOOD (state.py).
+    if (this.state === State.GOOD && this.positive.enabled) return this.maybePositiveChime(now, smoothedGood);
     return tr;
   }
 
@@ -433,13 +436,54 @@ export class PostureStateMachine {
     return transition(this.state, Nudge.NONE);
   }
 
-  maybePositiveChime(now) {
-    if (this.goodStateSince === null) this.goodStateSince = now;
-    const every = this.positive.every_seconds;
-    const sustained = now - this.goodStateSince >= every - EPS;
-    const cooled = this.positiveAt === null || now - this.positiveAt >= every - EPS;
-    if (sustained && cooled) {
+  /** Seconds of GOOD before praise `count` (0-based) of a streak: dense-to-lean
+   *  with a fixed jitter pattern (state.py _positive_gap). */
+  positiveGap(count) {
+    const pc = this.positive;
+    const first = pc.first_after_seconds ?? null;
+    if (first === null) return pc.every_seconds;
+    const gap = Math.min(first * (pc.growth ?? 1.5) ** count, pc.every_seconds);
+    return gap * (1 + (pc.jitter ?? 0) * JITTER_PATTERN[count % JITTER_PATTERN.length]);
+  }
+
+  /** UI-only view of the timer the user is currently racing (no Python
+   *  counterpart; it reads state, never changes it). null when no timer runs.
+   *  kind: "recover"  holding good posture to clear a reminder (recovery_good_s)
+   *        "confirm"  holding good posture to reach GOOD (good_confirm_s)
+   *        "slipping" a slouch building toward the reminder (bad_sustain_s)
+   *        "praise"   good posture held toward the next praise
+   *  fraction 0..1 of the way there, remaining seconds left. */
+  holdProgress(now) {
+    const timer = (kind, start, need) => {
+      const elapsed = Math.max(0, now - start);
+      return { kind, fraction: need > 0 ? Math.min(1, elapsed / need) : 1, remaining: Math.max(0, need - elapsed) };
+    };
+    if (BAD_STATES.has(this.state)) {
+      return this.goodSince === null ? null : timer("recover", this.goodSince, this.t.recovery_good_s);
+    }
+    if (this.badSince !== null) return timer("slipping", this.badSince, this.t.bad_sustain_s);
+    if (this.state === State.GOOD) {
+      if (!this.positive.enabled || this.goodStateSince === null) return null;
+      const since = this.positiveCount && this.positiveAt !== null ? this.positiveAt : this.goodStateSince;
+      let due = since + this.positiveGap(this.positiveCount);
+      if (this.positiveAt !== null) due = Math.max(due, this.positiveAt + this.positiveGap(0));
+      return timer("praise", since, due - since);
+    }
+    if (this.goodSince !== null) return timer("confirm", this.goodSince, this.t.good_confirm_s);
+    return null;
+  }
+
+  maybePositiveChime(now, smoothedGood = true) {
+    if (this.goodStateSince === null) {
+      this.goodStateSince = now;
+      this.positiveCount = 0;
+    }
+    const since = this.positiveCount && this.positiveAt !== null ? this.positiveAt : this.goodStateSince;
+    const sustained = now - since >= this.positiveGap(this.positiveCount) - EPS;
+    const cooled = this.positiveAt === null || now - this.positiveAt >= this.positiveGap(0) - EPS;
+    if (sustained && cooled && smoothedGood) {
       this.positiveAt = now;
+      this.positiveCount += 1;
       return transition(State.GOOD, Nudge.POSITIVE_CHIME);
     }
     return transition(State.GOOD, Nudge.NONE);
@@ -660,7 +704,7 @@ export class CalibrationRecorder {
 
 // -- cues.py --------------------------------------------------------------------
 
-const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
+export const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
 
 /** +1 when the person's right shoulder is at larger image x, else -1. */
 export function mirrorSign(landmarks) {
@@ -668,7 +712,10 @@ export function mirrorSign(landmarks) {
   return landmarks[RIGHT_SHOULDER].x - landmarks[LEFT_SHOULDER].x < 0 ? -1.0 : 1.0;
 }
 
-function cueText(metric, side) {
+
+/** [title, fix, say] for a metric's cue. Exported so voice-lines.js can list
+ *  every spoken sentence for pre-rendering. */
+export function cueText(metric, side) {
   if (metric === "head_forward") {
     return [
       "Head forward",
@@ -676,24 +723,29 @@ function cueText(metric, side) {
       "Head forward. Tuck your chin and bring your ears back over your shoulders.",
     ];
   }
+  // Sideways cues name the area, not a side: after mirroring and baseline
+  // drift, "left"/"right" was too often the wrong way round to trust, and
+  // "straighten your neck" is the right fix either way. `side` stays in the
+  // returned cue (and its id) for consumers that want it.
+  void side;
   if (metric === "head_tilt") {
     return [
-      `Head tilted toward your ${side} shoulder`,
+      "Head tilted",
       "Straighten your neck so your ears are level.",
-      `Your head is tilted to the ${side}. Straighten your neck.`,
+      "Your head is tilted. Straighten your neck.",
     ];
   }
   if (metric === "shoulder_level") {
     return [
-      `${side.charAt(0).toUpperCase()}${side.slice(1)} shoulder dropped`,
-      `Lift your ${side} shoulder and take your weight off that elbow.`,
-      `Your ${side} shoulder is low. Level your shoulders.`,
+      "Shoulders uneven",
+      "Level your shoulders and take your weight off your elbow.",
+      "Your shoulders are uneven. Level them out.",
     ];
   }
   return [
-    `Leaning to your ${side}`,
+    "Leaning sideways",
     "Sit up straight with your weight even on both hips.",
-    `You're leaning to the ${side}. Sit up straight.`,
+    "You're leaning to one side. Sit up straight.",
   ];
 }
 
@@ -766,6 +818,18 @@ export class PostureEngine {
       : null;
     const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
-    return { result, transition: tr, needle: this.needle.value, nudges, cue };
+    const hold = this.machine.holdProgress(now);
+    return { result, transition: tr, needle: this.needle.value, nudges, cue, hold };
+  }
+
+  /** Resume after a user pause: start fresh as if the person just sat down
+   *  (streaks, timers and the needle cleared, drift baseline back to the
+   *  calibration anchor), so time spent paused can never fire a reminder.
+   *  Calibration and the praise cooldown are kept. Browser-only (no Python
+   *  counterpart: pausing is a UI feature, not part of the golden pipeline). */
+  restart() {
+    this.machine.enterNoPerson();
+    this.machine.absentSince = null;
+    this.needle.reset();
   }
 }
