@@ -1,6 +1,6 @@
 {
-  "version": "5675988bd6e93f2c",
-  "totalBytes": 26235423,
+  "version": "a266281b4196808b",
+  "totalBytes": 26235245,
   "files": [
     {
       "url": "app.js",
@@ -24,13 +24,13 @@
     },
     {
       "url": "feedback.js",
-      "size": 3899,
-      "sha256": "839d5f7741b2c8893f6859b9677d7ccb4e42512d36d447c9c1d8e7b3dfc6f4df"
+      "size": 3841,
+      "sha256": "34585f9d009698b548849c28d741c1ef045205bafaf5e778ccc48450e1f6cfd1"
     },
     {
       "url": "index.html",
-      "size": 40048,
-      "sha256": "eba262246752785267eabd44bf1fa198391154283dfd5c92a0078bdbb2b99135"
+      "size": 40057,
+      "sha256": "2695aa87cbd9a46056544f8bffea74767afbdacaabb7abaae778bad9d2041fa2"
     },
     {
       "url": "mini-view.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "offline.js",
-      "size": 3466,
-      "sha256": "cfb67f7c1e9042ffee3583feff01e63d123f9f3a8316318572566467f70ec993"
+      "size": 3337,
+      "sha256": "b083173525beadd16aa15fe53261f2e6ed14ce8a4ae5c8db1607a134ad59b3b2"
     },
     {
       "url": "onboarding.js",

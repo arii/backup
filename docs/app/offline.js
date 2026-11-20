@@ -6,10 +6,6 @@
 // worker calls). app.js owns the registration and the buttons; sw.js owns the
 // cache. tests/js/offline.test.mjs.
 
-export const OFFLINE_STATES = Object.freeze([
-  "unsupported", "idle", "downloading", "ready", "update-available", "error",
-]);
-
 /** Each release gets its own cache, named CACHE_PREFIX + precache version (mirrors sw.js). */
 export const CACHE_PREFIX = "posture-guard-";
 export const cacheNameFor = (version) => CACHE_PREFIX + version;

@@ -380,6 +380,14 @@ try {
     await page.screenshot({ path: path.join(outDir, "app-375-practice.png"), fullPage: true });
     await page.click("#practice-stop");
     await page.waitForFunction(() => !document.body.classList.contains("practicing"));
+    // Learn the cues ends with a "Try a breath check" button (finishing the last step shows it).
+    await page.click("#help-btn");
+    await page.click("#help-practice");
+    for (let i = 0; i < 12 && await page.evaluate(() => document.body.classList.contains("practicing")); i++) {
+      await page.click("#practice-next");
+    }
+    check("practice: finishing the last step offers Try a breath check",
+      await page.isVisible("#practice-breath") && /Try a breath check/.test(await page.textContent("#practice-breath")));
     // Export and delete.
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("#progress-export")]);
     const exported = JSON.parse(await (await import("node:fs")).promises.readFile(await download.path(), "utf8"));
