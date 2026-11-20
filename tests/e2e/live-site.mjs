@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // End-to-end check of the browser app, run by .github/workflows/live-site.yml
 // against the deployed GitHub Pages site or, on push, a locally served

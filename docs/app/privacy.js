@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // privacy.js: pure helpers for what the app stores and what a bug report shares.
 // Node-testable (no DOM): app.js passes in the storage object and the facts.

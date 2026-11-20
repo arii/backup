@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for

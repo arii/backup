@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // First-run onboarding, the safety notice and the setup check. Pure (no DOM,
 // injected clock) like relax.js, so it is unit-tested in

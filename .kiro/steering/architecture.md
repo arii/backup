@@ -4,7 +4,8 @@
 - Every newly created `.py` file starts with:
   ```
   # Author: Ariel Anders
-  # Copyright (c) 2026 Ariel Anders. All rights reserved.
+  # Copyright (c) 2026 Ariel Anders
+  # SPDX-License-Identifier: MIT
   ```
   Do not add or change headers on existing files; keep diffs free of churn.
 - Type hints on all new and modified code. `requires-python >= 3.10`: use `X | None`.

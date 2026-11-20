@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """Posture needle: one smoothed number for "how far from good posture".
 
 -1.0 is upright, +1.0 is at (or past) bad posture. Two raw mappings:

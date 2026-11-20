@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Feedback policy: decides WHETHER a feedback action is allowed. app.js still
 // plays the sounds and shows the banners. Pure, with injected time, so it is

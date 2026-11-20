@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Pure logic behind the compact live views (skeleton and needle) in the
 // practice and "Not working?" panels. Kept free of DOM access so it can be

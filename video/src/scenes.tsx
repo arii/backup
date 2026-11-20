@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 // Every scene of the demo video. Footage scenes cut the recorded clips at the
 // timestamps scripts/capture.mjs measured on the live site.
 import type React from "react";

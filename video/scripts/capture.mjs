@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Records real footage of the DEPLOYED app for the demo video, plus the
 // timestamps the video edits on (when the reminder fired, when it spoke, ...).

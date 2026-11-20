@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Pure UI settings logic (no DOM), unit-tested in tests/js/settings.test.mjs:
 // defaults for new users, the optional single-key pause shortcut (WCAG 2.1.4
