@@ -55,6 +55,12 @@
   .note { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
   .error { color: var(--bad); font-size: 13px; margin-top: 6px; }
   .error:empty, #warnings:empty { display: none; }
+  #webgl-help { display: none; text-align: left; max-width: 560px; background: var(--panel); border: 1px solid var(--warn); border-radius: 8px; padding: 12px 16px; font-size: 14px; }
+  #webgl-help.show { display: block; }
+  #webgl-help b { color: var(--warn); }
+  #webgl-help ul { margin: 6px 0 0; padding-left: 20px; color: var(--text); }
+  #webgl-help li { margin: 4px 0; }
+  #webgl-help code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
   #warnings { border: 1px solid var(--warn); color: var(--warn); border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
   .modes label { margin-right: 12px; font-size: 14px; }
   input[type=text] { width: 100%; padding: 7px 9px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
@@ -91,6 +97,15 @@
         </div>
         <p id="start-status" class="note"></p>
         <p id="start-error" class="error"></p>
+        <div id="webgl-help" role="alert">
+          <b>Your browser has WebGL turned off, and the pose model needs it.</b>
+          <ul>
+            <li><b>Chrome / Edge:</b> Settings &gt; System &gt; turn on <i>Use graphics acceleration when available</i>, then relaunch the browser. <code>chrome://gpu</code> shows whether WebGL is on.</li>
+            <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
+            <li>Strict privacy settings, some extensions, remote desktops and virtual machines can also block WebGL; try another browser or machine.</li>
+          </ul>
+          <p style="margin-top:8px">Then reload this page. <i>Try the demo</i> works without WebGL.</p>
+        </div>
       </div>
     </div>
     <div class="panel" style="margin-top:16px">
