@@ -48,11 +48,13 @@ export const NEEDS_TRACKING_TIP = "Start the webcam or demo first";
 
 /** The message under the Start buttons when the camera could not start. */
 export function cameraErrorMessage(err) {
-  const detail = (err?.message) || String(err);
+  const detail = err?.message || String(err);
   if (err && err.name === "NotAllowedError") {
-    return "Camera permission denied. To allow it, click the camera icon in the address bar " +
+    return (
+      "Camera permission denied. To allow it, click the camera icon in the address bar " +
       "(or open this site's settings), allow the camera, then reload the page. " +
-      "You can also try the demo instead.";
+      "You can also try the demo instead."
+    );
   }
   return `Could not start: ${detail}. Try the demo instead.`;
 }

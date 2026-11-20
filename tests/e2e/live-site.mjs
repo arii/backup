@@ -45,8 +45,7 @@ import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] =
-  process.argv.slice(2);
+const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
 const bust = `?v=${Date.now()}`;
 const report = { base, checks: [] };
@@ -54,9 +53,13 @@ let failed = false;
 const baseOrigin = new URL(base).origin;
 const externalRequests = [];
 const VENDORED = [
-  "vision_bundle.mjs", "pose_landmarker_lite.task", "LICENSE",
-  "wasm/vision_wasm_internal.js", "wasm/vision_wasm_internal.wasm",
-  "wasm/vision_wasm_nosimd_internal.js", "wasm/vision_wasm_nosimd_internal.wasm",
+  "vision_bundle.mjs",
+  "pose_landmarker_lite.task",
+  "LICENSE",
+  "wasm/vision_wasm_internal.js",
+  "wasm/vision_wasm_internal.wasm",
+  "wasm/vision_wasm_nosimd_internal.js",
+  "wasm/vision_wasm_nosimd_internal.wasm",
 ];
 
 /** Node-side fetch that always reads the body. An unread body leaves the
@@ -84,23 +87,31 @@ const ACKED = 1;
 // Every check except the consent one seeds it; keep in step with CONSENT_VERSION.
 const CONSENT = { version: 1, at: "2026-01-01T00:00:00.000Z" };
 
-async function newPage(browser, { fresh = false, guide = false, consent = true, extra = null, viewport = { width: 1280, height: 900 } } = {}) {
+async function newPage(
+  browser,
+  { fresh = false, guide = false, consent = true, extra = null, viewport = { width: 1280, height: 900 } } = {},
+) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
-    await context.addInitScript(([onboarded, ackVersion, firstRunDone, consentRecord, extraStore]) => {
-      try {
-        if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
-        sessionStorage.setItem("pg-e2e-acked", "1");
-        const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
-        s.onboarded = Math.max(s.onboarded || 0, onboarded);
-        s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
-        if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
-        if (consentRecord) s.consent = consentRecord;
-        if (extraStore) Object.assign(s, extraStore);
-        localStorage.setItem("posture-guard:v1", JSON.stringify(s));
-      } catch { /* storage unavailable */ }
-    }, [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra]);
+    await context.addInitScript(
+      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore]) => {
+        try {
+          if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
+          sessionStorage.setItem("pg-e2e-acked", "1");
+          const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+          s.onboarded = Math.max(s.onboarded || 0, onboarded);
+          s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
+          if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
+          if (consentRecord) s.consent = consentRecord;
+          if (extraStore) Object.assign(s, extraStore);
+          localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+        } catch {
+          /* storage unavailable */
+        }
+      },
+      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra],
+    );
   }
   const page = await context.newPage();
   page.on("request", (r) => {
@@ -109,21 +120,24 @@ async function newPage(browser, { fresh = false, guide = false, consent = true, 
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
-  page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
   return { page, errors };
 }
 
-const ui = (page) => page.evaluate(() => ({
-  badge: document.getElementById("state-badge").textContent,
-  source: document.getElementById("source").textContent,
-  warning: document.getElementById("warnings").textContent,
-  needle: document.getElementById("needle-text").textContent,
-  reminders: document.getElementById("reminder-count").textContent,
-  headForward: document.getElementById("m-head_forward_deg").textContent,
-  shoulderLevel: document.getElementById("m-shoulder_level_deg").textContent,
-  startError: document.getElementById("start-error").textContent,
-  overlay: getComputedStyle(document.getElementById("start-overlay")).display,
-}));
+const ui = (page) =>
+  page.evaluate(() => ({
+    badge: document.getElementById("state-badge").textContent,
+    source: document.getElementById("source").textContent,
+    warning: document.getElementById("warnings").textContent,
+    needle: document.getElementById("needle-text").textContent,
+    reminders: document.getElementById("reminder-count").textContent,
+    headForward: document.getElementById("m-head_forward_deg").textContent,
+    shoulderLevel: document.getElementById("m-shoulder_level_deg").textContent,
+    startError: document.getElementById("start-error").textContent,
+    overlay: getComputedStyle(document.getElementById("start-overlay")).display,
+  }));
 
 const args = ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"];
 if (y4m) args.push(`--use-file-for-fake-video-capture=${y4m}`);
@@ -150,10 +164,9 @@ try {
     await page.waitForTimeout(5000);
     const early = await ui(page);
     check("demo starts in good posture", early.badge === "good posture", early);
-    await page.waitForFunction(
-      () => Number(document.getElementById("reminder-count").textContent) >= 1,
-      null, { timeout: 40000 },
-    );
+    await page.waitForFunction(() => Number(document.getElementById("reminder-count").textContent) >= 1, null, {
+      timeout: 40000,
+    });
     const slouch = await ui(page);
     check("demo slouch triggers a reminder", slouch.badge === "sit up", slouch);
     await page.screenshot({ path: path.join(outDir, "demo-slouch.png") });
@@ -196,11 +209,20 @@ try {
       notnow: document.getElementById("prompt-notnow").textContent,
       bar: !document.getElementById("prompt-bar").hidden,
     }));
-    check("prompts: the eye break shows the 20-20-20 text, a countdown bar and Snooze / Not now",
-      /20 feet away for 20 seconds/.test(eye.text) && eye.role === "status" && eye.live === "polite"
-      && /Snooze 10 min/.test(eye.snooze) && /Not now/.test(eye.notnow) && eye.bar, eye);
+    check(
+      "prompts: the eye break shows the 20-20-20 text, a countdown bar and Snooze / Not now",
+      /20 feet away for 20 seconds/.test(eye.text) &&
+        eye.role === "status" &&
+        eye.live === "polite" &&
+        /Snooze 10 min/.test(eye.snooze) &&
+        /Not now/.test(eye.notnow) &&
+        eye.bar,
+      eye,
+    );
     await page.screenshot({ path: path.join(outDir, "prompt-eye-break.png") });
-    await page.waitForFunction(() => /eyes had a rest/.test(document.getElementById("prompt-text").textContent), null, { timeout: 30000 });
+    await page.waitForFunction(() => /eyes had a rest/.test(document.getElementById("prompt-text").textContent), null, {
+      timeout: 30000,
+    });
     check("prompts: the eye break countdown finishes", true);
     await page.waitForSelector("#prompt-card.show[data-prompt=move]", { timeout: 30000 });
     const move = await page.evaluate(() => ({
@@ -208,27 +230,37 @@ try {
       breathe: !document.getElementById("prompt-action").hidden,
       shown: window.__shown.map((x) => x.id),
     }));
-    check("prompts: the move break follows, one at a time, with a Breathe with me choice",
-      /stand up and move/.test(move.text) && move.breathe && move.shown.join() === "eye,move", move);
+    check(
+      "prompts: the move break follows, one at a time, with a Breathe with me choice",
+      /stand up and move/.test(move.text) && move.breathe && move.shown.join() === "eye,move",
+      move,
+    );
     await page.click("#prompt-done");
     const gaps = await page.evaluate(() => window.__shown.slice(1).map((x, i) => x.t - window.__shown[i].t));
-    check("prompts: at least 10 prompt minutes (1 s here) between prompts",
-      gaps.every((g) => g >= 800) && (await page.evaluate(() => window.__overlap.length)) === 0, { gaps });
+    check(
+      "prompts: at least 10 prompt minutes (1 s here) between prompts",
+      gaps.every((g) => g >= 800) && (await page.evaluate(() => window.__overlap.length)) === 0,
+      { gaps },
+    );
     // Paused: nothing shows, however much prompt time passes.
     await page.click("#pause");
     const beforePause = (await shownIds()).length;
     await page.waitForTimeout(3000);
-    check("prompts: none while paused",
-      (await shownIds()).length === beforePause
-      && await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")));
+    check(
+      "prompts: none while paused",
+      (await shownIds()).length === beforePause &&
+        (await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show"))),
+    );
     await page.click("#pause");
     // Silent test: nothing shows either.
     await page.click("#test-start");
     const beforeTest = (await shownIds()).length;
     await page.waitForTimeout(3000);
-    check("prompts: none during a silent test",
-      (await shownIds()).length === beforeTest
-      && await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")));
+    check(
+      "prompts: none during a silent test",
+      (await shownIds()).length === beforeTest &&
+        (await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show"))),
+    );
     await page.click("#test-start");
     // Breaks & prompts panel toggles persist.
     await page.uncheck("#eye-breaks");
@@ -243,9 +275,16 @@ try {
       cues: document.getElementById("breathe-cues").checked,
       stored: JSON.parse(localStorage.getItem("posture-guard:v1")),
     }));
-    check("prompts: Breaks & prompts settings persist across a reload",
-      !panel.eye && panel.move === "45" && panel.moments && panel.cues
-      && panel.stored.eyeBreaks === false && panel.stored.moveBreakMinutes === 45, panel);
+    check(
+      "prompts: Breaks & prompts settings persist across a reload",
+      !panel.eye &&
+        panel.move === "45" &&
+        panel.moments &&
+        panel.cues &&
+        panel.stored.eyeBreaks === false &&
+        panel.stored.moveBreakMinutes === 45,
+      panel,
+    );
     await page.screenshot({ path: path.join(outDir, "breaks-panel.png"), fullPage: true });
     check("prompts: no page errors", errors.length === 0, errors);
     await page.close();
@@ -262,8 +301,11 @@ try {
       demoVisible: document.getElementById("start-demo").offsetParent !== null,
       footer: document.getElementById("safety-footer").textContent,
     }));
-    check("first run: onboarding card shows and the Start buttons are hidden",
-      first.card && /How it works/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer), first);
+    check(
+      "first run: onboarding card shows and the Start buttons are hidden",
+      first.card && /How it works/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer),
+      first,
+    );
     await page.screenshot({ path: path.join(outDir, "onboarding-step1.png") });
     await page.click("#ob-next");
     await page.click("#ob-next");
@@ -272,8 +314,14 @@ try {
       text: document.getElementById("ob-body").textContent,
       ack: !document.getElementById("ob-ack").hidden,
     }));
-    check("first run: step 3 is the safety notice with an acknowledgement button",
-      safety.ack && /medical advice/.test(safety.text) && /rigid posture/.test(safety.text) && /numbness/.test(safety.text), safety);
+    check(
+      "first run: step 3 is the safety notice with an acknowledgement button",
+      safety.ack &&
+        /medical advice/.test(safety.text) &&
+        /rigid posture/.test(safety.text) &&
+        /numbness/.test(safety.text),
+      safety,
+    );
     await page.screenshot({ path: path.join(outDir, "onboarding-step3.png") });
     await page.click("#ob-ack");
     const acked = await page.evaluate(() => ({
@@ -281,8 +329,14 @@ try {
       demoVisible: document.getElementById("start-demo").offsetParent !== null,
       cardHidden: document.getElementById("onboarding").hidden,
     }));
-    check("first run: acknowledging stores the versions and shows the Start buttons",
-      acked.stored.ackVersion === ACKED && acked.stored.onboarded === ONBOARDED && acked.demoVisible && acked.cardHidden, acked);
+    check(
+      "first run: acknowledging stores the versions and shows the Start buttons",
+      acked.stored.ackVersion === ACKED &&
+        acked.stored.onboarded === ONBOARDED &&
+        acked.demoVisible &&
+        acked.cardHidden,
+      acked,
+    );
     await page.reload();
     const again = await page.evaluate(() => ({
       cardHidden: document.getElementById("onboarding").hidden,
@@ -294,16 +348,27 @@ try {
       open: document.getElementById("help-dialog").open,
       text: document.getElementById("help-body").textContent,
     }));
-    check("help: the button reopens the walkthrough with the safety notice",
-      help.open && /How it works/.test(help.text) && /not a medical device/.test(help.text), { open: help.open });
+    check(
+      "help: the button reopens the walkthrough with the safety notice",
+      help.open && /How it works/.test(help.text) && /not a medical device/.test(help.text),
+      { open: help.open },
+    );
     await page.screenshot({ path: path.join(outDir, "help-dialog.png") });
     await page.keyboard.press("Escape");
     await page.click("#start-demo");
-    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, { timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+      timeout: 15000,
+    });
     check("first run: #start-demo works after acknowledging", true);
     await page.click("#safety-link");
-    check("safety notice: the footer link opens the full notice",
-      await page.evaluate(() => document.getElementById("safety-dialog").open && /as-is/.test(document.getElementById("safety-list").textContent)));
+    check(
+      "safety notice: the footer link opens the full notice",
+      await page.evaluate(
+        () =>
+          document.getElementById("safety-dialog").open &&
+          /as-is/.test(document.getElementById("safety-list").textContent),
+      ),
+    );
     await page.keyboard.press("Escape");
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
@@ -338,16 +403,27 @@ try {
       suggest: document.getElementById("progress-suggest").textContent,
       overflow: document.documentElement.scrollWidth > window.innerWidth,
     }));
-    check("progress: 7 days from store.days, test trend, and a light-coaching suggestion",
-      prog.rows === 7 && /75%/.test(prog.text) && /50%/.test(prog.text) && /80%/.test(prog.tests) && /light coaching/.test(prog.suggest), prog);
+    check(
+      "progress: 7 days from store.days, test trend, and a light-coaching suggestion",
+      prog.rows === 7 &&
+        /75%/.test(prog.text) &&
+        /50%/.test(prog.text) &&
+        /80%/.test(prog.tests) &&
+        /light coaching/.test(prog.suggest),
+      prog,
+    );
     check("375 px: no horizontal overflow on the start screen", !prog.overflow, prog);
     await page.screenshot({ path: path.join(outDir, "app-375-start.png"), fullPage: true });
     await page.click("#start-demo");
-    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, { timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+      timeout: 15000,
+    });
     const before = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days));
     await page.click("#help-btn");
     await page.click("#help-practice");
-    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "practice", null, { timeout: 5000 }).catch(() => {});
+    await page
+      .waitForFunction(() => document.getElementById("state-badge").textContent === "practice", null, { timeout: 5000 })
+      .catch(() => {});
     const practice = await page.evaluate(() => ({
       on: document.body.classList.contains("practicing"),
       badge: document.getElementById("state-badge").textContent,
@@ -360,39 +436,58 @@ try {
     check("practice: the step highlights the matching tile", focus);
     const miniSeen = new Set();
     let miniInk = false;
-    for (let i = 0; i < 12; i++) { // sim 24 s: the demo slouches meanwhile, yet nothing may fire
+    for (let i = 0; i < 12; i++) {
+      // sim 24 s: the demo slouches meanwhile, yet nothing may fire
       await page.waitForTimeout(250);
       const m = await page.evaluate(() => {
         const cv = document.getElementById("practice-mini-canvas");
         const px = cv.width && cv.height ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
-        return { t: document.getElementById("practice-needle-rotor").getAttribute("transform"), ink: px.some((v, k) => k % 4 === 3 && v > 0), w: cv.clientWidth };
+        return {
+          t: document.getElementById("practice-needle-rotor").getAttribute("transform"),
+          ink: px.some((v, k) => k % 4 === 3 && v > 0),
+          w: cv.clientWidth,
+        };
       });
-      miniSeen.add(m.t); miniInk = miniInk || m.ink;
+      miniSeen.add(m.t);
+      miniInk = miniInk || m.ink;
     }
     check("practice: mini skeleton canvas is drawn next to the instructions", miniInk);
     check("practice: mini needle moves between good and slouch in the demo", miniSeen.size > 1, [...miniSeen]);
-    const quiet = await page.evaluate((b) => ({
-      spoken: window.__spoken.length,
-      reminders: document.getElementById("reminder-count").textContent,
-      daysSame: JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days) === b,
-    }), before);
-    check("practice: no speech, no reminders, nothing recorded",
-      quiet.spoken === 0 && quiet.reminders === "0" && quiet.daysSame, quiet);
+    const quiet = await page.evaluate(
+      (b) => ({
+        spoken: window.__spoken.length,
+        reminders: document.getElementById("reminder-count").textContent,
+        daysSame: JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days) === b,
+      }),
+      before,
+    );
+    check(
+      "practice: no speech, no reminders, nothing recorded",
+      quiet.spoken === 0 && quiet.reminders === "0" && quiet.daysSame,
+      quiet,
+    );
     await page.screenshot({ path: path.join(outDir, "app-375-practice.png"), fullPage: true });
     await page.click("#practice-stop");
     await page.waitForFunction(() => !document.body.classList.contains("practicing"));
     // Learn the cues ends with a "Try a breath check" button (finishing the last step shows it).
     await page.click("#help-btn");
     await page.click("#help-practice");
-    for (let i = 0; i < 12 && await page.evaluate(() => document.body.classList.contains("practicing")); i++) {
+    for (let i = 0; i < 12 && (await page.evaluate(() => document.body.classList.contains("practicing"))); i++) {
       await page.click("#practice-next");
     }
-    check("practice: finishing the last step offers Try a breath check",
-      await page.isVisible("#practice-breath") && /Try a breath check/.test(await page.textContent("#practice-breath")));
+    check(
+      "practice: finishing the last step offers Try a breath check",
+      (await page.isVisible("#practice-breath")) &&
+        /Try a breath check/.test(await page.textContent("#practice-breath")),
+    );
     // Export and delete.
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("#progress-export")]);
     const exported = JSON.parse(await (await import("node:fs")).promises.readFile(await download.path(), "utf8"));
-    check("progress: export is whitelisted JSON", exported.schema === 1 && !!exported.days && !("calibration" in exported), Object.keys(exported));
+    check(
+      "progress: export is whitelisted JSON",
+      exported.schema === 1 && !!exported.days && !("calibration" in exported),
+      Object.keys(exported),
+    );
     page.once("dialog", (d) => d.accept());
     await page.click("#progress-delete");
     await page.waitForLoadState("load");
@@ -401,7 +496,11 @@ try {
       stored: localStorage.getItem("posture-guard:v1"),
       card: !document.getElementById("onboarding").hidden,
     }));
-    check("progress: delete clears the stored data and shows onboarding again", gone.card && !(gone.stored || "").includes("days"), gone);
+    check(
+      "progress: delete clears the stored data and shows onboarding again",
+      gone.card && !(gone.stored || "").includes("days"),
+      gone,
+    );
     check("progress/practice: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -411,14 +510,22 @@ try {
   {
     const { page, errors } = await newPage(browser, { guide: true, viewport: { width: 320, height: 640 } });
     await page.goto(`${base}app/${bust}`);
-    const noScroll = () => page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
-    }));
+    const noScroll = () =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      }));
     const startW = await noScroll();
     await page.screenshot({ path: path.join(outDir, "app-320-start.png"), fullPage: true });
-    check("reflow: no horizontal scroll at 320 px on the start screen", startW.scrollWidth <= startW.innerWidth, startW);
-    check("start screen says it works best on a laptop or desktop",
-      /laptop or desktop with a webcam/i.test(await page.textContent("#start-overlay")));
+    check(
+      "reflow: no horizontal scroll at 320 px on the start screen",
+      startW.scrollWidth <= startW.innerWidth,
+      startW,
+    );
+    check(
+      "start screen says it works best on a laptop or desktop",
+      /laptop or desktop with a webcam/i.test(await page.textContent("#start-overlay")),
+    );
     const pre = await page.evaluate(() => ({
       breath: document.getElementById("breath-check").disabled,
       good: document.getElementById("calib-good").disabled,
@@ -430,8 +537,11 @@ try {
       goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
       mode: /Chime only still speaks/.test(document.getElementById("mode-note").textContent),
     }));
-    check("controls: breath check and record buttons are disabled before start, with a tooltip",
-      pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip), pre);
+    check(
+      "controls: breath check and record buttons are disabled before start, with a tooltip",
+      pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip),
+      pre,
+    );
     check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
     check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
     check("chime-only note explains breath lines", pre.mode, pre);
@@ -447,16 +557,24 @@ try {
     }));
     check("controls: enabled after the demo starts", !post.breath && !post.good && !post.bad, post);
     check("a11y: focus moves to the status badge after Start", post.focus === "state-badge", post);
-    check("first run: the guide card appears after Start with live framing",
-      post.guide && /in view/.test(post.framing || ""), post);
+    check(
+      "first run: the guide card appears after Start with live framing",
+      post.guide && /in view/.test(post.framing || ""),
+      post,
+    );
     await page.click("#first-run-next");
-    check("first run: step 2 offers calibration",
-      (await page.textContent("#first-run-heading")) === "Calibrate to your posture" && await page.isVisible("#first-run-body button"));
+    check(
+      "first run: step 2 offers calibration",
+      (await page.textContent("#first-run-heading")) === "Calibrate to your posture" &&
+        (await page.isVisible("#first-run-body button")),
+    );
     await page.click("#first-run-next");
-    check("first run: step 3 is Choose your coach, with voice, breaks and sample buttons",
+    check(
+      "first run: step 3 is Choose your coach, with voice, breaks and sample buttons",
       (await page.textContent("#first-run-heading")) === "Choose your coach" &&
-      (await page.locator("#coach-voice, #coach-level, #coach-eye, #coach-move, #coach-moments").count()) === 5 &&
-      (await page.locator("#first-run-body button").count()) === 3);
+        (await page.locator("#coach-voice, #coach-level, #coach-eye, #coach-move, #coach-moments").count()) === 5 &&
+        (await page.locator("#first-run-body button").count()) === 3,
+    );
     await page.selectOption("#coach-move", "45");
     await page.uncheck("#coach-eye");
     const coach = await page.evaluate(() => {
@@ -465,9 +583,13 @@ try {
     });
     check("first run: coach choices change the real settings", coach.move === 45 && coach.eye === false, coach);
     await page.click("#first-run-next");
-    check("first run: last step says to leave the tab open and has Share and a silent test",
-      /Leave this tab open/.test(await page.textContent("#first-run-body")) && /Pause any time/.test(await page.textContent("#first-run-body")) &&
-      (await page.locator("#first-run-body button").allTextContents()).join("|") === "Share BackUp|Start a silent test");
+    check(
+      "first run: last step says to leave the tab open and has Share and a silent test",
+      /Leave this tab open/.test(await page.textContent("#first-run-body")) &&
+        /Pause any time/.test(await page.textContent("#first-run-body")) &&
+        (await page.locator("#first-run-body button").allTextContents()).join("|") ===
+          "Share BackUp|Start a silent test",
+    );
     await page.click("#first-run-next");
     const done = await page.evaluate(() => ({
       hidden: document.getElementById("first-run").hidden,
@@ -476,7 +598,10 @@ try {
     check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
     await page.click("#setup-panel summary");
     await page.click("#intro-again");
-    check("first run: Show the intro again reopens it", !(await page.evaluate(() => document.getElementById("first-run").hidden)));
+    check(
+      "first run: Show the intro again reopens it",
+      !(await page.evaluate(() => document.getElementById("first-run").hidden)),
+    );
     const dashW = await noScroll();
     await page.screenshot({ path: path.join(outDir, "app-320-dashboard.png"), fullPage: true });
     check("reflow: no horizontal scroll at 320 px on the dashboard", dashW.scrollWidth <= dashW.innerWidth, dashW);
@@ -489,13 +614,20 @@ try {
     await page.uncheck("#pause-shortcut", { force: true });
     await page.locator("body").press("p");
     check("shortcut: P does nothing once turned off", (await page.textContent("#pause")) === "Pause");
-    check("shortcut: the setting is stored",
-      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).pauseShortcut)) === false);
+    check(
+      "shortcut: the setting is stored",
+      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).pauseShortcut)) === false,
+    );
     // Reduced motion: no transitions on the hold bar, score bar or banner.
     await page.emulateMedia({ reducedMotion: "reduce" });
-    const motion = await page.evaluate(() => ["hold-fill", "banner", "good-bar"].map((id) =>
-      getComputedStyle(document.getElementById(id)).transitionDuration));
-    check("a11y: prefers-reduced-motion disables transitions", motion.every((d) => d === "0s"), motion);
+    const motion = await page.evaluate(() =>
+      ["hold-fill", "banner", "good-bar"].map((id) => getComputedStyle(document.getElementById(id)).transitionDuration),
+    );
+    check(
+      "a11y: prefers-reduced-motion disables transitions",
+      motion.every((d) => d === "0s"),
+      motion,
+    );
     check("320 px: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -504,16 +636,29 @@ try {
   {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
-    check("not working: the panel invites you to start before tracking", /Start the camera/.test(await page.textContent("#setup-status")));
+    check(
+      "not working: the panel invites you to start before tracking",
+      /Start the camera/.test(await page.textContent("#setup-status")),
+    );
     await page.click("#start-demo");
-    await page.waitForFunction(() => /looks good/.test(document.getElementById("setup-status").textContent), null, { timeout: 20000 });
+    await page.waitForFunction(() => /looks good/.test(document.getElementById("setup-status").textContent), null, {
+      timeout: 20000,
+    });
     check("not working: the demo reports that tracking looks good", true);
     await page.click("#setup-panel summary");
     await page.waitForTimeout(500);
     const sm = await page.evaluate(() => {
       const cv = document.getElementById("setup-mini-canvas");
-      return { w: cv.clientWidth, rotor: !!document.getElementById("setup-needle-rotor"),
-        ink: cv.width ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data.some((v, k) => k % 4 === 3 && v > 0) : false };
+      return {
+        w: cv.clientWidth,
+        rotor: !!document.getElementById("setup-needle-rotor"),
+        ink: cv.width
+          ? cv
+              .getContext("2d")
+              .getImageData(0, 0, cv.width, cv.height)
+              .data.some((v, k) => k % 4 === 3 && v > 0)
+          : false,
+      };
     });
     check("not working: the panel shows a live mini skeleton and needle", sm.w > 0 && sm.rotor && sm.ink, sm);
     await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
@@ -540,18 +685,30 @@ try {
       ss.speak = () => {};
       ss.cancel = () => {};
       Object.defineProperty(window, "speechSynthesis", { value: ss, configurable: true });
-      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+      window.SpeechSynthesisUtterance = class {
+        constructor(t) {
+          this.text = t;
+        }
+      };
       // The app announces each spoken line and whether it used a clip.
       document.addEventListener("pg:speak", (e) => window.__spoken.push(e.detail));
     });
     await page.goto(`${base}app/${bust}`);
-    await page.waitForFunction(() => document.getElementById("voice-note").textContent.includes("Kokoro"), null, { timeout: 10000 }).catch(() => {});
+    await page
+      .waitForFunction(() => document.getElementById("voice-note").textContent.includes("Kokoro"), null, {
+        timeout: 10000,
+      })
+      .catch(() => {});
     const voice = await page.evaluate(() => ({
       note: document.getElementById("voice-note").textContent,
       selected: document.getElementById("voice-pick").value,
       praiseDefault: document.getElementById("spoken-praise").checked,
     }));
-    check("voice: recorded Kokoro voice is the default", voice.selected.startsWith("kokoro:") && voice.note.includes("Kokoro"), voice);
+    check(
+      "voice: recorded Kokoro voice is the default",
+      voice.selected.startsWith("kokoro:") && voice.note.includes("Kokoro"),
+      voice,
+    );
     check("voice: spoken praise is off by default", voice.praiseDefault === false, voice);
     const clip = await page.evaluate(async () => {
       const m = await (await fetch("./voice/manifest.json")).json();
@@ -568,54 +725,111 @@ try {
       text: document.getElementById("hold-text").textContent,
       width: document.getElementById("hold-fill").style.width,
     }));
-    check("hold bar fills toward the next praise", hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0, hold);
-    await page.waitForFunction(() => window.__spoken.some((x) => /good|posture|champion|keep|relaxed/i.test(x.text) && !/^Head|^Your|^You're leaning|^Please/.test(x.text)),
-      null, { timeout: 15000 }).catch(() => {});
+    check(
+      "hold bar fills toward the next praise",
+      hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0,
+      hold,
+    );
+    await page
+      .waitForFunction(
+        () =>
+          window.__spoken.some(
+            (x) =>
+              /good|posture|champion|keep|relaxed/i.test(x.text) && !/^Head|^Your|^You're leaning|^Please/.test(x.text),
+          ),
+        null,
+        { timeout: 15000 },
+      )
+      .catch(() => {});
     const spoken = await page.evaluate(() => window.__spoken.slice());
-    check("praise: spoken with the recorded voice when opted in",
-      spoken.some((x) => x.engine === "kokoro" && /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(x.text)),
-      spoken);
+    check(
+      "praise: spoken with the recorded voice when opted in",
+      spoken.some(
+        (x) =>
+          x.engine === "kokoro" &&
+          /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(
+            x.text,
+          ),
+      ),
+      spoken,
+    );
     await page.keyboard.press("p");
     const pausedBadge = await page.textContent("#state-badge");
-    const before = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
+    const before = await page.evaluate(() => [
+      window.__spoken.length,
+      document.getElementById("reminder-count").textContent,
+    ]);
     await page.waitForTimeout(4000); // sim 32 s: the whole slouch half would chime without the pause
-    const after = await page.evaluate(() => [window.__spoken.length, document.getElementById("reminder-count").textContent]);
-    check("pause: no reminders or speech while paused",
-      pausedBadge === "paused" && before[0] === after[0] && before[1] === after[1], { pausedBadge, before, after });
+    const after = await page.evaluate(() => [
+      window.__spoken.length,
+      document.getElementById("reminder-count").textContent,
+    ]);
+    check(
+      "pause: no reminders or speech while paused",
+      pausedBadge === "paused" && before[0] === after[0] && before[1] === after[1],
+      { pausedBadge, before, after },
+    );
     await page.click("#pause");
     await page.waitForTimeout(1500);
     const resumed = await page.textContent("#state-badge");
     check("pause: resume restarts tracking", resumed !== "paused", { resumed });
     await page.click("#breath-check"); // 9 s real-time phases are on the 8x clock: ~1.2 s
-    await page.waitForFunction(() => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent), null, { timeout: 8000 }).catch(() => {});
+    await page
+      .waitForFunction(
+        () => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent),
+        null,
+        { timeout: 8000 },
+      )
+      .catch(() => {});
     const breathOut = await page.evaluate(() => ({
       status: document.getElementById("relax-status").textContent,
-      lines: window.__spoken.filter((x) => /breath|shoulders|relaxed/i.test(x.text)).map((x) => `${x.engine}: ${x.text}`),
+      lines: window.__spoken
+        .filter((x) => /breath|shoulders|relaxed/i.test(x.text))
+        .map((x) => `${x.engine}: ${x.text}`),
     }));
-    check("breath check: prompts in, out, then gives a verdict with the recorded voice",
-      /Relaxed and stacked/.test(breathOut.status) && breathOut.lines.length >= 3 && breathOut.lines.every((l) => l.startsWith("kokoro")), breathOut);
+    check(
+      "breath check: prompts in, out, then gives a verdict with the recorded voice",
+      /Relaxed and stacked/.test(breathOut.status) &&
+        breathOut.lines.length >= 3 &&
+        breathOut.lines.every((l) => l.startsWith("kokoro")),
+      breathOut,
+    );
     const spokenBeforeTest = await page.evaluate(() => window.__spoken.length);
     await page.click("#test-start");
     await page.waitForTimeout(3000); // sim 24 s: the demo slouches in this window, yet nothing may fire
-    const silent = await page.evaluate((n) => ({
-      badge: document.getElementById("state-badge").textContent,
-      testing: document.body.classList.contains("testing"),
-      needleShown: getComputedStyle(document.querySelector(".panel.coaching")).display !== "none",
-      spoke: window.__spoken.length - n,
-      status: document.getElementById("test-status").textContent,
-    }), spokenBeforeTest);
-    check("silent test: hides feedback and stays quiet",
-      silent.badge === "silent test" && silent.testing && !silent.needleShown && silent.spoke === 0 && /left/.test(silent.status), silent);
+    const silent = await page.evaluate(
+      (n) => ({
+        badge: document.getElementById("state-badge").textContent,
+        testing: document.body.classList.contains("testing"),
+        needleShown: getComputedStyle(document.querySelector(".panel.coaching")).display !== "none",
+        spoke: window.__spoken.length - n,
+        status: document.getElementById("test-status").textContent,
+      }),
+      spokenBeforeTest,
+    );
+    check(
+      "silent test: hides feedback and stays quiet",
+      silent.badge === "silent test" &&
+        silent.testing &&
+        !silent.needleShown &&
+        silent.spoke === 0 &&
+        /left/.test(silent.status),
+      silent,
+    );
     await page.click("#test-start"); // stop early: not saved
-    check("silent test: stopping early is not saved",
-      (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0);
+    check(
+      "silent test: stopping early is not saved",
+      (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0,
+    );
     await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
     const href = await page.getAttribute("#report-bug", "href");
     const issue = new URL(href);
     const body = issue.searchParams.get("body") || "";
-    check("bug report: pre-fills a GitHub issue with diagnostics",
+    check(
+      "bug report: pre-fills a GitHub issue with diagnostics",
       issue.pathname === "/arii/posture-guard/issues/new" && body.includes("WebGL:") && body.includes("Browser:"),
-      { href: href.slice(0, 200) });
+      { href: href.slice(0, 200) },
+    );
     await page.screenshot({ path: path.join(outDir, "demo-praise-pause.png") });
     check("praise/pause/report: no page errors", errors.length === 0, errors);
     report.praise = { spoken, pausedBadge, resumed };
@@ -629,21 +843,29 @@ try {
     const t0 = Date.now();
     await page.click("#start-camera");
     await page.waitForFunction(
-      () => getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+      () =>
+        getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
         document.getElementById("start-error").textContent !== "",
-      null, { timeout: 90000 },
+      null,
+      { timeout: 90000 },
     );
     const loaded = await ui(page);
-    check("webcam mode starts (vendored bundle, WASM and model load)",
-      loaded.overlay === "none" && loaded.source === "webcam", { ...loaded, seconds: (Date.now() - t0) / 1000 });
+    check(
+      "webcam mode starts (vendored bundle, WASM and model load)",
+      loaded.overlay === "none" && loaded.source === "webcam",
+      { ...loaded, seconds: (Date.now() - t0) / 1000 },
+    );
     // Give the detector a few seconds on the looping fake camera frame.
     await page.waitForTimeout(8000);
     const seen = await ui(page);
     report.webcam = { loaded, seen };
     await page.screenshot({ path: path.join(outDir, "webcam-fake-camera.png") });
     if (y4m) {
-      check("pose detected on the fake camera feed",
-        seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-", seen);
+      check(
+        "pose detected on the fake camera feed",
+        seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-",
+        seen,
+      );
       check("upright person gets no reminder", seen.reminders === "0", seen);
     }
     check("webcam mode has no errors", errors.length === 0, errors);
@@ -652,8 +874,12 @@ try {
   // 4. No WebGL: a separate browser, since the flag is per launch.
   {
     const noGL = await chromium.launch({
-      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
-        ...(y4m ? [`--use-file-for-fake-video-capture=${y4m}`] : [])],
+      args: [
+        "--disable-3d-apis",
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+        ...(y4m ? [`--use-file-for-fake-video-capture=${y4m}`] : []),
+      ],
     });
     try {
       const { page, errors } = await newPage(noGL);
@@ -672,26 +898,39 @@ try {
         if (!el) return { banner: "element-missing", text: "" };
         return { banner: getComputedStyle(el).display, text: el.textContent };
       });
-      check("no WebGL: landing page shows the warning banner",
-        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /fallback|simpler/i.test(landing.text), landing);
+      check(
+        "no WebGL: landing page shows the warning banner",
+        landing.banner === "block" &&
+          /chrome:\/\/settings/.test(landing.text) &&
+          /fallback|simpler/i.test(landing.text),
+        landing,
+      );
       await page.goto(`${base}app/${bust}`);
-      const gl = await page.evaluate(() => Boolean(
-        document.createElement("canvas").getContext("webgl") ||
-        (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2"))));
+      const gl = await page.evaluate(() =>
+        Boolean(
+          document.createElement("canvas").getContext("webgl") ||
+            (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2")),
+        ),
+      );
       const cam = await page.evaluate(() => {
         const btn = document.getElementById("start-camera");
         const helpEl = document.getElementById("webgl-help");
         if (!btn || !helpEl) return { text: "", disabled: true, help: "element-missing" };
         return { text: btn.textContent, disabled: btn.disabled, help: getComputedStyle(helpEl).display };
       });
-      check("no WebGL: camera button stays enabled and the notice explains the fallback",
-        !gl && !cam.disabled && /webcam/i.test(cam.text) && cam.help === "block", cam);
+      check(
+        "no WebGL: camera button stays enabled and the notice explains the fallback",
+        !gl && !cam.disabled && /webcam/i.test(cam.text) && cam.help === "block",
+        cam,
+      );
       const t0 = Date.now();
       await page.click("#start-camera");
       await page.waitForFunction(
-        () => getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+        () =>
+          getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
           document.getElementById("start-error").textContent !== "",
-        null, { timeout: 120000 },
+        null,
+        { timeout: 120000 },
       );
       const s = await ui(page);
       const note = await page.evaluate(() => {
@@ -702,13 +941,22 @@ try {
       const seen = await ui(page);
       await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
       report.noWebgl = { s, note, seen, seconds: (Date.now() - t0) / 1000 };
-      check("no WebGL: webcam starts on the MoveNet fallback",
-        s.overlay === "none" && s.source === "webcam" && s.startError === "", s);
-      check("no WebGL: shows the reduced accuracy notice",
-        note.display === "block" && /less accurate/i.test(note.text), note);
+      check(
+        "no WebGL: webcam starts on the MoveNet fallback",
+        s.overlay === "none" && s.source === "webcam" && s.startError === "",
+        s,
+      );
+      check(
+        "no WebGL: shows the reduced accuracy notice",
+        note.display === "block" && /less accurate/i.test(note.text),
+        note,
+      );
       if (y4m) {
-        check("no WebGL: fallback finds the person on the fake camera feed",
-          seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-", seen);
+        check(
+          "no WebGL: fallback finds the person on the fake camera feed",
+          seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-",
+          seen,
+        );
       }
       check("no WebGL: no page errors", errors.length === 0, errors);
       await page.close();
@@ -721,14 +969,26 @@ try {
   {
     const { page, errors } = await newPage(browser);
     await page.goto(base + "app/" + bust);
-    const rate = 8000, n = 800; // 0.1 s of silence as 16-bit mono PCM WAV
+    const rate = 8000,
+      n = 800; // 0.1 s of silence as 16-bit mono PCM WAV
     const wav = Buffer.alloc(44 + n * 2);
-    wav.write("RIFF", 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write("WAVEfmt ", 8);
-    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
-    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32);
-    wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(n * 2, 40);
+    wav.write("RIFF", 0);
+    wav.writeUInt32LE(36 + n * 2, 4);
+    wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20);
+    wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(rate, 24);
+    wav.writeUInt32LE(rate * 2, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write("data", 36);
+    wav.writeUInt32LE(n * 2, 40);
     await page.setInputFiles("#bad-file", { name: "chime.wav", mimeType: "audio/wav", buffer: wav });
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound, null, { timeout: 5000 })
+    await page
+      .waitForFunction(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound, null, {
+        timeout: 5000,
+      })
       .catch(() => {});
     const stored = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
     check("custom sound: an uploaded sound is stored", stored);
@@ -746,12 +1006,18 @@ try {
     await page.addInitScript(() => {
       window.__osc = [];
       const orig = AudioContext.prototype.createOscillator;
-      AudioContext.prototype.createOscillator = function () { const o = orig.call(this); window.__osc.push(o); return o; };
+      AudioContext.prototype.createOscillator = function () {
+        const o = orig.call(this);
+        window.__osc.push(o);
+        return o;
+      };
     });
     await page.goto(`${base}app/${bust}`);
     const def = await page.inputValue("#sound-pack");
     const osc = async (sel) => {
-      await page.evaluate(() => { window.__osc.length = 0; });
+      await page.evaluate(() => {
+        window.__osc.length = 0;
+      });
       await page.click(sel);
       await page.waitForTimeout(200);
       return page.evaluate(() => window.__osc.length);
@@ -762,9 +1028,11 @@ try {
     const spookyGood = await osc("#test-good");
     await page.reload();
     const kept = await page.inputValue("#sound-pack");
-    check("sound pack: clean is the default and Spooky plays a bell and a ghost glide",
+    check(
+      "sound pack: clean is the default and Spooky plays a bell and a ghost glide",
       def === "clean" && clean === 2 && spookyBad === 14 && spookyGood === 2 && kept === "spooky",
-      { def, clean, spookyBad, spookyGood, kept });
+      { def, clean, spookyBad, spookyGood, kept },
+    );
     check("sound pack: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -780,13 +1048,22 @@ try {
       const swBefore = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
       check("offline: no service worker is registered until the user opts in", swBefore === 0, { swBefore });
       await page.click("#offline-enable");
-      await page.waitForFunction(
-        () => /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(document.getElementById("offline-status").textContent),
-        null, { timeout: 90000 },
-      ).catch(() => {});
+      await page
+        .waitForFunction(
+          () =>
+            /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(
+              document.getElementById("offline-status").textContent,
+            ),
+          null,
+          { timeout: 90000 },
+        )
+        .catch(() => {});
       const status = await page.evaluate(() => document.getElementById("offline-status").textContent);
-      check("offline: ready message appears and says video is never stored",
-        /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(status) && /video is never stored/i.test(status), status);
+      check(
+        "offline: ready message appears and says video is never stored",
+        /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(status) && /video is never stored/i.test(status),
+        status,
+      );
       await page.screenshot({ path: path.join(outDir, "offline-ready.png") });
       await page.reload(); // let the worker take control of the page before going offline
       await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 }).catch(() => {});
@@ -802,25 +1079,41 @@ try {
       if (y4m) {
         await page.reload();
         await page.click("#start-camera");
-        await page.waitForFunction(
-          () => document.getElementById("source").textContent === "webcam" && document.getElementById("m-head_forward_deg").textContent !== "-",
-          null, { timeout: 60000 },
-        ).catch(() => {});
+        await page
+          .waitForFunction(
+            () =>
+              document.getElementById("source").textContent === "webcam" &&
+              document.getElementById("m-head_forward_deg").textContent !== "-",
+            null,
+            { timeout: 60000 },
+          )
+          .catch(() => {});
         const cam = await ui(page);
-        check("offline: webcam mode starts and pose detection finds the person without a network",
-          !cam.startError && cam.source === "webcam" && cam.headForward !== "-", cam);
+        check(
+          "offline: webcam mode starts and pose detection finds the person without a network",
+          !cam.startError && cam.source === "webcam" && cam.headForward !== "-",
+          cam,
+        );
       }
       check("offline: no failed requests", failedReqs.length === 0, failedReqs.slice(0, 5));
       check("offline: no page errors", errors.length === 0, errors);
       await ctx.setOffline(false);
       await page.reload();
       await page.click("#offline-remove");
-      await page.waitForFunction(() => /Offline copy removed/.test(document.getElementById("offline-status").textContent), null, { timeout: 10000 });
+      await page.waitForFunction(
+        () => /Offline copy removed/.test(document.getElementById("offline-status").textContent),
+        null,
+        { timeout: 10000 },
+      );
       const left = await page.evaluate(async () => ({
         regs: (await navigator.serviceWorker.getRegistrations()).length,
         caches: (await caches.keys()).filter((k) => k.startsWith("posture-guard-")).length,
       }));
-      check("offline: Remove offline copy unregisters the worker and deletes the cache", left.regs === 0 && left.caches === 0, left);
+      check(
+        "offline: Remove offline copy unregisters the worker and deletes the cache",
+        left.regs === 0 && left.caches === 0,
+        left,
+      );
     }
     await page.close();
   }
@@ -830,33 +1123,67 @@ try {
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
-    check("consent: relax reminders box is off and the status says off until the user opts in",
+    check(
+      "consent: relax reminders box is off and the status says off until the user opts in",
       !(await page.isChecked("#relax-reminders")) && /Off\./.test(await page.textContent("#consent-status")),
-      await page.textContent("#consent-status"));
+      await page.textContent("#consent-status"),
+    );
     await page.click("#breath-check");
-    check("consent: the breath check asks first and does not start", await page.evaluate(() => document.getElementById("consent-dialog").open &&
-      !/Breathe in slowly/.test(document.getElementById("relax-status").textContent)));
+    check(
+      "consent: the breath check asks first and does not start",
+      await page.evaluate(
+        () =>
+          document.getElementById("consent-dialog").open &&
+          !/Breathe in slowly/.test(document.getElementById("relax-status").textContent),
+      ),
+    );
     const dialog = await page.textContent("#consent-dialog");
-    check("consent: the dialog explains what, where, kept, identify and withdraw",
-      /measured/.test(dialog) && /only in this browser tab/.test(dialog) && /identify/.test(dialog) && /withdraw/i.test(dialog) && /Consumer Health Data/.test(dialog), dialog.slice(0, 200));
+    check(
+      "consent: the dialog explains what, where, kept, identify and withdraw",
+      /measured/.test(dialog) &&
+        /only in this browser tab/.test(dialog) &&
+        /identify/.test(dialog) &&
+        /withdraw/i.test(dialog) &&
+        /Consumer Health Data/.test(dialog),
+      dialog.slice(0, 200),
+    );
     check("consent: Turn on is disabled until the box is checked", await page.isDisabled("#consent-agree"));
     await page.screenshot({ path: path.join(outDir, "consent-dialog.png") });
     await page.click("#consent-cancel");
-    check("consent: declining stores nothing", await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent));
+    check(
+      "consent: declining stores nothing",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent),
+    );
     await page.check("#breathing-moments");
-    check("consent: the breathing moments box also asks and resets when declined", await page.evaluate(() => document.getElementById("consent-dialog").open));
+    check(
+      "consent: the breathing moments box also asks and resets when declined",
+      await page.evaluate(() => document.getElementById("consent-dialog").open),
+    );
     await page.click("#consent-cancel");
     check("consent: breathing moments stay off", !(await page.isChecked("#breathing-moments")));
     await page.click("#breath-check");
     await page.check("#consent-check");
     await page.click("#consent-agree");
-    await page.waitForFunction(() => /Breathe in slowly/.test(document.getElementById("relax-status").textContent), null, { timeout: 5000 }).catch(() => {});
+    await page
+      .waitForFunction(() => /Breathe in slowly/.test(document.getElementById("relax-status").textContent), null, {
+        timeout: 5000,
+      })
+      .catch(() => {});
     const rec = await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).consent);
-    check("consent: agreeing records a dated consent and runs the breath check",
-      rec && rec.version === 1 && !Number.isNaN(Date.parse(rec.at)) && /Breathe in slowly/.test(await page.textContent("#relax-status")), rec);
+    check(
+      "consent: agreeing records a dated consent and runs the breath check",
+      rec &&
+        rec.version === 1 &&
+        !Number.isNaN(Date.parse(rec.at)) &&
+        /Breathe in slowly/.test(await page.textContent("#relax-status")),
+      rec,
+    );
     await page.click("#consent-withdraw");
-    check("consent: withdrawing removes the record",
-      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent) && !(await page.isChecked("#relax-reminders")));
+    check(
+      "consent: withdrawing removes the record",
+      (await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent)) &&
+        !(await page.isChecked("#relax-reminders")),
+    );
     page.on("dialog", (d) => d.accept());
     await page.click("#consent-open");
     await page.check("#consent-check");
@@ -864,8 +1191,10 @@ try {
     await page.click("#progress-delete");
     await page.waitForLoadState("load");
     await page.waitForTimeout(500);
-    check("consent: Delete my data removes the consent record",
-      await page.evaluate(() => !(JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent)));
+    check(
+      "consent: Delete my data removes the consent record",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent),
+    );
     check("consent: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -873,26 +1202,51 @@ try {
   // 4d. Issue #49 part 4: Share menu without navigator.share, plain links only.
   {
     const { page, errors } = await newPage(browser);
-    await page.addInitScript(() => { Object.defineProperty(navigator, "share", { value: undefined, configurable: true }); });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    });
     await page.goto(`${base}app/${bust}`);
     const before = externalRequests.length;
     await page.click("#share-btn");
-    const links = await page.evaluate(() => Object.fromEntries(["bluesky", "linkedin", "x", "email", "mastodon"].map((id) => {
-      const a = document.getElementById(`share-${id}`);
-      return [id, { href: a.href, hidden: a.hidden, rel: a.rel }];
-    })));
+    const links = await page.evaluate(() =>
+      Object.fromEntries(
+        ["bluesky", "linkedin", "x", "email", "mastodon"].map((id) => {
+          const a = document.getElementById(`share-${id}`);
+          return [id, { href: a.href, hidden: a.hidden, rel: a.rel }];
+        }),
+      ),
+    );
     const hosts = ["bluesky", "linkedin", "x"].map((k) => new URL(links[k].href).hostname).join();
-    check("share: menu opens with Bluesky, LinkedIn, X and email links, no third-party host before a click",
-      hosts === "bsky.app,www.linkedin.com,x.com" && links.email.href.startsWith("mailto:") && links.mastodon.hidden &&
-      /noopener/.test(links.bluesky.rel) && externalRequests.length === before, links);
-    check("share: the text and link are shown",
-      /Nothing is uploaded/.test(await page.textContent("#share-text")) && /\/posture-guard\/|^http/.test(await page.inputValue("#share-link")));
+    check(
+      "share: menu opens with Bluesky, LinkedIn, X and email links, no third-party host before a click",
+      hosts === "bsky.app,www.linkedin.com,x.com" &&
+        links.email.href.startsWith("mailto:") &&
+        links.mastodon.hidden &&
+        /noopener/.test(links.bluesky.rel) &&
+        externalRequests.length === before,
+      links,
+    );
+    check(
+      "share: the text and link are shown",
+      /Nothing is uploaded/.test(await page.textContent("#share-text")) &&
+        /\/posture-guard\/|^http/.test(await page.inputValue("#share-link")),
+    );
     await page.fill("#share-instance", "https://evil.example/x");
-    check("share: an invalid Mastodon server shows a hint and no link", await page.evaluate(() => document.getElementById("share-mastodon").hidden) &&
-      /server name/.test(await page.textContent("#share-msg")));
+    check(
+      "share: an invalid Mastodon server shows a hint and no link",
+      (await page.evaluate(() => document.getElementById("share-mastodon").hidden)) &&
+        /server name/.test(await page.textContent("#share-msg")),
+    );
     await page.fill("#share-instance", "fosstodon.org");
-    const masto = await page.evaluate(() => { const a = document.getElementById("share-mastodon"); return { hidden: a.hidden, host: new URL(a.href).hostname }; });
-    check("share: a valid Mastodon server gives a link to that host", !masto.hidden && masto.host === "fosstodon.org", masto);
+    const masto = await page.evaluate(() => {
+      const a = document.getElementById("share-mastodon");
+      return { hidden: a.hidden, host: new URL(a.href).hostname };
+    });
+    check(
+      "share: a valid Mastodon server gives a link to that host",
+      !masto.hidden && masto.host === "fosstodon.org",
+      masto,
+    );
     await page.screenshot({ path: path.join(outDir, "share-dialog.png") });
     check("share: no page errors", errors.length === 0, errors);
     await page.close();
@@ -904,8 +1258,11 @@ try {
     await page.goto(`${base}app/${bust}`);
     await page.click("#share-btn");
     await page.click("#share-card-btn");
-    check("share card: too little tracked time gives a hint and no card",
-      /at least a minute/.test(await page.textContent("#share-msg")) && await page.evaluate(() => document.getElementById("share-card-wrap").hidden));
+    check(
+      "share card: too little tracked time gives a hint and no card",
+      /at least a minute/.test(await page.textContent("#share-msg")) &&
+        (await page.evaluate(() => document.getElementById("share-card-wrap").hidden)),
+    );
     await page.click("#share-close");
     await page.click("#start-demo");
     await page.waitForTimeout(66000);
@@ -913,10 +1270,18 @@ try {
     await page.click("#share-card-btn");
     const card = await page.evaluate(() => {
       const c = document.getElementById("share-card");
-      return { shown: !document.getElementById("share-card-wrap").hidden, w: c.width, h: c.height, label: c.getAttribute("aria-label") };
+      return {
+        shown: !document.getElementById("share-card-wrap").hidden,
+        w: c.width,
+        h: c.height,
+        label: c.getAttribute("aria-label"),
+      };
     });
-    check("share card: a 1200x630 card with alt text is shown after a minute of tracking",
-      card.shown && card.w === 1200 && card.h === 630 && /good posture this session/.test(card.label || ""), card);
+    check(
+      "share card: a 1200x630 card with alt text is shown after a minute of tracking",
+      card.shown && card.w === 1200 && card.h === 630 && /good posture this session/.test(card.label || ""),
+      card,
+    );
     await page.waitForTimeout(300);
     const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#share-card-download")]);
     check("share card: Download PNG saves backup-score.png", dl.suggestedFilename() === "backup-score.png");
@@ -930,16 +1295,27 @@ try {
     const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
     const used = (extra = {}) => ({
       usage: { firstSeen: day(30), sessions: 8 },
-      days: { [day(20)]: { good: 3000, bad: 600 }, [day(10)]: { good: 3000, bad: 600 }, [day(3)]: { good: 3000, bad: 600 } },
+      days: {
+        [day(20)]: { good: 3000, bad: 600 },
+        [day(10)]: { good: 3000, bad: 600 },
+        [day(3)]: { good: 3000, bad: 600 },
+      },
       // keep the other prompts out of the way: only the sponsor card is under test
-      eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false,
+      eyeBreaks: false,
+      moveBreakMinutes: 0,
+      relaxReminders: false,
       ...extra,
     });
     const shownIn = async (extra, ms) => {
       const { page, errors } = await newPage(browser, { extra: used(extra) });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       await page.click("#start-demo");
-      const seen = await page.waitForFunction(() => !document.getElementById("sponsor-card").hidden, null, { timeout: ms }).then(() => true, () => false);
+      const seen = await page
+        .waitForFunction(() => !document.getElementById("sponsor-card").hidden, null, { timeout: ms })
+        .then(
+          () => true,
+          () => false,
+        );
       return { page, errors, seen };
     };
     {
@@ -954,12 +1330,22 @@ try {
           inPanel: !!document.getElementById("sponsor-card").closest(".panel"),
           video: document.getElementById("sponsor-card").closest(".stage") === null,
         }));
-        check("sponsor: text, links and buttons, counted once", /tracked about \d+ hours/.test(info.text) &&
-          info.link === "https://github.com/sponsors/arii" && info.buttons.join("|") === "Share instead|Maybe later|Don\u2019t ask again" &&
-          info.stored.shown === 1 && info.inPanel && info.video, info);
+        check(
+          "sponsor: text, links and buttons, counted once",
+          /tracked about \d+ hours/.test(info.text) &&
+            info.link === "https://github.com/sponsors/arii" &&
+            info.buttons.join("|") === "Share instead|Maybe later|Don\u2019t ask again" &&
+            info.stored.shown === 1 &&
+            info.inPanel &&
+            info.video,
+          info,
+        );
         await page.screenshot({ path: path.join(outDir, "sponsor-card.png") });
         await page.click("#sponsor-never");
-        const after = await page.evaluate(() => ({ hidden: document.getElementById("sponsor-card").hidden, sp: JSON.parse(localStorage.getItem("posture-guard:v1")).sponsor }));
+        const after = await page.evaluate(() => ({
+          hidden: document.getElementById("sponsor-card").hidden,
+          sp: JSON.parse(localStorage.getItem("posture-guard:v1")).sponsor,
+        }));
         check("sponsor: Don't ask again hides it and is stored", after.hidden && after.sp.never === true, after);
       }
       check("sponsor: no page errors", errors.length === 0, errors);
@@ -982,7 +1368,10 @@ try {
       await page.click("#start-demo");
       await page.click("#test-start");
       await page.waitForTimeout(4000);
-      check("sponsor: not shown during a silent test", await page.evaluate(() => document.getElementById("sponsor-card").hidden));
+      check(
+        "sponsor: not shown during a silent test",
+        await page.evaluate(() => document.getElementById("sponsor-card").hidden),
+      );
       await page.close();
     }
   }
@@ -991,27 +1380,47 @@ try {
   {
     const { page, errors } = await newPage(browser);
     await page.goto(base + bust);
-    const og = await page.evaluate(() => Object.fromEntries(["og:title", "og:description", "og:image", "twitter:card", "twitter:image"].map((k) => {
-      const m = document.querySelector(`meta[property="${k}"], meta[name="${k}"]`);
-      return [k, m?.content];
-    })));
-    check("landing: Open Graph and Twitter card tags are present", Object.values(og).every(Boolean) && og["twitter:card"] === "summary_large_image", og);
+    const og = await page.evaluate(() =>
+      Object.fromEntries(
+        ["og:title", "og:description", "og:image", "twitter:card", "twitter:image"].map((k) => {
+          const m = document.querySelector(`meta[property="${k}"], meta[name="${k}"]`);
+          return [k, m?.content];
+        }),
+      ),
+    );
+    check(
+      "landing: Open Graph and Twitter card tags are present",
+      Object.values(og).every(Boolean) && og["twitter:card"] === "summary_large_image",
+      og,
+    );
     const img = await fetchStatus(`${base}assets/og-image.png${bust}`);
     check("landing: og-image.png is served", img.ok && /image\/png/.test(img.type), { status: img.status });
-    check("landing: footer links to the Consumer Health Data Privacy Policy",
-      (await page.locator('footer a[href="privacy.html#consumer-health-data"]').count()) === 1);
+    check(
+      "landing: footer links to the Consumer Health Data Privacy Policy",
+      (await page.locator('footer a[href="privacy.html#consumer-health-data"]').count()) === 1,
+    );
     await page.goto(`${base}privacy.html${bust}`);
     const sections = await page.evaluate(() => ({
-      chd: /Consumer Health Data Privacy Policy/.test(document.getElementById("consumer-health-data")?.textContent || ""),
-      bio: /do not retain any face geometry/.test(document.getElementById("biometric")?.nextElementSibling?.textContent || ""),
+      chd: /Consumer Health Data Privacy Policy/.test(
+        document.getElementById("consumer-health-data")?.textContent || "",
+      ),
+      bio: /do not retain any face geometry/.test(
+        document.getElementById("biometric")?.nextElementSibling?.textContent || "",
+      ),
       sponsor: /sponsor prompt/.test(document.body.textContent),
       offline: /Make available offline/.test(document.body.textContent),
     }));
-    check("privacy page has the consumer health data and biometric retention sections", sections.chd && sections.bio && sections.sponsor && sections.offline, sections);
+    check(
+      "privacy page has the consumer health data and biometric retention sections",
+      sections.chd && sections.bio && sections.sponsor && sections.offline,
+      sections,
+    );
     await page.goto(`${base}app/${bust}`);
-    check("app footer links to the Consumer Health Data Privacy Policy and Sponsor",
+    check(
+      "app footer links to the Consumer Health Data Privacy Policy and Sponsor",
       (await page.locator('footer a[href="../privacy.html#consumer-health-data"]').count()) === 1 &&
-      (await page.locator('footer a[href="https://github.com/sponsors/arii"]').count()) === 1);
+        (await page.locator('footer a[href="https://github.com/sponsors/arii"]').count()) === 1,
+    );
     check("landing and privacy pages have no errors", errors.length === 0, errors);
     await page.close();
   }
@@ -1024,8 +1433,11 @@ try {
       if (!res.ok) missing.push(`${f} ${res.status}`);
     }
     check("vendored MediaPipe files are served", missing.length === 0, missing);
-    check("no request to a third-party host (jsDelivr, Google, ...)",
-      externalRequests.length === 0, externalRequests.slice(0, 5));
+    check(
+      "no request to a third-party host (jsDelivr, Google, ...)",
+      externalRequests.length === 0,
+      externalRequests.slice(0, 5),
+    );
   }
 } finally {
   await browser.close();

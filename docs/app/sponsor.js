@@ -43,7 +43,7 @@ export function recordSession(store, nowMs) {
 export function usageTotals(store) {
   let days = 0;
   let seconds = 0;
-  for (const [key, d] of Object.entries((store?.days) || {})) {
+  for (const [key, d] of Object.entries(store?.days || {})) {
     if (!DATE_KEY.test(key) || !d || typeof d !== "object") continue;
     const s = num(d.good) + num(d.bad);
     seconds += s;
@@ -63,7 +63,7 @@ export function sponsorText(store) {
 export function shouldOfferSponsor(store, ctx, cfg = SPONSOR) {
   const { nowMs, good = false, silent = false } = ctx;
   if (!good || silent) return false;
-  const sp = (store?.sponsor) || {};
+  const sp = store?.sponsor || {};
   if (sp.never === true) return false;
   if (num(sp.shown) >= cfg.max_shown) return false;
   const t = usageTotals(store);

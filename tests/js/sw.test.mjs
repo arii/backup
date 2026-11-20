@@ -14,31 +14,51 @@ const SRC = readFileSync(new URL("../../docs/app/sw.js", import.meta.url), "utf8
 function fakeCaches() {
   const stores = new Map();
   const make = (name) => ({
-    async put(url, res) { stores.get(name).set(String(url), await res.clone().text()); },
-    async match(url) { const v = stores.get(name).get(String(url)); return v === undefined ? undefined : new Response(v); },
+    async put(url, res) {
+      stores.get(name).set(String(url), await res.clone().text());
+    },
+    async match(url) {
+      const v = stores.get(name).get(String(url));
+      return v === undefined ? undefined : new Response(v);
+    },
   });
   return {
     stores,
-    async open(n) { if (!stores.has(n)) stores.set(n, new Map()); return make(n); },
-    async has(n) { return stores.has(n); },
-    async keys() { return [...stores.keys()]; },
-    async delete(n) { return stores.delete(n); },
+    async open(n) {
+      if (!stores.has(n)) stores.set(n, new Map());
+      return make(n);
+    },
+    async has(n) {
+      return stores.has(n);
+    },
+    async keys() {
+      return [...stores.keys()];
+    },
+    async delete(n) {
+      return stores.delete(n);
+    },
   };
 }
 
 /** Load sw.js at `version`. `site` maps url path -> body; a missing path 404s. */
 function load(version, site, caches, fetchLog = []) {
   const handlers = {};
-  const files = Object.entries(site).filter(([u]) => u !== "precache.json").map(([url, body]) => ({
-    url, size: body.length, sha256: `h:${body}`,
-  }));
+  const files = Object.entries(site)
+    .filter(([u]) => u !== "precache.json")
+    .map(([url, body]) => ({
+      url,
+      size: body.length,
+      sha256: `h:${body}`,
+    }));
   const pre = { version, files };
   const self = {
     registration: { scope: SCOPE },
     location: new URL(SCOPE),
     clients: { matchAll: async () => [], claim: async () => {} },
     skipWaiting: () => {},
-    addEventListener: (t, fn) => { handlers[t] = fn; },
+    addEventListener: (t, fn) => {
+      handlers[t] = fn;
+    },
   };
   const fetchFn = async (u) => {
     const url = String(u.url || u);
@@ -47,15 +67,38 @@ function load(version, site, caches, fetchLog = []) {
     if (key === "precache.json") return new Response(JSON.stringify(pre));
     return key in site ? new Response(site[key]) : new Response("no", { status: 404 });
   };
-  const ctx = vm.createContext({ self, caches, fetch: fetchFn, Response, URL, Promise, JSON, Object, Math, String, Error });
+  const ctx = vm.createContext({
+    self,
+    caches,
+    fetch: fetchFn,
+    Response,
+    URL,
+    Promise,
+    JSON,
+    Object,
+    Math,
+    String,
+    Error,
+  });
   vm.runInContext(SRC.replace(/const PRECACHE_VERSION = "[^"]*";/, `const PRECACHE_VERSION = "${version}";`), ctx);
   const run = async (type, extra = {}) => {
-    let p; handlers[type]({ waitUntil: (x) => { p = x; }, ...extra });
+    let p;
+    handlers[type]({
+      waitUntil: (x) => {
+        p = x;
+      },
+      ...extra,
+    });
     return p;
   };
   const get = async (path, method = "GET") => {
     let p = null;
-    handlers.fetch({ request: { url: SCOPE.replace(/app\/$/, "") + path, method }, respondWith: (x) => { p = x; } });
+    handlers.fetch({
+      request: { url: SCOPE.replace(/app\/$/, "") + path, method },
+      respondWith: (x) => {
+        p = x;
+      },
+    });
     return p && (await p);
   };
   return { run, get };

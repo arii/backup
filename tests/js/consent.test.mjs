@@ -7,7 +7,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  CONSENT_POINTS, CONSENT_VERSION, consentStatus, hasConsent, recordConsent, withdrawConsent,
+  CONSENT_POINTS,
+  CONSENT_VERSION,
+  consentStatus,
+  hasConsent,
+  recordConsent,
+  withdrawConsent,
 } from "../../docs/app/consent.js";
 import { STORE_KEYS, clearStoredData } from "../../docs/app/privacy.js";
 
@@ -37,7 +42,8 @@ test("a record for the current or a newer version counts", () => {
 
 test("the text covers what, where, kept, identify and withdraw", () => {
   const t = CONSENT_POINTS.join(" ");
-  for (const re of [/measured/, /only in this browser tab/, /no video, images or landmark/i, /identify/, /withdraw/]) assert.match(t, re);
+  for (const re of [/measured/, /only in this browser tab/, /no video, images or landmark/i, /identify/, /withdraw/])
+    assert.match(t, re);
 });
 
 test("Delete my data removes the consent record (it lives in the one store key)", () => {

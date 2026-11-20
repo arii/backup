@@ -23,18 +23,30 @@ import { scenes, type SceneId } from "./timeline";
 
 const render = (id: SceneId, p: VideoProps): React.ReactNode => {
   switch (id) {
-    case "coldOpen": return <ColdOpen />;
-    case "ailments": return <Ailments />;
-    case "demoUpright": return <DemoUpright p={p} />;
-    case "demoSlouch": return <DemoSlouch p={p} />;
-    case "demoVoice": return <DemoVoice p={p} />;
-    case "demoRecover": return <DemoRecover p={p} />;
-    case "userClip": return <UserClip p={p} />;
-    case "webcam": return <Webcam p={p} />;
-    case "monster": return <Monster />;
-    case "proof": return <Proof />;
-    case "history": return <History />;
-    case "outro": return <Outro p={p} />;
+    case "coldOpen":
+      return <ColdOpen />;
+    case "ailments":
+      return <Ailments />;
+    case "demoUpright":
+      return <DemoUpright p={p} />;
+    case "demoSlouch":
+      return <DemoSlouch p={p} />;
+    case "demoVoice":
+      return <DemoVoice p={p} />;
+    case "demoRecover":
+      return <DemoRecover p={p} />;
+    case "userClip":
+      return <UserClip p={p} />;
+    case "webcam":
+      return <Webcam p={p} />;
+    case "monster":
+      return <Monster />;
+    case "proof":
+      return <Proof />;
+    case "history":
+      return <History />;
+    case "outro":
+      return <Outro p={p} />;
   }
 };
 

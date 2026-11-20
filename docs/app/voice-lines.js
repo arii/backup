@@ -65,10 +65,19 @@ export const BREATHE_LINES = {
 const CUE_LINES = CUE_METRICS.map((metric) => cueText(metric, "")[2]);
 
 /** All lines to pre-render, de-duplicated, in a stable order. */
-export const ALL_LINES = [...new Set([
-  DEFAULT_PROMPT, TEST_LINE, ...CUE_LINES, ...PRAISE, ...RECOVERY_PRAISE, ...Object.values(RELAX_LINES),
-  ...Object.values(BREAK_LINES), ...BREATHING_MOMENTS, ...Object.values(BREATHE_LINES),
-])];
+export const ALL_LINES = [
+  ...new Set([
+    DEFAULT_PROMPT,
+    TEST_LINE,
+    ...CUE_LINES,
+    ...PRAISE,
+    ...RECOVERY_PRAISE,
+    ...Object.values(RELAX_LINES),
+    ...Object.values(BREAK_LINES),
+    ...BREATHING_MOMENTS,
+    ...Object.values(BREATHE_LINES),
+  ]),
+];
 
 // Kokoro voices offered in the app (id -> label). Rendered for every line.
 export const VOICES = {

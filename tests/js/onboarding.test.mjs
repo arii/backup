@@ -8,8 +8,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEFAULTS, Reason } from "../../docs/app/posture-core.js";
 import {
-  ACK_VERSION, Diagnosis, markOnboarded, ONBOARDING_STEPS, ONBOARDING_VERSION, SAFETY_POINTS,
-  COACH_INTRO, DONE_INTRO, SAFETY_SHORT, SETUP, SetupCheck, shouldShowOnboarding, needsAckOnly,
+  ACK_VERSION,
+  Diagnosis,
+  markOnboarded,
+  ONBOARDING_STEPS,
+  ONBOARDING_VERSION,
+  SAFETY_POINTS,
+  COACH_INTRO,
+  DONE_INTRO,
+  SAFETY_SHORT,
+  SETUP,
+  SetupCheck,
+  shouldShowOnboarding,
+  needsAckOnly,
 } from "../../docs/app/onboarding.js";
 
 const FPS = 15;
@@ -41,9 +52,19 @@ test("a higher ACK_VERSION re-asks for every existing store, ack step only", () 
 test("safety text carries the required phrases and the third step is the notice", () => {
   const all = SAFETY_POINTS.join(" ").toLowerCase();
   for (const phrase of [
-    "not medical advice", "not a medical device", "rigid posture", "pain, numbness", "dizziness",
-    "clinician", "spine", "approximate", "not uploaded", "as-is", "mit license",
-  ]) assert.ok(all.includes(phrase), phrase);
+    "not medical advice",
+    "not a medical device",
+    "rigid posture",
+    "pain, numbness",
+    "dizziness",
+    "clinician",
+    "spine",
+    "approximate",
+    "not uploaded",
+    "as-is",
+    "mit license",
+  ])
+    assert.ok(all.includes(phrase), phrase);
   assert.ok(/medical advice/.test(SAFETY_SHORT) && /rigid posture/.test(SAFETY_SHORT));
   assert.equal(ONBOARDING_STEPS.length, 3);
   assert.equal(ONBOARDING_STEPS[2].points, SAFETY_POINTS);

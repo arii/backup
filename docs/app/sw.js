@@ -11,7 +11,7 @@
 // changes whenever a precached file changes, which makes the browser update it.
 // Plain script (not a module): the constants below mirror offline.js.
 
-const PRECACHE_VERSION = "98df2e3020e71ef7";
+const PRECACHE_VERSION = "3518cf66d1f96959";
 const CACHE_PREFIX = "posture-guard-";
 // One cache per release. The worker only ever reads and writes its own cache,
 // so an update never changes what the currently active worker serves.
@@ -26,7 +26,11 @@ async function broadcast(msg) {
 
 async function readMeta(cache) {
   const res = await cache.match(abs(META_URL));
-  try { return res ? await res.json() : null; } catch { return null; }
+  try {
+    return res ? await res.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The newest other release cache that finished installing (has meta), or null. */
@@ -46,7 +50,10 @@ async function precacheAll() {
   if (pre.version !== PRECACHE_VERSION) throw new Error("app files changed during download, try again");
   if (await caches.has(CACHE_NAME)) {
     const done = await readMeta(await caches.open(CACHE_NAME));
-    if (done && done.version === pre.version) { await broadcast({ type: "offline-ready", version: pre.version }); return; }
+    if (done && done.version === pre.version) {
+      await broadcast({ type: "offline-ready", version: pre.version });
+      return;
+    }
     await caches.delete(CACHE_NAME); // leftovers of an interrupted install
   }
   const cache = await caches.open(CACHE_NAME);
@@ -67,13 +74,20 @@ async function precacheAll() {
       if (!res.ok) throw new Error(`download failed: ${f.url} ${res.status}`);
       await cache.put(abs(f.url), res);
       done += f.size;
-      await broadcast({ type: "offline-progress", percent: total ? Math.min(99, Math.floor((done / total) * 100)) : 99, totalBytes: total });
+      await broadcast({
+        type: "offline-progress",
+        percent: total ? Math.min(99, Math.floor((done / total) * 100)) : 99,
+        totalBytes: total,
+      });
     }
     // The meta entry is written last: its presence means this release's copy is complete.
     const hashes = Object.fromEntries(pre.files.map((f) => [f.url, f.sha256]));
-    await cache.put(abs(META_URL), new Response(JSON.stringify({ version: pre.version, hashes }), {
-      headers: { "content-type": "application/json" },
-    }));
+    await cache.put(
+      abs(META_URL),
+      new Response(JSON.stringify({ version: pre.version, hashes }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
   } catch (err) {
     await caches.delete(CACHE_NAME); // the previous release's cache is untouched
     throw err;
@@ -83,30 +97,37 @@ async function precacheAll() {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    precacheAll().then(() => self.skipWaiting()).catch(async (err) => {
-      await broadcast({ type: "offline-error", message: String(err?.message || err) });
-      throw err; // fail the install: no half-installed worker
-    }),
+    precacheAll()
+      .then(() => self.skipWaiting())
+      .catch(async (err) => {
+        await broadcast({ type: "offline-error", message: String(err?.message || err) });
+        throw err; // fail the install: no half-installed worker
+      }),
   );
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== CACHE_NAME && k.startsWith(CACHE_PREFIX)) await caches.delete(k);
-    await self.clients.claim();
-  })());
+  event.waitUntil(
+    (async () => {
+      for (const k of await caches.keys()) if (k !== CACHE_NAME && k.startsWith(CACHE_PREFIX)) await caches.delete(k);
+      await self.clients.claim();
+    })(),
+  );
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
-  if (req.method !== "GET" || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
+  if (req.method !== "GET" || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope))
+    return;
   if (url.pathname.endsWith("/sw.js") || url.pathname.endsWith("/precache.json")) return; // always from the network
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    const key = url.pathname.endsWith("/") ? abs("index.html") : url.origin + url.pathname;
-    const hit = await cache.match(key);
-    if (hit) return hit;
-    return fetch(req);
-  })());
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const key = url.pathname.endsWith("/") ? abs("index.html") : url.origin + url.pathname;
+      const hit = await cache.match(key);
+      if (hit) return hit;
+      return fetch(req);
+    })(),
+  );
 });

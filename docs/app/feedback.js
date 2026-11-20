@@ -40,7 +40,9 @@ export class FeedbackPolicy {
     this.reset();
   }
 
-  setLevel(level) { this.level = normalizeLevel(level); }
+  setLevel(level) {
+    this.level = normalizeLevel(level);
+  }
 
   reset() {
     this.granted = []; // times of granted reminders, for the hourly cap
@@ -58,7 +60,8 @@ export class FeedbackPolicy {
     if (this.granted.length >= this.cfg.max_reminders_per_hour) {
       return { allow: false, voice: false, capped: true };
     }
-    if (episodeId !== this.episodeId) { // a new slouch episode begins
+    if (episodeId !== this.episodeId) {
+      // a new slouch episode begins
       this.prevEpisodeEnd = this.lastReminderT;
       this.episodeId = episodeId;
     }
@@ -91,7 +94,9 @@ export class FeedbackPolicy {
     return null;
   }
 
-  onBad() { this.endStreak(); }
+  onBad() {
+    this.endStreak();
+  }
 
   endStreak() {
     this.goodS = 0;

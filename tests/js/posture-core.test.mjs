@@ -22,14 +22,24 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import {
-  DEFAULTS, Nudge, PostureEngine, PostureStateMachine, Reason, State, TRACKED,
-  NeedleSmoother, mirrorSign, postureCue, rawNeedle, scorePose, scored, unreliable,
+  DEFAULTS,
+  Nudge,
+  PostureEngine,
+  PostureStateMachine,
+  Reason,
+  State,
+  TRACKED,
+  NeedleSmoother,
+  mirrorSign,
+  postureCue,
+  rawNeedle,
+  scorePose,
+  scored,
+  unreliable,
 } from "../../docs/app/posture-core.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const golden = JSON.parse(
-  readFileSync(path.join(here, "fixtures", "golden-timeline.json"), "utf8"),
-);
+const golden = JSON.parse(readFileSync(path.join(here, "fixtures", "golden-timeline.json"), "utf8"));
 const TOL = 1e-9;
 
 function landmarksFrom(encoded) {
@@ -64,10 +74,9 @@ test("golden timeline replays identically", () => {
     assert.equal(out.result.kind, e.kind, `${where} kind`);
     if (e.kind === "scored") {
       const m = out.result;
-      [m.head_forward_deg, m.trunk_lean_deg, m.head_tilt_deg, m.shoulder_level_deg]
-        .forEach((v, k) => {
-          close(v, e.metrics[k], `${where} metric ${k}`);
-        });
+      [m.head_forward_deg, m.trunk_lean_deg, m.head_tilt_deg, m.shoulder_level_deg].forEach((v, k) => {
+        close(v, e.metrics[k], `${where} metric ${k}`);
+      });
       assert.equal(m.trunk_lean_available, e.trunk_ok, `${where} trunk_ok`);
     } else {
       assert.equal(out.result.reason, e.reason, `${where} reason`);
@@ -80,8 +89,7 @@ test("golden timeline replays identically", () => {
     assert.deepEqual(out.nudges, e.nudges, `${where} nudges`);
     // Same cue (metric, side and wording) on every frame, and the recorded
     // voice reminder spoke exactly that cue.
-    const cue = out.cue === null ? null
-      : { id: out.cue.id, title: out.cue.title, fix: out.cue.fix, say: out.cue.say };
+    const cue = out.cue === null ? null : { id: out.cue.id, title: out.cue.title, fix: out.cue.fix, say: out.cue.say };
     assert.deepEqual(cue, e.cue, `${where} cue`);
     if (e.spoken.length) assert.deepEqual(e.spoken, [out.cue.say], `${where} spoken`);
   });
@@ -125,10 +133,14 @@ test("P1: needle bounded for arbitrary landmarks and calibrations", () => {
     for (const k of ["head_forward_deg", "trunk_lean_deg", "head_tilt_deg", "shoulder_level_deg"]) {
       assert.ok(Number.isFinite(res[k]), k);
     }
-    const metrics = () => scored({
-      head_forward_deg: anyFloat(r), trunk_lean_deg: anyFloat(r), head_tilt_deg: anyFloat(r),
-      shoulder_level_deg: anyFloat(r), trunk_lean_available: r() < 0.5,
-    });
+    const metrics = () =>
+      scored({
+        head_forward_deg: anyFloat(r),
+        trunk_lean_deg: anyFloat(r),
+        head_tilt_deg: anyFloat(r),
+        shoulder_level_deg: anyFloat(r),
+        trunk_lean_available: r() < 0.5,
+      });
     const cal = r() < 0.5 ? null : { good: metrics(), bad: metrics() };
     const v = rawNeedle(res, DEFAULTS.scoring, cal);
     assert.ok(v === null || (Number.isFinite(v) && v >= -1 && v <= 1), `needle ${v}`);
@@ -146,7 +158,7 @@ const OPEN_FRAMING = { ...DEFAULTS.scoring, shoulder_width_min: 1e-9, shoulder_w
 
 test("P2: angles are scale invariant", () => {
   const r = rng(2);
-  const base = { 7: [0.46, 0.45], 8: [0.54, 0.45], 11: [0.40, 0.60], 12: [0.60, 0.60], 23: [0.44, 0.90], 24: [0.56, 0.90] };
+  const base = { 7: [0.46, 0.45], 8: [0.54, 0.45], 11: [0.4, 0.6], 12: [0.6, 0.6], 23: [0.44, 0.9], 24: [0.56, 0.9] };
   for (let n = 0; n < 1000; n += 1) {
     const k = 10 ** (r() * 6 - 3);
     const a = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1 }));
@@ -168,8 +180,15 @@ test("P2: angles are scale invariant", () => {
 const GOOD = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
 const BAD = scored({ head_forward_deg: 18, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 0 });
 const NEUTRAL = scored({ head_forward_deg: 0, trunk_lean_deg: 0, head_tilt_deg: 0, shoulder_level_deg: 4.5 }); // exit 3 < 4.5 < enter 6
-const KINDS = [GOOD, BAD, NEUTRAL, unreliable(Reason.NO_POSE), unreliable(Reason.LOW_VISIBILITY),
-  unreliable(Reason.NON_FINITE), unreliable(Reason.FRAMING_OUT_OF_BAND, "too far")];
+const KINDS = [
+  GOOD,
+  BAD,
+  NEUTRAL,
+  unreliable(Reason.NO_POSE),
+  unreliable(Reason.LOW_VISIBILITY),
+  unreliable(Reason.NON_FINITE),
+  unreliable(Reason.FRAMING_OUT_OF_BAND, "too far"),
+];
 
 function timeline(r) {
   const out = [];
@@ -191,12 +210,23 @@ test("P4: one chime per bad episode, voice spacing respected", () => {
   for (let n = 0; n < 150; n += 1) {
     const sm = new PostureStateMachine(DEFAULTS.state, DEFAULTS.scoring, DEFAULTS.feedback);
     const { out } = timeline(r);
-    let inBad = false, chimes = 0, chimeAt = null, lastVoice = null;
+    let inBad = false,
+      chimes = 0,
+      chimeAt = null,
+      lastVoice = null;
     for (const [now, result] of out) {
       const tr = sm.update(result, now);
       const entering = (tr.state === State.BAD_CHIME || tr.state === State.BAD_VOICE) && !inBad;
-      if (entering) { chimes = 0; chimeAt = null; lastVoice = null; }
-      if (tr.nudge === Nudge.CHIME) { assert.ok(entering); chimes += 1; chimeAt = now; }
+      if (entering) {
+        chimes = 0;
+        chimeAt = null;
+        lastVoice = null;
+      }
+      if (tr.nudge === Nudge.CHIME) {
+        assert.ok(entering);
+        chimes += 1;
+        chimeAt = now;
+      }
       if (tr.nudge === Nudge.VOICE) {
         assert.ok(chimeAt !== null);
         const gap = lastVoice === null ? now - chimeAt : now - lastVoice;
@@ -257,7 +287,10 @@ test("P3: bad runs shorter than bad_sustain_s never remind", () => {
     for (let s = 0, runs = 1 + Math.floor(r() * 12); s < runs; s += 1) {
       const badS = r() * st.bad_sustain_s * 0.95;
       const goodS = st.smoothing_window_s + 1.1 + r() * (4 - st.smoothing_window_s - 1.1);
-      for (const [result, duration] of [[BAD, badS], [GOOD, goodS]]) {
+      for (const [result, duration] of [
+        [BAD, badS],
+        [GOOD, goodS],
+      ]) {
         const start = now;
         for (;;) {
           assert.ok(!REMINDERS.has(sm.update(result, now).nudge));
@@ -278,10 +311,16 @@ test("P6: update never throws and always returns a known state", () => {
     let now = 0;
     for (let i = 0, len = Math.floor(r() * 200); i < len; i += 1) {
       now += r() < 0.2 ? 0 : r() * 5;
-      const result = r() < 0.7 ? KINDS[Math.floor(r() * KINDS.length)] : scored({
-        head_forward_deg: anyFloat(r), trunk_lean_deg: anyFloat(r), head_tilt_deg: anyFloat(r),
-        shoulder_level_deg: anyFloat(r), trunk_lean_available: r() < 0.5,
-      });
+      const result =
+        r() < 0.7
+          ? KINDS[Math.floor(r() * KINDS.length)]
+          : scored({
+              head_forward_deg: anyFloat(r),
+              trunk_lean_deg: anyFloat(r),
+              head_tilt_deg: anyFloat(r),
+              shoulder_level_deg: anyFloat(r),
+              trunk_lean_available: r() < 0.5,
+            });
       assert.ok(states.has(sm.update(result, now).state));
     }
   }
@@ -289,7 +328,7 @@ test("P6: update never throws and always returns a known state", () => {
 
 test("P7: cue is mirror invariant and only names metrics past their band", () => {
   const r = rng(7);
-  const base = { 7: [0.46, 0.45], 8: [0.54, 0.45], 11: [0.40, 0.60], 12: [0.60, 0.60], 23: [0.44, 0.90], 24: [0.56, 0.90] };
+  const base = { 7: [0.46, 0.45], 8: [0.54, 0.45], 11: [0.4, 0.6], 12: [0.6, 0.6], 23: [0.44, 0.9], 24: [0.56, 0.9] };
   const blank = () => Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1 }));
   let cues = 0;
   for (let n = 0; n < 2000; n += 1) {
@@ -303,14 +342,23 @@ test("P7: cue is mirror invariant and only names metrics past their band", () =>
     const a = scorePose(pose, DEFAULTS.scoring);
     const b = scorePose(mirrored, DEFAULTS.scoring);
     if (a.kind !== "scored" || b.kind !== "scored") continue;
-    const baseline = r() < 0.5 ? null : scored({
-      head_forward_deg: r() * 20 - 10, trunk_lean_deg: r() * 20 - 10,
-      head_tilt_deg: r() * 20 - 10, shoulder_level_deg: r() * 20 - 10,
-    });
-    const mirroredBaseline = baseline && scored({
-      head_forward_deg: -baseline.head_forward_deg, trunk_lean_deg: -baseline.trunk_lean_deg,
-      head_tilt_deg: -baseline.head_tilt_deg, shoulder_level_deg: baseline.shoulder_level_deg,
-    });
+    const baseline =
+      r() < 0.5
+        ? null
+        : scored({
+            head_forward_deg: r() * 20 - 10,
+            trunk_lean_deg: r() * 20 - 10,
+            head_tilt_deg: r() * 20 - 10,
+            shoulder_level_deg: r() * 20 - 10,
+          });
+    const mirroredBaseline =
+      baseline &&
+      scored({
+        head_forward_deg: -baseline.head_forward_deg,
+        trunk_lean_deg: -baseline.trunk_lean_deg,
+        head_tilt_deg: -baseline.head_tilt_deg,
+        shoulder_level_deg: baseline.shoulder_level_deg,
+      });
     const cueA = postureCue(a, DEFAULTS.scoring, baseline, mirrorSign(pose));
     const cueB = postureCue(b, DEFAULTS.scoring, mirroredBaseline, mirrorSign(mirrored));
     assert.equal(cueA === null, cueB === null);

@@ -10,10 +10,31 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  DEFAULTS, Nudge, PostureEngine, PostureStateMachine, Reason, State, CalibrationRecorder, NeedleSmoother,
-  LEFT_EAR, LEFT_HIP, LEFT_SHOULDER, RIGHT_EAR, RIGHT_HIP, RIGHT_SHOULDER,
-  calibratedNeedle, clamp, lowVisibilityDetail, mirrorSign, postureCue, rawNeedle, scorePose, scored,
-  thresholdNeedle, unreliable, zoneOf,
+  DEFAULTS,
+  Nudge,
+  PostureEngine,
+  PostureStateMachine,
+  Reason,
+  State,
+  CalibrationRecorder,
+  NeedleSmoother,
+  LEFT_EAR,
+  LEFT_HIP,
+  LEFT_SHOULDER,
+  RIGHT_EAR,
+  RIGHT_HIP,
+  RIGHT_SHOULDER,
+  calibratedNeedle,
+  clamp,
+  lowVisibilityDetail,
+  mirrorSign,
+  postureCue,
+  rawNeedle,
+  scorePose,
+  scored,
+  thresholdNeedle,
+  unreliable,
+  zoneOf,
 } from "../../docs/app/posture-core.js";
 
 const CFG = DEFAULTS.scoring;
@@ -21,13 +42,15 @@ const near = (a, b, tol = 1e-4) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${
 
 function pose(overrides = {}) {
   const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1 }));
-  const set = (i, x, y) => { lm[i] = { x, y, visibility: 1 }; };
-  set(LEFT_SHOULDER, 0.40, 0.60);
-  set(RIGHT_SHOULDER, 0.60, 0.60);
+  const set = (i, x, y) => {
+    lm[i] = { x, y, visibility: 1 };
+  };
+  set(LEFT_SHOULDER, 0.4, 0.6);
+  set(RIGHT_SHOULDER, 0.6, 0.6);
   set(LEFT_EAR, 0.46, 0.45);
   set(RIGHT_EAR, 0.54, 0.45);
-  set(LEFT_HIP, 0.44, 0.90);
-  set(RIGHT_HIP, 0.56, 0.90);
+  set(LEFT_HIP, 0.44, 0.9);
+  set(RIGHT_HIP, 0.56, 0.9);
   for (const [i, v] of Object.entries(overrides)) lm[i] = { visibility: 1, ...v };
   return lm;
 }
@@ -36,13 +59,16 @@ const mirror = (lm) => lm.map((p) => ({ ...p, x: 1 - p.x }));
 
 const SLOUCHED = pose({ [LEFT_EAR]: { x: 0.48, y: 0.54 }, [RIGHT_EAR]: { x: 0.56, y: 0.54 } });
 const LEANING = pose({
-  [LEFT_SHOULDER]: { x: 0.45, y: 0.60 }, [RIGHT_SHOULDER]: { x: 0.65, y: 0.60 },
-  [LEFT_EAR]: { x: 0.51, y: 0.45 }, [RIGHT_EAR]: { x: 0.59, y: 0.45 },
+  [LEFT_SHOULDER]: { x: 0.45, y: 0.6 },
+  [RIGHT_SHOULDER]: { x: 0.65, y: 0.6 },
+  [LEFT_EAR]: { x: 0.51, y: 0.45 },
+  [RIGHT_EAR]: { x: 0.59, y: 0.45 },
 });
 const TILTED = pose({ [LEFT_EAR]: { x: 0.45, y: 0.46 }, [RIGHT_EAR]: { x: 0.55, y: 0.44 } });
 const UNEVEN = pose({
-  [RIGHT_SHOULDER]: { x: 0.60, y: 0.62 },
-  [LEFT_EAR]: { x: 0.46, y: 0.46 }, [RIGHT_EAR]: { x: 0.54, y: 0.46 },
+  [RIGHT_SHOULDER]: { x: 0.6, y: 0.62 },
+  [LEFT_EAR]: { x: 0.46, y: 0.46 },
+  [RIGHT_EAR]: { x: 0.54, y: 0.46 },
 });
 
 // -- scoring ------------------------------------------------------------------
@@ -67,16 +93,16 @@ test("zones: good, bad and the hysteresis band", () => {
 
 test("unreliable results: no pose, low visibility, framing", () => {
   assert.equal(scorePose(null, CFG).reason, Reason.NO_POSE);
-  const cropped = pose({ [RIGHT_SHOULDER]: { x: 0.60, y: 0.60, visibility: 0.1 } });
+  const cropped = pose({ [RIGHT_SHOULDER]: { x: 0.6, y: 0.6, visibility: 0.1 } });
   const res = scorePose(cropped, CFG);
   assert.equal(res.reason, Reason.LOW_VISIBILITY);
   assert.match(res.detail, /shoulders not visible \(right 0\.10\)/);
   assert.equal(res.detail, lowVisibilityDetail(cropped, CFG));
-  const narrow = pose({ [LEFT_SHOULDER]: { x: 0.48, y: 0.60 }, [RIGHT_SHOULDER]: { x: 0.52, y: 0.60 } });
+  const narrow = pose({ [LEFT_SHOULDER]: { x: 0.48, y: 0.6 }, [RIGHT_SHOULDER]: { x: 0.52, y: 0.6 } });
   const far = scorePose(narrow, CFG);
   assert.equal(far.reason, Reason.FRAMING_OUT_OF_BAND);
   assert.match(far.detail, /^too far/);
-  const wide = pose({ [LEFT_SHOULDER]: { x: 0.10, y: 0.60 }, [RIGHT_SHOULDER]: { x: 0.90, y: 0.60 } });
+  const wide = pose({ [LEFT_SHOULDER]: { x: 0.1, y: 0.6 }, [RIGHT_SHOULDER]: { x: 0.9, y: 0.6 } });
   assert.match(scorePose(wide, CFG).detail, /^too close/);
 });
 
@@ -102,7 +128,10 @@ test("hidden hips degrade to head metrics, or gate when degraded feedback is off
 });
 
 test("hidden hip garbage cannot decide the zone", () => {
-  const lm = pose({ [LEFT_HIP]: { x: 0.9, y: 0.2, visibility: 0.1 }, [RIGHT_HIP]: { x: 0.1, y: 0.2, visibility: 0.1 } });
+  const lm = pose({
+    [LEFT_HIP]: { x: 0.9, y: 0.2, visibility: 0.1 },
+    [RIGHT_HIP]: { x: 0.1, y: 0.2, visibility: 0.1 },
+  });
   const res = scorePose(lm, CFG);
   assert.equal(res.trunk_lean_available, false);
   assert.equal(zoneOf(res, CFG), "good");
@@ -278,7 +307,10 @@ test("glitch frames hold good, keep the bad streak and keep the baseline", () =>
   run(sm, GOOD, 0, 2);
   assert.equal(sm.update(glitch, 2.05).state, State.GOOD);
   const bad = run(sm, (t) => (Math.round(t * 10) % 3 === 0 ? glitch : BAD), 2.1, 4.5);
-  assert.ok(bad.some(([, n]) => n === Nudge.CHIME), "glitches did not reset the bad streak");
+  assert.ok(
+    bad.some(([, n]) => n === Nudge.CHIME),
+    "glitches did not reset the bad streak",
+  );
   const before = sm.baseline.metrics;
   sm.update(glitch, 5);
   assert.equal(sm.baseline.metrics, before);
@@ -335,7 +367,9 @@ test("baseline anchor survives no_person and feature off restores plain behavior
   run(sm, NO_POSE, 0, 4);
   assert.deepEqual(sm.baseline.metrics, GOOD);
   const off = new PostureStateMachine(
-    DEFAULTS.state, { ...CFG, baseline_deviation: { enabled: false, window_s: 300 } }, DEFAULTS.feedback,
+    DEFAULTS.state,
+    { ...CFG, baseline_deviation: { enabled: false, window_s: 300 } },
+    DEFAULTS.feedback,
   );
   assert.equal(off.baseline, null);
   run(off, GOOD, 0, 2);
@@ -348,19 +382,25 @@ test("good confirmation and slouch chime work at low frame rates", () => {
     run(sm, GOOD, 0, 3, 1 / fps);
     assert.equal(sm.state, State.GOOD, `${fps} fps good`);
     const out = run(sm, BAD, 3 + 1 / fps, 8, 1 / fps);
-    assert.ok(out.some(([, n]) => n === Nudge.CHIME), `${fps} fps chime`);
+    assert.ok(
+      out.some(([, n]) => n === Nudge.CHIME),
+      `${fps} fps chime`,
+    );
   }
 });
 
 test("positive chime fires after sustained good, spaces out, and stays off when disabled", () => {
   const sm = machine();
-  const out = run(sm, GOOD, 0, 200, 0.5).filter(([, n]) => n === Nudge.POSITIVE_CHIME).map(([t]) => t);
+  const out = run(sm, GOOD, 0, 200, 0.5)
+    .filter(([, n]) => n === Nudge.POSITIVE_CHIME)
+    .map(([t]) => t);
   assert.ok(out.length >= 2);
   assert.ok(out[0] >= 15 * 0.75 - 1e-6, `first praise at ${out[0]}`);
   assert.ok(out[1] - out[0] >= out[0] - 1e-6);
-  const off = new PostureStateMachine(
-    DEFAULTS.state, CFG, { ...DEFAULTS.feedback, positive_chime: { ...DEFAULTS.feedback.positive_chime, enabled: false } },
-  );
+  const off = new PostureStateMachine(DEFAULTS.state, CFG, {
+    ...DEFAULTS.feedback,
+    positive_chime: { ...DEFAULTS.feedback.positive_chime, enabled: false },
+  });
   assert.equal(run(off, GOOD, 0, 200, 0.5).length, 0);
 });
 
@@ -377,7 +417,13 @@ test("a bad episode or unreliable frames restart the praise interval", () => {
 // -- needle -----------------------------------------------------------------------
 
 const metrics = (head = 0, trunk = 0, tilt = 0, level = 0, ok = true) =>
-  scored({ head_forward_deg: head, trunk_lean_deg: trunk, head_tilt_deg: tilt, shoulder_level_deg: level, trunk_lean_available: ok });
+  scored({
+    head_forward_deg: head,
+    trunk_lean_deg: trunk,
+    head_tilt_deg: tilt,
+    shoulder_level_deg: level,
+    trunk_lean_available: ok,
+  });
 
 test("threshold needle: upright -1, every metric at threshold +1, unavailable trunk skipped", () => {
   assert.equal(thresholdNeedle(metrics(), CFG), -1);
@@ -418,7 +464,12 @@ test("smoother: first sample as is, exact exponential step, frame-rate independe
   for (let i = 1; i <= 10; i += 1) many.update(1, i / 10);
   near(one.value, many.value, 1e-12);
   const held = many.value;
-  for (const [raw, t] of [[null, 2], [NaN, 3], [0, 0.5]]) assert.equal(many.update(raw, t), held);
+  for (const [raw, t] of [
+    [null, 2],
+    [NaN, 3],
+    [0, 0.5],
+  ])
+    assert.equal(many.update(raw, t), held);
   const instant = new NeedleSmoother({ tau_s: 0 });
   instant.update(-1, 0);
   assert.equal(instant.update(0.7, 0.1), 0.7);

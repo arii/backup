@@ -24,7 +24,11 @@ const OUT = path.join(ROOT, "docs/app/voice");
 const MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
 
 const slug = (text) => {
-  const words = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
   return `${words}-${createHash("sha1").update(text).digest("hex").slice(0, 6)}`;
 };
 
@@ -45,10 +49,19 @@ for (const voice of Object.keys(VOICES)) {
     await audio.save(wav); // async in transformers.js (RawAudio.save)
     // Trim leading/trailing silence, mono 48 kbps MP3 (plays in every browser).
     execFileSync("ffmpeg", [
-      "-loglevel", "error", "-y", "-i", wav,
-      "-af", "silenceremove=start_periods=1:start_threshold=-50dB,areverse," +
-             "silenceremove=start_periods=1:start_threshold=-50dB,areverse,apad=pad_dur=0.05",
-      "-ac", "1", "-b:a", "48k", path.join(dir, name),
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      wav,
+      "-af",
+      "silenceremove=start_periods=1:start_threshold=-50dB,areverse," +
+        "silenceremove=start_periods=1:start_threshold=-50dB,areverse,apad=pad_dur=0.05",
+      "-ac",
+      "1",
+      "-b:a",
+      "48k",
+      path.join(dir, name),
     ]);
     manifest.voices[voice][text] = `${voice}/${name}`;
     console.log(`${voice}: ${text}`);

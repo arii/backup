@@ -148,7 +148,10 @@ export function lowVisibilityDetail(lm, cfg) {
   let hipsHidden = false;
   for (const [name, [l, r]] of GROUPS) {
     const below = [];
-    [["left", l], ["right", r]].forEach(([side, i]) => {
+    [
+      ["left", l],
+      ["right", r],
+    ].forEach(([side, i]) => {
       // `<` (not `!(>=)`) on purpose: a NaN visibility is not listed.
       if (lm[i].visibility < cfg.visibility_floor) below.push(`${side} ${fmt2(lm[i].visibility)}`);
     });
@@ -188,9 +191,11 @@ export function scorePose(landmarks, cfg) {
   const width = shoulderWidth(landmarks);
   if (!(cfg.shoulder_width_min <= width && width <= cfg.shoulder_width_max)) {
     const where = width < cfg.shoulder_width_min ? "too far" : "too close";
-    return unreliable(Reason.FRAMING_OUT_OF_BAND,
+    return unreliable(
+      Reason.FRAMING_OUT_OF_BAND,
       `${where}: shoulder width ${width.toFixed(2)} of frame outside ` +
-      `${cfg.shoulder_width_min}-${cfg.shoulder_width_max}`);
+        `${cfg.shoulder_width_min}-${cfg.shoulder_width_max}`,
+    );
   }
   const headForward = measureHeadForward(landmarks);
   const headTilt = measureHeadTilt(landmarks);
@@ -231,7 +236,6 @@ export function zoneOf(m, cfg) {
   if (cfg.trunk_lean_required && m.trunk_lean_available) pairs.push([m.trunk_lean_deg, cfg.trunk_lean_deg]);
   return classify(pairs, cfg);
 }
-
 
 class PostureBaseline {
   constructor(cfg) {
@@ -308,8 +312,7 @@ export class PostureStateMachine {
     this.positive = feedback.positive_chime;
     this.voiceTimings = voiceTimings;
     this.state = State.NO_PERSON;
-    this.baseline = thresholds.baseline_deviation.enabled
-      ? new PostureBaseline(thresholds.baseline_deviation) : null;
+    this.baseline = thresholds.baseline_deviation.enabled ? new PostureBaseline(thresholds.baseline_deviation) : null;
     this.history = [];
     this.badSince = null;
     this.goodSince = null;
@@ -698,7 +701,8 @@ export class CalibrationRecorder {
     this.samples = [];
     const needed = Math.max(1, this.cfg.min_samples);
     if (samples.length < needed) {
-      this.error = `${kind} calibration failed: ${samples.length} scored frames ` +
+      this.error =
+        `${kind} calibration failed: ${samples.length} scored frames ` +
         `(need ${needed}) - sit fully in frame and retry`;
       return;
     }
@@ -708,8 +712,8 @@ export class CalibrationRecorder {
     this.version += 1;
     const cal = this.calibration;
     if (cal && !axisOk(cal)) {
-      this.error = "good and slouch recordings are identical - the needle uses the " +
-        "thresholds until one is re-recorded";
+      this.error =
+        "good and slouch recordings are identical - the needle uses the " + "thresholds until one is re-recorded";
     }
   }
 }
@@ -723,7 +727,6 @@ export function mirrorSign(landmarks) {
   if (landmarks === null || landmarks === undefined) return 1.0;
   return landmarks[RIGHT_SHOULDER].x - landmarks[LEFT_SHOULDER].x < 0 ? -1.0 : 1.0;
 }
-
 
 /** [title, fix, say] for a metric's cue. Exported so voice-lines.js can list
  *  every spoken sentence for pre-rendering. */
@@ -825,9 +828,8 @@ export class PostureEngine {
       this.needle.update(rawNeedle(result, this.config.scoring, usable ? cal : null), now);
     }
     const baseline = this.machine.baseline === null ? null : this.machine.baseline.metrics;
-    const cue = result.kind === "scored"
-      ? postureCue(result, this.config.scoring, baseline, mirrorSign(landmarks))
-      : null;
+    const cue =
+      result.kind === "scored" ? postureCue(result, this.config.scoring, baseline, mirrorSign(landmarks)) : null;
     const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
     const hold = this.machine.holdProgress(now);

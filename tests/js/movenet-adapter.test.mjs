@@ -6,28 +6,75 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LANDMARK_COUNT, createMoveNetDetector, MOVENET_SCORE_THRESHOLD, MOVENET_TO_BLAZEPOSE, movenetToLandmarks, scoreToVisibility } from "../../docs/app/movenet-adapter.js";
 import {
-  DEFAULTS, LEFT_EAR, LEFT_HIP, LEFT_SHOULDER, PostureEngine, RIGHT_EAR, RIGHT_HIP, RIGHT_SHOULDER, State, scorePose,
+  LANDMARK_COUNT,
+  createMoveNetDetector,
+  MOVENET_SCORE_THRESHOLD,
+  MOVENET_TO_BLAZEPOSE,
+  movenetToLandmarks,
+  scoreToVisibility,
+} from "../../docs/app/movenet-adapter.js";
+import {
+  DEFAULTS,
+  LEFT_EAR,
+  LEFT_HIP,
+  LEFT_SHOULDER,
+  PostureEngine,
+  RIGHT_EAR,
+  RIGHT_HIP,
+  RIGHT_SHOULDER,
+  State,
+  scorePose,
 } from "../../docs/app/posture-core.js";
 
-const W = 640, H = 480;
-const NAMES = ["nose", "left_eye", "right_eye", "left_ear", "right_ear", "left_shoulder", "right_shoulder",
-  "left_elbow", "right_elbow", "left_wrist", "right_wrist", "left_hip", "right_hip",
-  "left_knee", "right_knee", "left_ankle", "right_ankle"];
+const W = 640,
+  H = 480;
+const NAMES = [
+  "nose",
+  "left_eye",
+  "right_eye",
+  "left_ear",
+  "right_ear",
+  "left_shoulder",
+  "right_shoulder",
+  "left_elbow",
+  "right_elbow",
+  "left_wrist",
+  "right_wrist",
+  "left_hip",
+  "right_hip",
+  "left_knee",
+  "right_knee",
+  "left_ankle",
+  "right_ankle",
+];
 
 /** A front-facing seated pose in video pixels. headDx shifts the head sideways (a lean). */
 function pose({ headDx = 0, hipScore = 0.54, score = 0.54 } = {}) {
   const at = {
-    nose: [320 + headDx, 170], left_eye: [335 + headDx, 150], right_eye: [305 + headDx, 150],
-    left_ear: [360 + headDx, 165], right_ear: [280 + headDx, 165],
-    left_shoulder: [400, 300], right_shoulder: [240, 300],
-    left_elbow: [420, 400], right_elbow: [220, 400], left_wrist: [420, 470], right_wrist: [220, 470],
-    left_hip: [380, 470], right_hip: [260, 470], left_knee: [380, 479], right_knee: [260, 479],
-    left_ankle: [380, 479], right_ankle: [260, 479],
+    nose: [320 + headDx, 170],
+    left_eye: [335 + headDx, 150],
+    right_eye: [305 + headDx, 150],
+    left_ear: [360 + headDx, 165],
+    right_ear: [280 + headDx, 165],
+    left_shoulder: [400, 300],
+    right_shoulder: [240, 300],
+    left_elbow: [420, 400],
+    right_elbow: [220, 400],
+    left_wrist: [420, 470],
+    right_wrist: [220, 470],
+    left_hip: [380, 470],
+    right_hip: [260, 470],
+    left_knee: [380, 479],
+    right_knee: [260, 479],
+    left_ankle: [380, 479],
+    right_ankle: [260, 479],
   };
   return NAMES.map((n) => ({
-    name: n, x: at[n][0], y: at[n][1], score: n.endsWith("_hip") ? hipScore : score,
+    name: n,
+    x: at[n][0],
+    y: at[n][1],
+    score: n.endsWith("_hip") ? hipScore : score,
   }));
 }
 
@@ -126,7 +173,14 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 test("createMoveNetDetector returns the latest finished result and never overlaps inferences", async () => {
   let calls = 0;
   let release;
-  const detector = { estimatePoses: () => { calls++; return new Promise((r) => { release = () => r([{ keypoints: kp() }]); }); } };
+  const detector = {
+    estimatePoses: () => {
+      calls++;
+      return new Promise((r) => {
+        release = () => r([{ keypoints: kp() }]);
+      });
+    },
+  };
   const d = createMoveNetDetector(detector);
   assert.deepEqual(d.detectForVideo(video).landmarks, []);
   await tick();
@@ -144,7 +198,12 @@ test("createMoveNetDetector returns the latest finished result and never overlap
 
 test("createMoveNetDetector does not start before the video has a size", async () => {
   let calls = 0;
-  const d = createMoveNetDetector({ estimatePoses: async () => { calls++; return []; } });
+  const d = createMoveNetDetector({
+    estimatePoses: async () => {
+      calls++;
+      return [];
+    },
+  });
   d.detectForVideo({ videoWidth: 0, videoHeight: 0 });
   await tick();
   assert.equal(calls, 0);
@@ -152,7 +211,11 @@ test("createMoveNetDetector does not start before the video has a size", async (
 
 test("createMoveNetDetector rethrows an inference error on later calls", async () => {
   const boom = new Error("boom");
-  const d = createMoveNetDetector({ estimatePoses: async () => { throw boom; } });
+  const d = createMoveNetDetector({
+    estimatePoses: async () => {
+      throw boom;
+    },
+  });
   d.detectForVideo(video);
   await tick();
   await tick();

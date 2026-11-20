@@ -14,7 +14,10 @@ function replay(level, episodes, gap = 120) {
   const out = { reminders: 0, voices: 0 };
   for (let e = 0; e < episodes; e++) {
     const t = e * gap;
-    for (const [dt, wantVoice] of [[0, false], [10, true]]) {
+    for (const [dt, wantVoice] of [
+      [0, false],
+      [10, true],
+    ]) {
       const r = p.onReminder(t + dt, { episodeId: e + 1, voice: wantVoice });
       if (r.allow) out.reminders += 1;
       if (r.allow && r.voice) out.voices += 1;
@@ -37,7 +40,8 @@ test("standard allows every reminder and voice the engine asks for", () => {
 test("light never produces more reminders, voice lines or praise than standard", () => {
   for (const episodes of [1, 2, 3, 6, 12]) {
     for (const gap of [30, 120, 900]) {
-      const s = replay("standard", episodes, gap), l = replay("light", episodes, gap);
+      const s = replay("standard", episodes, gap),
+        l = replay("light", episodes, gap);
       assert.ok(l.reminders <= s.reminders, `reminders ${episodes}/${gap}`);
       assert.ok(l.voices <= s.voices, `voices ${episodes}/${gap}`);
     }

@@ -9,9 +9,9 @@
 // touch the posture score.
 
 export const BREAKS = Object.freeze({
-  eye_after_s: 20 * 60,   // 20-20-20: every 20 min of continuous presence...
-  eye_look_s: 20,         // ...look 20 feet away for 20 seconds
-  away_reset_s: 120,      // leaving the frame for 2 min counts as a break
+  eye_after_s: 20 * 60, // 20-20-20: every 20 min of continuous presence...
+  eye_look_s: 20, // ...look 20 feet away for 20 seconds
+  away_reset_s: 120, // leaving the frame for 2 min counts as a break
   move_default_min: 60,
 });
 
@@ -32,16 +32,20 @@ export class BreakTracker {
   }
 
   reset() {
-    this.seated = 0;      // continuous seated seconds
-    this.eyeBase = 0;     // seated time when the last eye break was taken or reset
+    this.seated = 0; // continuous seated seconds
+    this.eyeBase = 0; // seated time when the last eye break was taken or reset
     this.moveBase = 0;
-    this.away = 0;        // seconds away in the current absence
+    this.away = 0; // seconds away in the current absence
     this.awayCounted = false;
     this.lastT = null;
   }
 
-  setMoveMinutes(v) { this.moveMinutes = normalizeMoveMinutes(v); }
-  setEyeBreaks(on) { this.eyeBreaks = !!on; }
+  setMoveMinutes(v) {
+    this.moveMinutes = normalizeMoveMinutes(v);
+  }
+  setEyeBreaks(on) {
+    this.eyeBreaks = !!on;
+  }
 
   /** present: someone is in view. now: seconds on a clock the caller keeps
    *  bounded (no huge jumps). Returns true once when an absence turns into a

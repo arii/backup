@@ -7,7 +7,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  SPONSOR, answerSponsor, markSponsorShown, recordSession, shouldOfferSponsor, sponsorText, usageTotals,
+  SPONSOR,
+  answerSponsor,
+  markSponsorShown,
+  recordSession,
+  shouldOfferSponsor,
+  sponsorText,
+  usageTotals,
 } from "../../docs/app/sponsor.js";
 
 const DAY = 86400000;
@@ -33,16 +39,24 @@ test("not in the first week", () => {
 });
 
 test("needs 5 sessions, 3 distinct days and 2 hours", () => {
-  const few = usedStore(); few.usage.sessions = 4;
+  const few = usedStore();
+  few.usage.sessions = 4;
   assert.equal(ask(few, 10), false);
-  const fewDays = usedStore(); fewDays.days = { "2026-01-01": { good: 20000, bad: 0 }, "2026-01-02": { good: 100, bad: 0 } };
+  const fewDays = usedStore();
+  fewDays.days = { "2026-01-01": { good: 20000, bad: 0 }, "2026-01-02": { good: 100, bad: 0 } };
   assert.equal(ask(fewDays, 10), false);
   const short = usedStore();
-  for (const d of Object.values(short.days)) { d.good = 100; d.bad = 100; }
+  for (const d of Object.values(short.days)) {
+    d.good = 100;
+    d.bad = 100;
+  }
   assert.equal(usageTotals(short).seconds, 800);
   assert.equal(ask(short, 10), false);
   const exact = usedStore(); // 4 x 3000 s = 12000 s
-  for (const d of Object.values(exact.days)) { d.good = 1800; d.bad = 0; } // 7200 s = 2 h exactly
+  for (const d of Object.values(exact.days)) {
+    d.good = 1800;
+    d.bad = 0;
+  } // 7200 s = 2 h exactly
   assert.equal(ask(exact, 10), true);
 });
 
@@ -76,7 +90,8 @@ test("Don't ask again is permanent", () => {
 
 test("recordSession keeps the first day and counts sessions; junk is repaired", () => {
   const s = {};
-  recordSession(s, at(0)); recordSession(s, at(5));
+  recordSession(s, at(0));
+  recordSession(s, at(5));
   assert.deepEqual(s.usage, { firstSeen: "2026-01-01", sessions: 2 });
   const junk = { usage: { firstSeen: "yesterday", sessions: "x" }, days: { bad: 1, "2026-01-01": null } };
   recordSession(junk, at(3));

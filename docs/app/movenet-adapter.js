@@ -11,11 +11,11 @@ export const LANDMARK_COUNT = 33;
 
 /** MoveNet keypoint order -> BlazePose landmark index. */
 export const MOVENET_TO_BLAZEPOSE = [
-  0,  // nose
-  2,  // left eye
-  5,  // right eye
-  7,  // left ear
-  8,  // right ear
+  0, // nose
+  2, // left eye
+  5, // right eye
+  7, // left ear
+  8, // right ear
   11, // left shoulder
   12, // right shoulder
   13, // left elbow
@@ -45,7 +45,7 @@ export function scoreToVisibility(score) {
 }
 
 function clamp01(v) {
-  return v < 0 ? 0 : Math.min(v , 1);
+  return v < 0 ? 0 : Math.min(v, 1);
 }
 
 /**
@@ -83,10 +83,19 @@ export function createMoveNetDetector(detector) {
       if (failure) throw failure;
       if (!busy && videoEl.videoWidth > 0) {
         busy = true;
-        const w = videoEl.videoWidth, h = videoEl.videoHeight;
-        Promise.resolve().then(() => detector.estimatePoses(videoEl, { flipHorizontal: false })).then((poses) => {
-          latest = poses.length ? movenetToLandmarks(poses[0].keypoints, w, h) : null;
-        }).catch((err) => { failure = err; }).finally(() => { busy = false; });
+        const w = videoEl.videoWidth,
+          h = videoEl.videoHeight;
+        Promise.resolve()
+          .then(() => detector.estimatePoses(videoEl, { flipHorizontal: false }))
+          .then((poses) => {
+            latest = poses.length ? movenetToLandmarks(poses[0].keypoints, w, h) : null;
+          })
+          .catch((err) => {
+            failure = err;
+          })
+          .finally(() => {
+            busy = false;
+          });
       }
       return { landmarks: latest ? [latest] : [] };
     },

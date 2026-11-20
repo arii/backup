@@ -12,7 +12,10 @@ import { BREAKS, BreakTracker, MOVE_BREAK_OPTIONS, normalizeMoveMinutes } from "
 function run(tr, t, seconds, present) {
   let taken = 0;
   if (tr.lastT === null) tr.update(present, t); // the first sample only starts the clock
-  for (let i = 0; i < seconds; i++) { t += 1; if (tr.update(present, t)) taken += 1; }
+  for (let i = 0; i < seconds; i++) {
+    t += 1;
+    if (tr.update(present, t)) taken += 1;
+  }
   return { t, taken };
 }
 
