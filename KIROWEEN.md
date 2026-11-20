@@ -96,6 +96,21 @@ What the Kiro phase changed (PRs #19 onward):
   truth, injected timestamps (no wall-clock reads in the logic), frame-rate-
   independent smoothing, lazy hardware imports, and keeping the browser port in
   sync with Python.
+- **Follow-on specs.** Five more spec folders under `.kiro/specs/`
+  (`onboarding-and-setup`, `progress-review`, `wellness-tools`,
+  `safety-and-disclaimers`, `feedback-design`), each with EARS requirements, a design
+  and a task list. Built tasks are checked. Spec-only tasks stay unchecked and are
+  labelled.
+- **Research-driven feedback.** [`docs/research/feedback-and-habit-formation.md`](docs/research/feedback-and-habit-formation.md)
+  maps motor-learning and habit research to design rules: specific, task-focused
+  cues, opt-in earned praise, reduced-frequency (Light) coaching, a silent retention
+  test, an hourly reminder cap, and no shame or streak-loss messages. Some sources
+  were verified from abstracts or page text, others from citation metadata only, and
+  the document says which.
+- **Safety stance.** A versioned first-run acknowledgement, a footer notice and
+  disclaimers on every doc surface; the wording is a draft for a lawyer to review.
+- **Steering additions.** `.kiro/steering/architecture.md` now has rules for safety
+  claims and feedback design.
 - **Hooks.** `.kiro/hooks/pytest-on-change.json` runs `pytest` when package or
   test files are saved; `.kiro/hooks/browser-parity-on-change.json` runs the
   browser parity tests when the JavaScript core or its fixture changes.
@@ -140,6 +155,20 @@ What the Kiro phase changed (PRs #19 onward):
   numbness or dizziness. The wording is a draft that a lawyer should review before any
   wider launch.
 
+- **No clinical validation.** Nothing in the app or the research notes has been
+  clinically validated. The research is mostly lab motor learning and workplace
+  studies, and several citations were checked from metadata only.
+- **Webcam accuracy.** A 2D webcam estimate depends on lighting, angle, clothing and
+  body shape. "Good" is relative to the user's own calibration.
+- **Spec only, not built:** the social leaderboard, face and jaw tension prompts, eye
+  breaks and blink reminders, neck and shoulder stretch prompts, the microbreak
+  timer and the guided breathing exercise. Built: onboarding, safety acknowledgement,
+  Help, *Not working?*, *Learn the cues*, the personal progress panel, Light coaching,
+  milestone praise and the hourly reminder cap.
+- **Desktop app.** The Python dashboard does not have the onboarding or progress
+  panel.
+- **E2E scripts.** `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` hard-code
+  onboarding version 1 and ack version 1. Update them when those versions change.
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.

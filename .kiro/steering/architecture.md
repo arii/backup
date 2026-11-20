@@ -68,3 +68,28 @@
 - New behavior in `scoring.py`, `state.py`, `posture_needle.py` or `calibration.py`
   needs a property or timeline test.
 - CI (`.github/workflows/ci.yml`) runs lint + the full suite on every branch.
+
+## Safety and claims
+- Posture Guard is a wellness tool. No copy, spec or code comment may claim to
+  diagnose, treat, prevent or cure a condition, or that it improves health outcomes.
+  Do not call the research "proof" or the app "clinically validated".
+- The safety notice text lives in one place (`SAFETY_SHORT` and `SAFETY_POINTS` in
+  `docs/app/onboarding.js`). Reuse it; keep README, landing page and `docs.html`
+  consistent with it. Changing its meaning means bumping `ACK_VERSION` so users are
+  asked again. Bumping `ONBOARDING_VERSION` or `ACK_VERSION` also means updating the
+  hard-coded values in `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs`.
+- The disclaimer wording is a draft and not legal advice. A lawyer reviews it before a
+  wider launch.
+
+## Feedback design
+- Follow `docs/research/feedback-and-habit-formation.md` and
+  `.kiro/specs/feedback-design/`: cues are specific and task-focused, praise is opt-in
+  and earned, no shaming or streak-loss messages, no punishing sounds, no sound during
+  pause or the silent test, and an hourly reminder cap.
+- Do not edit spoken strings in `docs/app/voice-lines.js` without re-rendering the
+  clips with `scripts/render-voice.mjs`. New text without a clip falls back to robotic
+  speech synthesis.
+- Browser-only helper modules (`relax.js`, `onboarding.js`, `progress.js`,
+  `feedback.js`) stay pure: no DOM, injected time, with a matching test in `tests/js/`.
+- Label each new feature as implemented or spec only in the docs. Cite a source as
+  verified only if its abstract or page text was read.
