@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Ariel Anders
 // SPDX-License-Identifier: MIT
 //
-// Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
+// Browser shell for BackUp: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for
 // chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
@@ -391,7 +391,7 @@ function fire(nudge, cue) {
     }
   }
   if (notifyEnabled && document.hidden && reminder) {
-    new Notification("Posture Guard", { body: text, silent: true });
+    new Notification("BackUp", { body: text, silent: true });
   }
 }
 
@@ -1668,7 +1668,7 @@ function renderFirstRun() {
     const row = document.createElement("div");
     row.className = "btn-row";
     row.append(
-      firstRunButton("Share Posture Guard", () => openShare(), false),
+      firstRunButton("Share BackUp", () => openShare(), false),
       firstRunButton("Start a silent test", () => { closeFirstRun(); $("test-start").scrollIntoView({ block: "center" }); $("test-start").focus(); }),
     );
     parts.push(row);
@@ -1965,7 +1965,7 @@ $("progress-export").addEventListener("click", () => {
 });
 
 $("progress-delete").addEventListener("click", () => {
-  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests, uploaded sounds and the offline copy)? This cannot be undone.")) return;
+  if (!window.confirm("Delete all BackUp data stored in this browser (settings, calibration, daily totals, tests, uploaded sounds and the offline copy)? This cannot be undone.")) return;
   deleted = true; // stop any pending save from writing it back
   clearStoredData(localStorage);
   removeOfflineCopy().finally(() => location.reload());

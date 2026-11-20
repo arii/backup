@@ -1,4 +1,4 @@
-# Posture Guard demo video
+# BackUp demo video
 
 A [Remotion](https://www.remotion.dev/) project for the Kiroween submission video
 (about 1 minute 50 seconds; the outline is in [`../KIROWEEN.md`](../KIROWEEN.md)).

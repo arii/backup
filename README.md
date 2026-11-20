@@ -1,9 +1,9 @@
-# Posture Guard
+# BackUp
 
-**Posture to die for.** (Please don't. That's the whole point.)
+**BackUp — Posture to Die For.** (Please don't. That's the whole point.)
 
 Somewhere between your third coffee and your fourth meeting, your head drifted
-forward until your ears were hovering over the keyboard. Posture Guard noticed.
+forward until your ears were hovering over the keyboard. BackUp noticed.
 Leave a browser tab open with your webcam on, and it watches how you sit. Slouch,
 and it chimes. Keep slouching, and it tells you out loud exactly what is wrong and
 how to fix it. Everything runs on your computer; no video or landmark leaves it.
@@ -21,7 +21,7 @@ The app needs a webcam (or use the demo), a recent Chrome, Edge or Firefox, and
 hardware acceleration (WebGL) turned on. Released under the [MIT License](LICENSE).
 Third-party credits: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 [![Sponsor on GitHub](https://img.shields.io/badge/%E2%99%A5-Sponsor-ea4aaa)](https://github.com/sponsors/arii)
-Posture Guard is free and built by one person. If it is useful to you, you can
+BackUp is free and built by one person. If it is useful to you, you can
 [sponsor on GitHub](https://github.com/sponsors/arii). The app asks at most three times, only after
 regular use (counted in your own browser, never sent anywhere), and
 *Don't ask again* is permanent. Not legal advice, but the engineering side of the
@@ -29,7 +29,7 @@ privacy and legal review is tracked in [`docs/legal-checklist.md`](docs/legal-ch
 Kiroween 2026 submission deadline: **Dec 4, 2026, 2:00 PM PT**.
 Docs last verified: 2026-11-20.
 
-> **Safety.** Posture Guard is a wellness tool, not medical advice or a medical
+> **Safety.** BackUp is a wellness tool, not medical advice or a medical
 > device. Do not hold a rigid posture. Stop and see a clinician if you have pain,
 > numbness or dizziness. Webcam estimates are approximate. Provided as-is under the
 > MIT License. See [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/design.md).
@@ -66,7 +66,7 @@ Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboar
 This wording is a draft. It is not legal advice, and the owner should have a lawyer
 review it before any wider launch.
 
-- Posture Guard is a wellness tool. It is not medical advice and not a medical device.
+- BackUp is a wellness tool. It is not medical advice and not a medical device.
   It does not diagnose, treat or prevent any condition.
 - Do not hold a rigid posture. Relax your shoulders and change position often.
   Reminders do not replace regular movement breaks. The evidence that "perfect"
@@ -89,7 +89,7 @@ optional desktop dashboard docs page and under the *Relax, don't brace* panel. F
 
 ### What it notices
 
-| Habit | Folk name | What Posture Guard tells you |
+| Habit | Folk name | What BackUp tells you |
 |---|---|---|
 | Head forward | Tech neck: your ears have wandered ahead of your shoulders | "Tuck your chin and bring your ears back over your shoulders." |
 | Head tilted | The puzzled dog | "Straighten your neck so your ears are level." |
@@ -99,12 +99,12 @@ optional desktop dashboard docs page and under the *Relax, don't brace* panel. F
 The advice never names a side, so a mirrored webcam image cannot make it wrong. Sit up
 and it plays a reward chime, because positive reinforcement works on spines too.
 
-Posture Guard is a reminder, not a doctor. If something hurts, see a human
+BackUp is a reminder, not a doctor. If something hurts, see a human
 professional, not a webcam.
 
 ## The monster (Kiroween 2026: Frankenstein)
 
-Posture Guard is stitched together from parts that were never meant to share a
+BackUp is stitched together from parts that were never meant to share a
 body. Unlike its namesake, it sits up straight.
 
 | Body part | Donor | Job |
@@ -276,7 +276,7 @@ python -m posture_guard.dashboard.serve [--config config.yaml] [--host 127.0.0.1
 ```
 
 `--camera` and `--device` override `camera.source` and `camera.device` in
-`config.yaml`. If the webcam does not open, Posture Guard falls back to the
+`config.yaml`. If the webcam does not open, BackUp falls back to the
 synthetic demo and shows the reason in the log and on the dashboard's camera line.
 The synthetic demo alternates `camera.demo_cycle_s` (20 s) of good posture with the
 same of slouching, so the full GOOD -> chime -> voice -> recovery cycle plays with
@@ -519,7 +519,7 @@ session that starts slouched teaches the deviation baseline the wrong neutral
 
 ## Kiroween 2026
 
-Posture Guard is a [Kiroween 2026](https://kiroween.devpost.com/) entry in the
+BackUp is a [Kiroween 2026](https://kiroween.devpost.com/) entry in the
 **Frankenstein** category: seemingly incompatible technologies (a Python brain and
 its JavaScript transplant, WebAssembly eyes, two voice boxes, a Web Worker heartbeat)
 stitched into one app. See [The monster](#the-monster-kiroween-2026-frankenstein)

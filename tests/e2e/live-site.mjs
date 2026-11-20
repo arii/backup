@@ -447,7 +447,7 @@ try {
     await page.click("#first-run-next");
     check("first run: last step says to leave the tab open and has Share and a silent test",
       /Leave this tab open/.test(await page.textContent("#first-run-body")) && /Pause any time/.test(await page.textContent("#first-run-body")) &&
-      (await page.locator("#first-run-body button").allTextContents()).join("|") === "Share Posture Guard|Start a silent test");
+      (await page.locator("#first-run-body button").allTextContents()).join("|") === "Share BackUp|Start a silent test");
     await page.click("#first-run-next");
     const done = await page.evaluate(() => ({
       hidden: document.getElementById("first-run").hidden,

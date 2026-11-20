@@ -1,7 +1,7 @@
 
-# Feedback and habit formation: what the evidence says, and what Posture Guard does
+# Feedback and habit formation: what the evidence says, and what BackUp does
 
-Posture Guard is a wellness tool and has not been clinically validated. This note
+BackUp is a wellness tool and has not been clinically validated. This note
 records the research behind its feedback design, so each choice can be traced to a
 source or labelled as a judgement call. It is not medical advice. See
 `.kiro/specs/safety-and-disclaimers/` for the safety stance.
@@ -27,7 +27,7 @@ Fogg "Tiny Habits" book).
 Status column: **shipped** = already in the app, **FEAT-003** = implemented in the
 same change set as the specs, **spec only** = designed but not built.
 
-| Principle | Evidence | What Posture Guard does | Status |
+| Principle | Evidence | What BackUp does | Status |
 |---|---|---|---|
 | Frequent feedback helps performance now but can hurt learning (guidance effect). Reduced feedback frequency improves retention. | Salmoni, Schmidt & Walter 1984; Winstein & Schmidt 1990 | Praise is faded: first praise at 15 s, then every 1 to 2 minutes. "Light" coaching level swaps voice for a chime on the first reminder of an episode and drops timed praise. It does not reduce the number of reminders. | shipped (faded praise), FEAT-003 (Light level) |
 | Measure learning with a no-feedback retention test, not with the coached score. | Salmoni et al. 1984; Winstein & Schmidt 1990 | Silent "Test me" stores a separate score in `store.tests`. Progress view compares it with coached time. | shipped (test), FEAT-003 (view) |
@@ -81,7 +81,7 @@ same change set as the specs, **spec only** = designed but not built.
   (d near 0.35).
 - Slater et al. is a viewpoint, not a trial. It argues the evidence for "correct
   posture prevents pain" is weak, and does not claim that posture never matters.
-- No study here evaluated Posture Guard. Its detection uses a 2D webcam and
+- No study here evaluated BackUp. Its detection uses a 2D webcam and
   approximate geometry. **The app is not clinically validated and makes no health
   claims.**
 

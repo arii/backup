@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Posture Guard setup for a clean Ubuntu/Debian-family Linux desktop.
+# BackUp setup for a clean Ubuntu/Debian-family Linux desktop.
 #
 # 1. Installs system packages (PulseAudio/PipeWire client tools, TTS, ffmpeg).
 # 2. Creates a Python venv and installs posture-guard with the webcam extra.

@@ -56,7 +56,7 @@ review), **Future** (a feature that does not exist yet).
 | EU/UK: self-host the model and runtime so visitor IPs do not go to Google or jsDelivr | Done | `docs/app/vendor/`; e2e asserts no third-party requests |
 | Share buttons are plain links, with no third-party widgets or counters | Done | `docs/app/share.js`; e2e asserts no external requests |
 | Sponsor prompt is triggered by counts kept only in `localStorage`; stated in the privacy page | Done | `docs/app/sponsor.js` |
-| Trademark search for "Posture Guard" before a store listing or paid launch | Needs lawyer | |
+| Trademark search for "BackUp" before a store listing or paid launch | Needs lawyer | |
 | GDPR review (lawful basis, cookie rules). The site sets no cookies. | Needs lawyer | |
 
 ## Before charging money

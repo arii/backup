@@ -54,7 +54,7 @@ export function usageTotals(store) {
 /** Text for the card, with the tracked hours rounded to a whole number (at least 2). */
 export function sponsorText(store) {
   const h = Math.max(2, Math.round(usageTotals(store).seconds / 3600));
-  return `You've tracked about ${h} hours with Posture Guard. It's free and built by one person. If it's helping, you can sponsor on GitHub. \u2665`;
+  return `You've tracked about ${h} hours with BackUp. It's free and built by one person. If it's helping, you can sponsor on GitHub. \u2665`;
 }
 
 /** True when the sponsor card may be offered now.

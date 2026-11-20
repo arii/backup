@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Ariel Anders
 // SPDX-License-Identifier: MIT
 //
-// Posture Guard core, in the browser: a faithful port of scoring.py,
+// BackUp core, in the browser: a faithful port of scoring.py,
 // state.py, posture_needle.py, calibration.py and the pipeline frame path.
 // Pure functions and classes, no DOM, no clock: every method takes the frame
 // time `now` (seconds), exactly like the Python code. Parity with Python is

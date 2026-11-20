@@ -11,7 +11,7 @@ import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl
 const URL_ = "https://arii.github.io/posture-guard/";
 
 test("share text is the agreed sentence", () => {
-  assert.equal(SHARE_TEXT, "Posture to die for: a free webcam posture coach that runs in your browser. Nothing is uploaded.");
+  assert.equal(SHARE_TEXT, "BackUp — Posture to Die For: a free webcam posture coach that runs in your browser. Nothing is uploaded.");
 });
 
 test("links carry the text and the URL, encoded", () => {
@@ -42,6 +42,6 @@ test("mastodon instance must be a plain hostname", () => {
 });
 
 test("native payload and share URL (no query, no hash)", () => {
-  assert.deepEqual(nativeSharePayload(URL_), { title: "Posture Guard", text: SHARE_TEXT, url: URL_ });
+  assert.deepEqual(nativeSharePayload(URL_), { title: "BackUp — Posture to Die For", text: SHARE_TEXT, url: URL_ });
   assert.equal(shareUrl("https://arii.github.io/posture-guard/app/?clockScale=600#x"), URL_);
 });

@@ -54,7 +54,7 @@ def create_app(
     # /docs is this app's own How-it-works page, so FastAPI's built-in
     # Swagger UI route (registered ahead of ours) is turned off; the
     # OpenAPI schema at /openapi.json stays available.
-    app = FastAPI(title="Posture Guard", docs_url=None)
+    app = FastAPI(title="BackUp", docs_url=None)
 
     @app.get("/video.mjpg")
     def video_mjpg() -> StreamingResponse:

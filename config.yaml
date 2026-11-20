@@ -1,4 +1,4 @@
-# Posture Guard configuration. All durations in seconds, all angles in degrees.
+# BackUp configuration. All durations in seconds, all angles in degrees.
 # Unknown keys and wrong-typed values are rejected at startup (ConfigError).
 
 camera:

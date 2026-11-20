@@ -1,6 +1,6 @@
 # Third-party notices
 
-Posture Guard is released under the [MIT License](LICENSE). It uses the third-party
+BackUp is released under the [MIT License](LICENSE). It uses the third-party
 work below. This is not legal advice. Licenses and sources were taken from the
 projects' own pages and should be re-checked before commercial use.
 
@@ -27,6 +27,6 @@ the photo with your own footage, or confirm that the photo is a cleared stock im
 ## Names and trademarks
 
 "Kiro" and "Kiroween" are used only to describe the hackathon and the tool used to
-build this project. "MediaPipe" and "Google" belong to their owners. "Posture Guard"
+build this project. "MediaPipe" and "Google" belong to their owners. "BackUp"
 may already be used by other products. Run a trademark search before any commercial
 use or app-store listing.

@@ -1,4 +1,4 @@
-"""Posture Guard: webcam posture coach with a live verification dashboard."""
+"""BackUp: webcam posture coach with a live verification dashboard."""
 
 from posture_guard.config import AppConfig, load_config
 

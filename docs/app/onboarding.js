@@ -25,11 +25,11 @@ export const SETUP = Object.freeze({
 /** The safety text, written once. Static pages carry copies of it. This is a
  *  draft for review by counsel, not legal advice. */
 export const SAFETY_SHORT =
-  "Posture Guard is a wellness tool, not medical advice or a medical device. " +
+  "BackUp is a wellness tool, not medical advice or a medical device. " +
   "Do not hold a rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.";
 
 export const SAFETY_POINTS = Object.freeze([
-  "Posture Guard is a wellness tool. It is not medical advice and not a medical device, " +
+  "BackUp is a wellness tool. It is not medical advice and not a medical device, " +
     "and it does not diagnose, treat or prevent any condition.",
   "Do not hold a rigid posture. Relax your shoulders and change position often. " +
     "Reminders are not a substitute for regular movement breaks.",
@@ -70,7 +70,7 @@ export const ONBOARDING_STEPS = Object.freeze([
 
 /** First-run "Choose your coach" and "You're set" steps (rendered in app.js). */
 export const COACH_INTRO =
-  "Pick how Posture Guard talks to you. Every choice can be changed later under Reminders & sounds and Breaks & prompts.";
+  "Pick how BackUp talks to you. Every choice can be changed later under Reminders & sounds and Breaks & prompts.";
 export const DONE_INTRO =
   "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
   "Pause any time with the Pause button. A silent test now gives you a baseline to compare with later. " +

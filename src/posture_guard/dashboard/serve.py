@@ -88,7 +88,7 @@ def apply_cli(config: AppConfig, camera: str | None, device: int | None) -> AppC
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Posture Guard dashboard")
+    parser = argparse.ArgumentParser(description="BackUp dashboard")
     parser.add_argument("--config", default="config.yaml", help="path to config.yaml")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
