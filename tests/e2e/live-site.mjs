@@ -566,6 +566,30 @@ try {
       await noGL.close();
     }
   }
+  // 6. A custom sound survives a reload under the CSP (restoreSound must not
+  //    use fetch(data:), which connect-src 'self' blocks).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(base + "app/" + bust);
+    const rate = 8000, n = 800; // 0.1 s of silence as 16-bit mono PCM WAV
+    const wav = Buffer.alloc(44 + n * 2);
+    wav.write("RIFF", 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(n * 2, 40);
+    await page.setInputFiles("#bad-file", { name: "chime.wav", mimeType: "audio/wav", buffer: wav });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound, null, { timeout: 5000 })
+      .catch(() => {});
+    const stored = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
+    check("custom sound: an uploaded sound is stored", stored);
+    await page.reload();
+    await page.click("#start-demo"); // restoreSound runs when a session begins
+    await page.waitForTimeout(1500);
+    const kept = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
+    check("custom sound: survives a reload (not blocked by the CSP)", kept);
+    check("custom sound: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
   // 5. Self-hosting: vendored files are served, nothing left the origin.
   {
     const missing = [];

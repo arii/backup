@@ -29,3 +29,9 @@ npm pack @mediapipe/tasks-vision@<version>
 
 Copy `vision_bundle.mjs` and `wasm/*` here, re-download the model, update the hashes above and
 the `TASKS_VISION` path in `../app.js` if the layout changes.
+
+## Repository size
+
+The two WASM builds and the model add about 24 MB. Each upgrade adds the same again to git
+history. The `nosimd` build is only for browsers without WebAssembly SIMD; drop it (and its
+CI check) if the supported-browser list allows.

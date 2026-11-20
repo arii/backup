@@ -281,8 +281,10 @@ async function restoreSound(kind) {
   const dataUrl = store[`${kind}Sound`];
   if (!dataUrl) return;
   try {
-    const bytes = await (await fetch(dataUrl)).arrayBuffer();
-    custom[kind] = await ensureAudio().decodeAudioData(bytes);
+    // Decode the base64 payload directly: fetch(data:) is blocked by connect-src 'self'.
+    const bin = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    custom[kind] = await ensureAudio().decodeAudioData(bytes.buffer);
   } catch { delete store[`${kind}Sound`]; save(); }
 }
 
@@ -1008,6 +1010,14 @@ function showError(message) {
 // includes video, images, landmarks or stored sounds.
 
 const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
+// Issue title from a "HH:MM:SS message" entry: drop the time, cut at a word boundary.
+function bugTitle(entry, max = 71) {
+  const msg = entry.slice(9);
+  if (msg.length <= max) return msg;
+  const cut = msg.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 1)).trimEnd()}...`;
+}
+
 const problems = []; // last few errors, newest last
 
 function logProblem(message) {
@@ -1044,7 +1054,7 @@ function bugReportUrl() {
     `- Reminders this session: ${reminderCount}`,
   ].join("\n");
   const body = buildBugReportBody({ diag, problems });
-  const title = problems.length ? `Bug: ${problems[problems.length - 1].slice(9, 80)}` : "Bug: ";
+  const title = problems.length ? `Bug: ${bugTitle(problems[problems.length - 1])}` : "Bug: ";
   const params = new URLSearchParams({ title, body: body.slice(0, 6000), labels: "bug" });
   return `${ISSUE_URL}?${params}`;
 }

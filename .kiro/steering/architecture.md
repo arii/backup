@@ -7,7 +7,8 @@
   # Copyright (c) 2026 Ariel Anders
   # SPDX-License-Identifier: MIT
   ```
-  Do not add or change headers on existing files; keep diffs free of churn.
+  Do not add or change headers on existing files; keep diffs free of churn (except the
+  one-time SPDX migration, #44).
 - Type hints on all new and modified code. `requires-python >= 3.10`: use `X | None`.
 - `ruff check .` must pass (line length 100, rules E, F, W, I, UP, B, SIM).
 

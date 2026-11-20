@@ -2,7 +2,7 @@
 
 **Posture to die for.** (Please don't.) Leave a browser tab open; your webcam
 watches how you sit, chimes when you slouch, and tells you out loud what to fix.
-Nothing leaves your computer.
+Your camera feed never leaves your browser.
 
 - **Category:** Frankenstein
 - **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
