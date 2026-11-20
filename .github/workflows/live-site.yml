@@ -1,7 +1,7 @@
 name: live-site
 
 # End-to-end check of the browser app (docs/app): demo mode, plus webcam mode
-# with Chromium's fake camera playing a photo of a person, so the real
+# with Chromium's fake camera playing a drawn cartoon figure, so the real
 # MediaPipe bundle, WASM and model are loaded from docs/app/vendor/ and run.
 # It also asserts that no request leaves the site (no CDN, no model bucket).
 #
@@ -38,16 +38,11 @@ jobs:
           npm install --no-save playwright@1
           npx playwright install --with-deps chromium
       - name: Build the fake camera feed
-        timeout-minutes: 5  # an apt mirror once hung this step for 15+ minutes
-        # Apache-2.0 sample photo from google-ai-edge/mediapipe-samples-web,
-        # cropped around the person to a webcam-like waist-up framing.
+        # A cartoon figure drawn by scripts/make-fake-camera.mjs; no photo of
+        # a real person and no ffmpeg.
         run: |
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg
-          curl -fsSL -o person.jpg \
-            https://raw.githubusercontent.com/google-ai-edge/mediapipe-samples-web/main/public/images/id_photos/id_fail_distant_waist_up.jpg
-          ffmpeg -loglevel error -loop 1 -i person.jpg -t 3 -r 15 \
-            -vf "crop=480:640:208:480,scale=480:640" -pix_fmt yuv420p person.y4m
-          ls -la person.jpg person.y4m
+          node scripts/make-fake-camera.mjs person.y4m --seconds 3
+          ls -la person.y4m
       - name: Pick the target build
         # Feature-branch pushes (PR checks) validate the candidate build from
         # the checkout; main pushes, scheduled and manual runs, the live site.

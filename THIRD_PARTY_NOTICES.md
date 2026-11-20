@@ -19,12 +19,9 @@ projects' own pages and should be re-checked before commercial use.
 | Component | License | Notes |
 |---|---|---|
 | Remotion 4 (`video/`) | [Remotion License](https://www.remotion.dev/docs/license) | Free for individuals and small companies, paid above a size threshold. The owner must confirm the free tier applies before publishing the rendered video. |
-| Sample photo `id_fail_distant_waist_up.jpg` from [`google-ai-edge/mediapipe-samples-web`](https://github.com/google-ai-edge/mediapipe-samples-web) | The repository is Apache-2.0. The photo's own source and license are not confirmed. | Used as a fake camera feed in CI and in the draft demo video (`video/scripts/make-fake-camera.sh`). It is not served by the site. |
 
-**Likeness warning.** The sample photo shows a real person. A copyright license does
-not cover a person's likeness in promotional material (right of publicity or
-personality rights). Before publishing the demo video to YouTube or Devpost, replace
-the photo with your own footage, or confirm that the photo is a cleared stock image.
+**Fake camera.** The CI and demo-video fake camera feed is a cartoon figure drawn by
+`scripts/make-fake-camera.mjs`. It contains no photo and no real person's likeness.
 
 ## Names and trademarks
 

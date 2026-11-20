@@ -20,7 +20,7 @@ Needs Node 20+, `ffmpeg` and `espeak-ng`.
 cd video
 npm install
 npx playwright install chromium
-bash scripts/make-fake-camera.sh person.y4m   # sample photo -> fake webcam feed
+node ../scripts/make-fake-camera.mjs person.y4m --seconds 12 --tilt-after 5   # drawn figure -> fake webcam feed
 bash scripts/make-audio.sh                    # the app's chimes + the spoken cue
 npm run capture -- https://arii.github.io/posture-guard/ "$PWD/person.y4m" public
 npm run studio                                # preview and tweak

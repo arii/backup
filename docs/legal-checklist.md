@@ -56,8 +56,30 @@ review), **Future** (a feature that does not exist yet).
 | EU/UK: self-host the model and runtime so visitor IPs do not go to Google or jsDelivr | Done | `docs/app/vendor/`; e2e asserts no third-party requests |
 | Share buttons are plain links, with no third-party widgets or counters | Done | `docs/app/share.js`; e2e asserts no external requests |
 | Sponsor prompt is triggered by counts kept only in `localStorage`; stated in the privacy page | Done | `docs/app/sponsor.js` |
-| Trademark search for "BackUp" before a store listing or paid launch | Needs lawyer | |
+| Trademark search for "BackUp" before a store listing or paid launch | Needs lawyer | Informal findings above |
 | GDPR review (lawful basis, cookie rules). The site sets no cookies. | Needs lawyer | |
+
+## Demo media, Remotion and trademark (issue #44)
+
+Not legal advice. Findings from reading public pages on 20 Nov 2026.
+
+| Item | Status | Finding |
+|---|---|---|
+| Real-person likeness in test and demo footage | Done | The fake camera feed is now a cartoon figure drawn by `scripts/make-fake-camera.mjs`. No photo of a person is used by CI, the demo video workflow or the docs. The earlier sample photo is gone from the repo. The owner's own webcam clip for the final video is still an owner choice (see `LAUNCH.md`). |
+| Remotion licence tier | Likely free, owner to confirm | Sources: [License and pricing](https://www.remotion.dev/docs/license/pricing.md), [License FAQ](https://www.remotion.dev/docs/license/faq.md), [Terms](https://www.remotion.dev/docs/terms). The Free License covers "an individual, whether for personal or commercial use" and organizations of up to 3 people, with no feature limits and no need to contact Remotion. This project is one person's open source work, so it appears to qualify. **Unconfirmed:** the current Terms text itself (only the summary pages were read), and whether the owner's employer or any company would count as the user of the software. If a company of 4 or more people ever renders videos with it, a Company License ($25 per seat per month for Creators, or per-render pricing for Automators, per the pricing page) applies. Remotion says to write to them if unsure. |
+| Trademark search for "BackUp" | Needs lawyer | Informal web search only. The USPTO trademark search ([tmsearch.uspto.gov](https://tmsearch.uspto.gov/)) loads but is a JavaScript application that cannot be queried from the sandbox, so **no USPTO result was checked**. Search engines returned only unrelated GitHub backup tools for `"BackUp" posture app webcam`, and nothing for the phrase "Posture to Die For". The earlier findings in `LAUNCH.md` (a physical brace named "BackUp Posture Support", several BACKUP marks for data backup software) stand and were not re-verified. |
+| Recommendation | | Before a store listing, a custom domain or any payment: (1) the owner runs the USPTO search for BACKUP in classes 9, 10, 42 and 44 and for POSTURE TO DIE FOR, (2) a short clearance opinion from a trademark attorney, (3) always show "BackUp: Posture to Die For" together, and keep the disclaimer. If the opinion is unfavourable, the name is a string in the UI and docs plus the repo URL, so renaming stays cheap (the `posture-guard:v1` storage key stays). |
+
+## Issue #51 status summary
+
+| Area | State |
+|---|---|
+| Done in code and site | Consent record for shoulder and breathing features, biometric retention statement, Consumer Health Data policy page, wellness wording, disclaimers, self-hosted model and runtime, no data leaves the device (see the tables above). |
+| Consent for basic posture tracking | Decided: onboarding notice plus the browser camera prompt, no second dialog. Lawyer to confirm. See Gap 1. Reasoning and sources: [`docs/audit-2026-11.md`](audit-2026-11.md). |
+| Owner-only | Privacy lawyer review (BIPA, MHMDA and similar, FTC health guidance, GDPR), trademark clearance. |
+| Future | Face tension tool, Chrome extension, paid tier, any server-side data. Each reopens this checklist. |
+
+Tracking issue: [#51](https://github.com/arii/posture-guard/issues/51). Related: [#44](https://github.com/arii/posture-guard/issues/44), [#30](https://github.com/arii/posture-guard/issues/30).
 
 ## Before charging money
 

@@ -157,7 +157,7 @@ export const Webcam: React.FC<{ p: VideoProps }> = ({ p }) => {
       <Clip src={w.src} fromSec={from} />
       {remindAt !== null && remindAt >= 0 && remindAt < 10 ? <Sound file="chime.wav" atSec={remindAt} /> : null}
       <Caption accent={color.good}>
-        The real pose model on a real person. Tilt her and it notices
+        The real pose model on a drawn stand-in. Tilt it and it notices
         {w.reminder !== null ? (
           <>
             : <b style={{ color: color.warn }}>{w.cue}.</b>
@@ -241,7 +241,7 @@ export const Monster: React.FC = () => {
 const STATS = [
   ["632 frames", "Replayed through the core on every change. Zero disagreements."],
   ["7 properties", "Seeded tests throw NaNs, mirrors and jitter at it."],
-  ["11 live checks", "Playwright visits the deployed site and makes sure a real person is found."],
+  ["11 live checks", "Playwright visits the deployed site and makes sure a person is found."],
 ] as const;
 
 const KIRO_TREE = [

@@ -66,3 +66,23 @@ All copy follows the wellness rules (#41, #51): it **notices, reminds and helps 
 - **UI:** "BackUp", plain and functional. The tagline appears on the start screen, page titles and the share text.
 - **Audio:** clean chimes by default. An optional spooky chime pack is planned, to play up the tagline without making it the default.
 - **Internal names stay as they are:** the `posture-guard:v1` storage key (so existing users keep their data) and the repo URL until the domain move.
+
+## Owner-only checklist (issue #30)
+
+These need the owner's accounts, hardware or voice, so an agent cannot do them. Engineering parts of #30 (no-WebGL camera fallback, live-site e2e) are done.
+
+- [ ] **Default branch** is `main` (Settings, Branches). Check that the repo home page shows the BackUp README and LICENSE.
+- [ ] **WebGL in your Chrome** (best accuracy; without it the app uses a simpler fallback): `chrome://settings/system`, turn on "Use graphics acceleration when available", relaunch, then check `chrome://gpu` says "WebGL: Hardware accelerated".
+- [ ] **Manual webcam test with a real person.** CI only uses a drawn figure. Open [the app](https://arii.github.io/posture-guard/app/) and:
+  1. Click Start, accept the notice, allow the camera. Expect the badge to leave "no one in view" and the fps and angle readouts to move.
+  2. Sit upright for 30 seconds. Expect "good posture" and no reminder.
+  3. Lean your head forward and hold. Expect a chime, then a spoken cue about your head within a few seconds.
+  4. Tilt one shoulder down. Expect a shoulder cue.
+  5. Move out of frame. Expect "no one in view", then recovery when you return.
+  6. Open Help and try the shoulder and breathing consent dialog: decline once, accept once, withdraw once.
+  7. Try "Test me" (silent) for a minute: no sounds or banners.
+  8. Click Delete my data and reload: progress and consent are gone.
+  Note any wrong cue, then file it with the Report a bug link.
+- [ ] **Demo video.** The Remotion render uses a drawn stand-in for the webcam scene. Add your own webcam clip (your own likeness, with your consent) and a voiceover, render, upload to YouTube.
+- [ ] **Devpost.** Pick the Frankenstein category and link the repo, the live app, the video and `KIROWEEN.md`.
+- [ ] **Legal items** (see `docs/legal-checklist.md`): confirm the Remotion free licence applies to you, run the USPTO search, and book a lawyer review before any payment or store listing.

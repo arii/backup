@@ -42,7 +42,7 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Fake camera feed
-        run: bash scripts/make-fake-camera.sh person.y4m
+        run: node ../scripts/make-fake-camera.mjs person.y4m --seconds 12 --tilt-after 5
       - name: Sounds
         run: bash scripts/make-audio.sh
       - name: Record footage from the live site

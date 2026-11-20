@@ -111,7 +111,7 @@ body. Unlike its namesake, it sits up straight.
 | **Memory** | `localStorage` | Your calibration, settings, custom sounds, daily totals, usage counts for the sponsor prompt and your dated consent record |
 | **Packed lunch** | An opt-in service worker (`docs/app/sw.js`) and Cache Storage | The app's own files, so it runs with Wi-Fi off (see Offline mode) |
 | **Immune system** | `node:test` | Seven correctness properties plus unit tests |
-| **Lab test subject** | Playwright, Chromium's fake camera, and ffmpeg turning a photo into a video feed | Checks that the deployed site finds a real person (an Apache-2.0 sample photo; the paperwork is in order) |
+| **Lab test subject** | Playwright, Chromium's fake camera, and a node script that draws a cartoon figure into a video feed | Checks that the deployed site finds a person (the figure is drawn in `scripts/make-fake-camera.mjs`, no photo of anyone) |
 | **Lightning** | Kiro: specs, steering and hooks | It's alive. |
 
 Why these parts don't normally fit, and the stitches that hold them:
@@ -348,7 +348,7 @@ why in the commit.
 CI runs the node tests, the precache check, the vendored-file checksums, a local
 Playwright e2e and ShellCheck on every push to every branch. After each GitHub Pages
 deploy, the `live-site` workflow opens the deployed app in Chromium and runs demo mode
-and webcam mode (with a fake camera playing a photo of a person).
+and webcam mode (with a fake camera playing a drawn cartoon figure).
 
 Browser end-to-end check (needs a local server and Playwright):
 

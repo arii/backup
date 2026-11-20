@@ -50,7 +50,7 @@ brain is now the only one.
 | Second brain | JavaScript port in `docs/app/posture-core.js`, now the only brain | A golden timeline: Python recorded 632 frames and Node reproduces every state, reminder, cue and number (within 1e-9). The recording is kept as a frozen fixture in `tests/js/fixtures/`, and a Kiro hook re-runs the tests whenever the app or its tests are saved |
 | Voice | Web Audio + speech synthesis (and `paplay` + pico2wave/espeak-ng on the desktop original) | One cue text spoken by either |
 | Heartbeat | A Web Worker timer | Browsers throttle background tabs; the worker keeps ticking and the frame-rate-independent state machine still times reminders correctly at 5 fps |
-| Lab test subject | Playwright, Chromium's fake camera, ffmpeg | A photo is turned into a video feed so CI can check the deployed site detects a real person |
+| Lab test subject | Playwright, Chromium's fake camera, a Node script | A drawn cartoon figure is turned into a video feed so CI can check the deployed site detects a person |
 | Amputated limb | Intel RealSense depth camera | Removed; shoulder width in the frame replaced depth as the distance check |
 
 The README's [The monster](README.md#the-monster-kiroween-2026-frankenstein) section
@@ -145,7 +145,7 @@ What the Kiro phase changed (PRs #19 onward):
   precache check, vendored-file checksums, a local Playwright e2e, and ShellCheck.
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
-  playing a photo of a person, so the real pose model loads from the self-hosted vendor files and
+  playing a drawn cartoon figure, so the real pose model loads from the self-hosted vendor files and
   detects her. Screenshots are kept as a workflow artifact.
 
 ## Known limitations

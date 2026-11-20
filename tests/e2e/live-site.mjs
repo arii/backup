@@ -11,7 +11,7 @@
 //
 // 1. Landing page loads and links to ./app/.
 // 2. Demo mode: GOOD, then the scripted slouch triggers a reminder.
-// 3. Webcam mode with Chromium's fake camera playing a photo of a person:
+// 3. Webcam mode with Chromium's fake camera playing a drawn cartoon figure:
 //    the real tasks-vision bundle, WASM and pose model load from app/vendor/ and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
