@@ -111,10 +111,6 @@
   @media (max-width: 860px) {
     .hero-grid { grid-template-columns: 1fr; gap: 24px; }
   }
-  /* Reduced motion: swap the animated GIF for its static first frame */
-  @media (prefers-reduced-motion: reduce) {
-    .hero-shot img { content: url("assets/posture-needle-demo-frame.png"); }
-  }
 
   /* Section headings */
   section { margin-top: 56px; }
@@ -266,13 +262,12 @@
         A posture coach that watches you through your normal webcam. Open the
         <a href="./app/">app</a>, leave the tab open, and it chimes when you slouch, then
         speaks up if you keep slouching. <b>Nothing to install</b>, <b>no special camera</b>,
-        and <b>no video leaves your computer</b>. A Linux desktop version with a local
-        dashboard is available too.
+        and <b>no video leaves your computer</b>.
       </p>
       <div class="cta-row">
         <a class="btn primary" href="./app/">Try it in your browser</a>
         <a class="btn" href="https://github.com/arii/posture-guard">GitHub repo</a>
-        <a class="btn" href="https://github.com/arii/posture-guard/blob/main/src/posture_guard/dashboard/static/docs.html">How it works</a>
+        <a class="btn" href="#how">How it works</a>
       </div>
       <p class="requirements" id="requirements"><b>Requirements:</b> a webcam, a recent Chrome, Edge or Firefox,
         and <b>hardware acceleration / WebGL turned on</b>. Everything runs in your browser and no video is uploaded.</p>
@@ -289,9 +284,10 @@
       </div>
     </div>
     <figure class="hero-shot">
-      <img src="assets/posture-needle-demo.gif" width="480" height="433"
-           alt="Live posture needle demo: the needle rests in the green good zone reading 8, while a banner counts down to the reward chime"
+      <img src="assets/app-desktop.png" width="1280" height="800"
+           alt="The Posture Guard browser app in demo mode: a skeleton outline, a posture needle in the slouching zone, and the advice 'Head forward: tuck your chin and bring your ears back over your shoulders'"
            loading="lazy">
+      <figcaption>The browser app in demo mode.</figcaption>
     </figure>
   </div>
 </header>
@@ -300,50 +296,46 @@
   <section>
     <h2>What it does</h2>
     <p class="section-sub">
-      Sit at your desk; the camera watches, scores four head/shoulder angles, and only
-      nudges you when bad posture <em>sustains</em> — chime first, spoken prompt after,
+      Sit at your desk; the camera watches, measures four head and shoulder angles, and only
+      nudges you when slouching <em>lasts</em>: chime first, spoken prompt after,
       silence the moment you sit up.
     </p>
     <div class="features">
       <div class="card">
-        <h3>State-colored wireframe + root-cause pills</h3>
-        <p>The tracking skeleton changes color with posture state, and a status message
-           names the cause — e.g. <b>“TOP EDGE CLIPPED — TILT CAMERA UP”</b> — instead of a vague failure.</p>
+        <h3>Says what to fix</h3>
+        <p>Reminders name the problem and the fix on screen and out loud, such as <b>“Head forward: tuck your chin and bring your ears back over your shoulders.”</b> The advice never depends on left or right.</p>
       </div>
       <div class="card">
-        <h3>Unified 0–100 posture needle</h3>
-        <p>A single always-on needle summarizes all metrics at a glance, with a
-           <b>“Reminder in Ns” countdown bar</b> so a nudge never surprises you.</p>
+        <h3>Natural recorded voice</h3>
+        <p>Spoken prompts use pre-recorded Kokoro voices, with the browser's speech synthesis as a fallback. Chime only and silent modes are there too.</p>
       </div>
       <div class="card">
-        <h3>Threshold bars + grace-period ring</h3>
-        <p>Each metric card shows its own target band as a bullet bar, and a grace ring
-           counts down the sustain window before a reminder fires.</p>
+        <h3>Posture needle</h3>
+        <p>A needle shows how far you are from your own good posture. It has no score number, and a plain warning line says what the camera cannot see.</p>
       </div>
       <div class="card">
-        <h3>Chime + spoken prompt, configurable modes</h3>
-        <p>Synchronized reminders: chime once when bad posture holds, then a spoken
-           prompt — with <b>chime+voice / chime-only / silent</b> modes and on-demand test buttons.</p>
+        <h3>Test me, a silent test</h3>
+        <p>Check whether the habit is sticking: a short test with no chime and no voice, compared with your coached score in the progress panel.</p>
       </div>
       <div class="card">
-        <h3>Positive reinforcement chime</h3>
-        <p>Sustained good posture earns its own gentle chime on an interval you choose —
-           feedback for sitting well, not just for slouching.</p>
+        <h3>Breath check, relax, don't brace</h3>
+        <p>A gentle reminder that good posture is relaxed, not squeezed, with an optional breath check. It is not a medical test.</p>
       </div>
       <div class="card">
-        <h3>Partial-tracking resilience</h3>
-        <p>Hips out of frame? Scoring keeps working from head and shoulders. Only losing
-           the ears + shoulders gates scoring — the dashboard then says so honestly.</p>
+        <h3>Hold-to-fill progress bar</h3>
+        <p>Hold good posture and the bar fills toward a small reward. Slouching never takes points away or breaks a streak.</p>
       </div>
       <div class="card">
-        <h3>Personal baseline that catches whole-torso slouch</h3>
-        <p>An adaptive personal baseline catches the <b>whole-torso recline</b>
-           that fixed angle thresholds miss, alongside tighter thresholds and sustain hysteresis.</p>
+        <h3>Pause and Help</h3>
+        <p>Pause tracking any time. The Help button replays the walkthrough, and <i>Not working?</i> names framing, lighting and speed problems.</p>
       </div>
       <div class="card">
-        <h3>Mini-HUD picture-in-picture</h3>
-        <p>Collapse the video into a <b>120&nbsp;px mini-HUD</b> with a status ring and
-           inclinometer — the dashboard consolidates to what matters while you work.</p>
+        <h3>Report a bug</h3>
+        <p>A report-a-bug link sits in the header. It opens a public GitHub issue, so leave out anything private.</p>
+      </div>
+      <div class="card">
+        <h3>Your progress panel</h3>
+        <p>The last 7 days of good posture, kept in your browser. Export it as JSON or use <i>Delete my data</i> to erase it.</p>
       </div>
     </div>
   </section>
@@ -362,33 +354,33 @@
   </section>
 
   <section>
-    <h2>How it works</h2>
+    <h2 id="how">How it works</h2>
     <p class="section-sub">One pipeline, end to end, on your own machine.</p>
     <ol class="pipeline">
       <li><b>Your webcam</b>
         <span class="muted">Any laptop or USB camera. Your shoulder width in the frame doubles as a distance check, so sitting too far or too close is flagged instead of scored.</span></li>
       <li><b>MediaPipe Pose</b>
-        <span class="muted">33 landmarks with per-landmark visibility, running on your computer: in the browser tab, or in-process on the desktop.</span></li>
+        <span class="muted">33 landmarks with per-landmark visibility, running in your browser tab, served from this site.</span></li>
       <li><b>Scoring</b>
-        <span class="muted">Four angles (head forward, trunk lean, head tilt, shoulder level) against thresholds, with hysteresis, sustain windows, and a personal EMA baseline.</span></li>
+        <span class="muted">Four angles (head forward, trunk lean, head tilt, shoulder level) against your own baseline, with sustain windows so a brief lean is ignored.</span></li>
       <li><b>State machine</b>
         <span class="muted">Bad posture must hold ~2&nbsp;s before a chime; a spoken prompt follows ~10&nbsp;s later and repeats at most every 30&nbsp;s while you stay slouched.</span></li>
       <li><b>Chime + spoken prompt</b>
-        <span class="muted">In the browser: Web Audio and speech synthesis, still working when the tab is in the background. On the desktop: a serialized playback queue with pico2wave or espeak-ng.</span></li>
+        <span class="muted">Web Audio chimes and recorded Kokoro voice lines, still working when the tab is in the background.</span></li>
     </ol>
   </section>
 
   <section>
-    <h2>The desktop dashboard</h2>
-    <p class="section-sub">Screenshots from the Linux desktop version's local dashboard — wireframe overlay, per-metric target bands, placement guidance, and feedback controls.</p>
+    <h2>The app</h2>
+    <p class="section-sub">Screenshots of the browser app in demo mode, on a desktop and on a phone-width screen.</p>
     <div class="shots">
       <figure class="shot">
-        <img src="assets/dashboard-shot-1.png" alt="Posture Guard dashboard: live camera view with a green tracking wireframe over a seated person, posture metric tiles with target bands, camera placement checklist, and feedback controls" loading="lazy">
-        <figcaption>Tracking and metrics.</figcaption>
+        <img src="assets/app-desktop.png" width="1280" height="800" alt="Browser app on a desktop screen: skeleton, posture needle, advice box and metric tiles" loading="lazy">
+        <figcaption>Slouching: the advice names the fix.</figcaption>
       </figure>
       <figure class="shot">
-        <img src="assets/dashboard-shot-2.png" alt="Posture Guard dashboard with the person leaning: the wireframe tilts with the torso and the shoulder-level metric is lit amber outside its target band" loading="lazy">
-        <figcaption>Leaning: shoulder level out of its band.</figcaption>
+        <img src="assets/app-phone.png" width="390" height="844" alt="Browser app on a phone-width screen with a green good posture badge" loading="lazy">
+        <figcaption>Good posture, phone width.</figcaption>
       </figure>
     </div>
   </section>
@@ -396,18 +388,8 @@
   <section>
     <h2>Quickstart</h2>
     <p class="section-sub"><b>In the browser:</b> open <a href="./app/">the app</a>, press <i>Start with webcam</i> (or <i>Try the demo</i> without a camera), and leave the tab open.</p>
-    <p class="section-sub"><b>On Linux</b> (Python 3.10+, any webcam; without one the app runs a scripted demo):</p>
-    <div class="quickstart">
-      <ol>
-        <li>Clone and set up (system packages + venv + preflight report):
-<pre><code>git clone https://github.com/arii/posture-guard.git
-cd posture-guard
-./setup.sh</code></pre></li>
-        <li>Run the app — it serves the dashboard at <code>http://127.0.0.1:8000</code>:
-<pre><code>make run</code></pre></li>
-        <li>Tune thresholds, timings, sounds and the audio sink in <code>config.yaml</code>.</li>
-      </ol>
-    </div>
+    <p class="section-sub">Place the camera at eye level, press <i>Record good posture</i> once while you sit well, and keep the tab open.
+      A <a href="https://github.com/arii/posture-guard#linux-desktop-app">Python desktop version</a> also exists as an optional, secondary tool. The browser app is the main product.</p>
   </section>
 
   <section>
@@ -426,7 +408,9 @@ cd posture-guard
   Posture Guard — posture to die for.
   <a href="https://github.com/arii/posture-guard">arii/posture-guard</a> &middot;
   <a href="privacy.html#about">About and safety</a> &middot;
-  <a href="privacy.html">Privacy</a>
+  <a href="privacy.html">Privacy</a> &middot;
+  <a href="https://github.com/arii/posture-guard/blob/main/LICENSE">MIT License</a> &middot;
+  <a href="https://github.com/arii/posture-guard/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
 </footer>
 
 <script>

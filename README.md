@@ -11,17 +11,28 @@ how to fix it. Everything runs on your computer; no video or landmark leaves it.
 **Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
 you have no camera). The first visit shows a short walkthrough (camera placement,
 what you will see and hear, and a safety notice). The *Help* button replays it, and
-*Not working?* diagnoses framing, lighting and speed problems.
+*Not working?* checks framing, lighting and speed problems.
+
+![The browser app in demo mode on a desktop screen](docs/assets/app-desktop.png)
+
+<img src="docs/assets/app-phone.png" alt="The browser app at phone width" width="240">
+
+The app needs a webcam (or use the demo), a recent Chrome, Edge or Firefox, and
+hardware acceleration (WebGL) turned on. Released under the [MIT License](LICENSE).
+Third-party credits: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Kiroween 2026 submission deadline: **Dec 4, 2026, 2:00 PM PT**.
+Docs last verified: 2026-11-20.
 
 > **Safety.** Posture Guard is a wellness tool, not medical advice or a medical
 > device. Do not hold a rigid posture. Stop and see a clinician if you have pain,
 > numbness or dizziness. Webcam estimates are approximate. Provided as-is under the
 > MIT License. See [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/design.md).
 
-There is also a Linux desktop version (Python, local web dashboard) with the same
-behavior, for running offline or on a machine of your own. The desktop app does not
-have the onboarding walkthrough, the progress panel or the coaching level; those are
-browser only.
+The browser app is the main product. An older Python desktop version with a local web
+dashboard still lives in this repo as an optional, secondary tool (see
+[Linux desktop app](#linux-desktop-app)). It is not kept in step with the browser
+app: it has no walkthrough, progress panel, recorded voice, silent test or coaching
+level.
 
 ## Getting started (first visit)
 
@@ -67,19 +78,19 @@ review it before any wider launch.
 How it works in the app: the first run requires an acknowledgement stored as
 `ackVersion` in `localStorage`. Bumping `ACK_VERSION` in `docs/app/onboarding.js` asks
 everyone again. The same notice appears in the app footer, the landing page, the
-dashboard docs page and under the *Relax, don't brace* panel. Full spec:
+optional desktop dashboard docs page and under the *Relax, don't brace* panel. Full spec:
 [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/requirements.md).
 
-### What it can diagnose
+### What it notices
 
-| Ailment | Folk name | What Posture Guard tells you |
+| Habit | Folk name | What Posture Guard tells you |
 |---|---|---|
 | Head forward | Tech neck: your ears have wandered ahead of your shoulders | "Tuck your chin and bring your ears back over your shoulders." |
 | Head tilted | The puzzled dog | "Straighten your neck so your ears are level." |
-| Shoulder dropped | The one-elbow lean | "Lift your right shoulder and take your weight off that elbow." |
+| Shoulder dropped | The one-elbow lean | "Level your shoulders and take your weight off that elbow." |
 | Leaning sideways | The Leaning Tower of Pisa | "Sit up straight with your weight even on both hips." |
 
-It names *your* left and right, even when your webcam mirrors the picture. Sit up
+The advice never names a side, so a mirrored webcam image cannot make it wrong. Sit up
 and it plays a reward chime, because positive reinforcement works on spines too.
 
 Posture Guard is a reminder, not a doctor. If something hurts, see a human
@@ -92,14 +103,14 @@ body. Unlike its namesake, it sits up straight.
 
 | Body part | Donor | Job |
 |---|---|---|
-| **Eyes** | Google MediaPipe Pose, compiled to WebAssembly in the browser (Python on Linux) | 33 body landmarks per frame from an ordinary webcam |
+| **Eyes** | Google MediaPipe Pose, compiled to WebAssembly in the browser (Python on the optional desktop app) | 33 body landmarks per frame from an ordinary webcam |
 | **Brain** | Python: scoring, reminder state machine, posture needle, calibration | Decides when you are slouching and what to say about it |
 | **Second brain** | A JavaScript transplant of the first (`docs/app/posture-core.js`) | The same decisions, running inside your browser tab |
 | **Spinal cord** | A golden timeline: Python records a scripted 632-frame session, Node replays it | Keeps both brains making identical decisions, numbers within 1e-9 |
 | **Voice** | Web Audio and speech synthesis in the browser; `paplay` with pico2wave or espeak-ng on Linux | The chime, then "Head forward. Tuck your chin..." |
 | **Heartbeat** | A Web Worker timer | Keeps tracking at ~5 fps after the browser throttles a background tab |
 | **Memory** | `localStorage` | Your calibration, settings, custom sounds and daily totals |
-| **Desktop nervous system** | FastAPI, WebSocket, MJPEG | The Linux dashboard |
+| **Desktop nervous system** | FastAPI, WebSocket, MJPEG | The optional Linux dashboard |
 | **Immune system** | pytest and hypothesis (Python), `node:test` (JavaScript) | Seven correctness properties plus unit tests; every bug we planted on purpose got caught |
 | **Lab test subject** | Playwright, Chromium's fake camera, and ffmpeg turning a photo into a video feed | Checks that the deployed site finds a real person (an Apache-2.0 sample photo; the paperwork is in order) |
 | **Lightning** | Kiro: specs, steering and hooks | It's alive. |
@@ -134,10 +145,15 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
 
 - **Tells you what to fix.** Reminders name the problem and the fix, on screen and
   out loud: "Head forward: tuck your chin and bring your ears back over your
-  shoulders", "Right shoulder dropped: lift your right shoulder and take your
-  weight off that elbow", "Head tilted toward your left shoulder", "Leaning to your
-  right". Sides are your own left and right, whether or not the camera image is
-  mirrored. The *What to fix* box under the needle shows the same advice live.
+  shoulders", "Shoulders uneven: level your shoulders and take your weight off that
+  elbow", "Head tilted: straighten your neck", "Leaning sideways: sit up with your
+  weight even". The advice is sideless, so a mirrored camera image never changes it.
+  The *What to fix* box under the needle shows the same advice live. The needle
+  shows no score number.
+- **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
+  speech synthesis as a fallback.
+- **Silent *Test me*, breath check and relax reminder, hold-to-fill progress bar,
+  pause, and *Report a bug*** (a public GitHub issue, so keep private details out).
 
 - **Everything in the tab.** MediaPipe Pose Landmarker and a JavaScript port of the
   scoring, reminder state machine, posture needle and calibration
@@ -208,7 +224,10 @@ same per-hour prompt cap. See [`.kiro/specs/wellness-tools`](.kiro/specs/wellnes
 | 20-20-20 eye breaks and blink reminders | Spec only |
 | Stand and move microbreak timer | Spec only |
 
-## Linux desktop app
+## Linux desktop app (optional, secondary)
+
+This older Python version is kept for offline use and for generating the golden
+timeline that the browser port is tested against. It is not the current product.
 
 ```bash
 ./setup.sh    # system packages + venv + pip install + preflight report
