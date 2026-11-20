@@ -70,8 +70,15 @@ audio:
 
 feedback:
   positive_chime:
-    enabled: true        # reward sustained good posture with an upbeat chime
-    every_seconds: 120   # fire at most this often while posture stays GOOD
+    # Praise while posture stays GOOD (chime, banner, and in the browser a
+    # spoken "looking good"). Dense-to-lean schedule, as in behavior-analysis
+    # schedule thinning: frequent praise early in a good streak, thinning out
+    # as the habit holds, restarting dense after each slip.
+    enabled: true
+    first_after_seconds: 15  # first praise this far into a good streak
+    growth: 1.5              # each later gap = previous gap x growth ...
+    every_seconds: 90        # ... capped here (null first_after = fixed interval)
+    jitter: 0.25             # vary gaps +/-25% on a fixed pattern (variable interval)
   recovery_chime:
     enabled: true        # play the good sound once when you recover after a reminder
 

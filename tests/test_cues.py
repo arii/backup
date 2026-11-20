@@ -75,8 +75,8 @@ def test_shoulder_side_is_the_persons_own(mirrored):
     pose = mirror_x(RIGHT_SHOULDER_LOW) if mirrored else RIGHT_SHOULDER_LOW
     cue = cue_for(pose)
     assert cue.id == "shoulder_level:right"
-    assert cue.title == "Right shoulder dropped"
-    assert "right shoulder" in cue.fix
+    assert cue.title == "Shoulders uneven"
+    assert "left" not in cue.fix and "right" not in cue.fix
 
 
 @pytest.mark.parametrize("mirrored", [False, True])
@@ -84,7 +84,8 @@ def test_head_tilt_side_is_the_persons_own(mirrored):
     pose = mirror_x(HEAD_TILT_RIGHT) if mirrored else HEAD_TILT_RIGHT
     cue = cue_for(pose)
     assert cue.id == "head_tilt:right"
-    assert cue.title == "Head tilted toward your right shoulder"
+    assert cue.title == "Head tilted"
+    assert "Straighten your neck" in cue.fix
 
 
 def test_head_tilt_left(tilted_head_pose):
@@ -97,7 +98,7 @@ def test_trunk_lean_side_is_the_persons_own(mirrored):
     pose = mirror_x(LEAN_RIGHT) if mirrored else LEAN_RIGHT
     cue = cue_for(pose)
     assert cue.id == "trunk_lean:right"
-    assert cue.title == "Leaning to your right"
+    assert cue.title == "Leaning sideways"
 
 
 @pytest.mark.parametrize(
