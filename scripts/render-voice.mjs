@@ -41,7 +41,7 @@ for (const voice of Object.keys(VOICES)) {
     const name = `${slug(text)}.mp3`;
     const wav = path.join(tmp, `${voice}-${name}.wav`);
     const audio = await tts.generate(text, { voice });
-    audio.save(wav);
+    await audio.save(wav); // async in transformers.js (RawAudio.save)
     // Trim leading/trailing silence, mono 48 kbps MP3 (plays in every browser).
     execFileSync("ffmpeg", [
       "-loglevel", "error", "-y", "-i", wav,
