@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  push:
+    # main only; PR branches are covered by the pull_request trigger below.
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel only superseded PR runs; main-branch runs always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check .
+      - name: Test
+        run: pytest
+
+  browser-core:
+    # docs/app/posture-core.js (the GitHub Pages app) must match the Python
+    # pipeline frame-for-frame on tests/fixtures/browser_golden.json.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser core parity + properties
+        run: node --test "tests/js/*.test.mjs"
+      - name: Offline precache list is current
+        run: node scripts/gen-precache.mjs --check
+
+  vendored-files:
+    # The app is self-hosted (issue #45): vendored MediaPipe files must exist
+    # and match the sha256 values recorded in docs/app/vendor/README.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify vendored files and checksums
+        working-directory: docs/app/vendor
+        run: |
+          test -s LICENSE
+          for f in vision_bundle.mjs pose_landmarker_lite.task \
+                   wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+            sum=$(sha256sum "$f" | cut -d' ' -f1)
+            grep -q "$sum" README.md || { echo "checksum not in README: $f"; exit 1; }
+          done
+      - name: No third-party hosts in the app
+        run: |
+          if grep -rnE "cdn\.jsdelivr\.net|storage\.googleapis\.com" docs/app/*.js docs/app/index.html; then
+            echo "app must not load from third-party hosts"; exit 1
+          fi
+
+  e2e-local:
+    # Serve docs/ locally and run the browser e2e (CSP, vendored files, reflow,
+    # first run) before merge, not only after deploy.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright Chromium
+        timeout-minutes: 8
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Serve docs/ and run the e2e
+        timeout-minutes: 8
+        run: |
+          (cd docs && nohup python3 -m http.server 8123 >/dev/null 2>&1 &)
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:8123/app/posture-core.js && break
+            sleep 1
+          done
+          node tests/e2e/live-site.mjs http://127.0.0.1:8123/ "" e2e-report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-local-report
+          path: e2e-report
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: |
+          sudo apt-get install -y -qq shellcheck
+          shellcheck setup.sh
+          shellcheck -x Makefile
+
+  webcam-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with webcam extra
+        run: pip install '.[webcam,dev]'
+      - name: Smoke-check real SDK APIs
+        # Asserts the installed mediapipe/opencv wheels expose every
+        # attribute webcam.py and pose.py use, so stubbed unit tests cannot
+        # hide API drift. A missing wheel for this Python fails loudly here.
+        run: python tests/smoke_hardware.py
+

@@ -1,0 +1,108 @@
+name: live-site
+
+# End-to-end check of the browser app (docs/app): demo mode, plus webcam mode
+# with Chromium's fake camera playing a photo of a person, so the real
+# MediaPipe bundle, WASM and model are loaded from docs/app/vendor/ and run.
+# It also asserts that no request leaves the site (no CDN, no model bucket).
+#
+# Target depends on the trigger:
+# - pushes to feature branches validate the candidate build served from the
+#   checkout, so PR checks cover not-yet-deployed changes;
+# - pushes to main wait until GitHub Pages serves this commit's build (its
+#   landing, privacy and precache.json files match the checkout), then validate
+#   the live site. This replaces a workflow_run trigger on "pages build and
+#   deployment", which never fires: GitHub's built-in Pages workflow does not
+#   start workflow_run chains (#54);
+# - scheduled and manual runs validate the live site as it is.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"  # weekly: catches a broken deploy or missing vendored files
+  push:
+    paths:
+      - ".github/workflows/live-site.yml"
+      - "tests/e2e/**"
+      - "docs/**"
+
+jobs:
+  live-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright Chromium
+        timeout-minutes: 8
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+      - name: Build the fake camera feed
+        timeout-minutes: 5  # an apt mirror once hung this step for 15+ minutes
+        # Apache-2.0 sample photo from google-ai-edge/mediapipe-samples-web,
+        # cropped around the person to a webcam-like waist-up framing.
+        run: |
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq ffmpeg
+          curl -fsSL -o person.jpg \
+            https://raw.githubusercontent.com/google-ai-edge/mediapipe-samples-web/main/public/images/id_photos/id_fail_distant_waist_up.jpg
+          ffmpeg -loglevel error -loop 1 -i person.jpg -t 3 -r 15 \
+            -vf "crop=480:640:208:480,scale=480:640" -pix_fmt yuv420p person.y4m
+          ls -la person.jpg person.y4m
+      - name: Pick the target build
+        # Feature-branch pushes (PR checks) validate the candidate build from
+        # the checkout; main pushes, scheduled and manual runs, the live site.
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "BASE_URL=http://127.0.0.1:8123/" >> "$GITHUB_ENV"
+          else
+            echo "BASE_URL=https://arii.github.io/posture-guard/" >> "$GITHUB_ENV"
+          fi
+      - name: Wait for Pages to serve this commit
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        timeout-minutes: 15
+        # Pages serves files byte for byte, so this commit is live once the
+        # landing page, privacy page and app precache list (whose version
+        # hash covers every app file) all match the checkout.
+        run: |
+          files="index.html privacy.html app/precache.json"
+          for i in $(seq 1 90); do
+            stale=""
+            for f in $files; do
+              want=$(sha256sum "docs/$f" | cut -d' ' -f1)
+              got=$(curl -fsS "https://arii.github.io/posture-guard/$f?run=${GITHUB_RUN_ID}-$i" | sha256sum | cut -d' ' -f1)
+              [ "$got" = "$want" ] || stale="$stale $f"
+            done
+            [ -z "$stale" ] && { echo "Pages serves this commit (attempt $i)"; exit 0; }
+            echo "attempt $i: not deployed yet:$stale"
+            sleep 10
+          done
+          echo "Pages did not serve this commit within 15 minutes"; exit 1
+      - name: Wait for the target app
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            (cd docs && nohup python3 -m http.server 8123 >/dev/null 2>&1 &)
+          fi
+          ok=0
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null "${BASE_URL}app/posture-core.js" && { ok=1; break; }
+            sleep 2
+          done
+          [ "$ok" = 1 ]
+      - name: Check the vendored MediaPipe files are served
+        run: |
+          for f in vision_bundle.mjs pose_landmarker_lite.task LICENSE \
+                   wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+            curl -fsS -o /dev/null "${BASE_URL}app/vendor/$f" || { echo "missing: $f"; exit 1; }
+          done
+      - name: Run the live-site check
+        timeout-minutes: 5
+        run: node tests/e2e/live-site.mjs "$BASE_URL" "$PWD/person.y4m" live-site-report
+      - name: Upload screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-site-report
+          path: live-site-report/
+
