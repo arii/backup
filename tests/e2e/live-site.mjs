@@ -1,22 +1,28 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
-// End-to-end check of the DEPLOYED browser app (GitHub Pages), run by
-// .github/workflows/live-site.yml. Not part of `node --test tests/js/`: it
-// needs the internet (Pages, jsDelivr, Google's model bucket) and Chromium.
+// End-to-end check of the browser app, run by .github/workflows/live-site.yml
+// against the deployed GitHub Pages site or, on push, a locally served
+// candidate build. Not part of `node --test tests/js/`: it needs the internet
+// (the Pages site, or a local server for the candidate build) and Chromium.
 //
 //   node tests/e2e/live-site.mjs <base-url> <fake-camera.y4m> <out-dir>
 //
 // 1. Landing page loads and links to ./app/.
 // 2. Demo mode: GOOD, then the scripted slouch triggers a reminder.
 // 3. Webcam mode with Chromium's fake camera playing a photo of a person:
-//    the real tasks-vision bundle, WASM and pose model load from the CDN and
+//    the real tasks-vision bundle, WASM and pose model load from app/vendor/ and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
 // 4. Webcam mode with WebGL blocked on every canvas type: the app must explain
 //    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
 //    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
 //    runs on it.)
+// 5. Self-hosting (issue #45): the vendored files are served, and no request
+//    leaves the site's origin (in particular none to cdn.jsdelivr.net or
+//    storage.googleapis.com). CSP violations show up as console errors, which
+//    every scenario already asserts are empty.
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
@@ -29,6 +35,13 @@ mkdirSync(outDir, { recursive: true });
 const bust = `?v=${Date.now()}`;
 const report = { base, checks: [] };
 let failed = false;
+const baseOrigin = new URL(base).origin;
+const externalRequests = [];
+const VENDORED = [
+  "vision_bundle.mjs", "pose_landmarker_lite.task", "LICENSE",
+  "wasm/vision_wasm_internal.js", "wasm/vision_wasm_internal.wasm",
+  "wasm/vision_wasm_nosimd_internal.js", "wasm/vision_wasm_nosimd_internal.wasm",
+];
 
 function check(name, ok, detail) {
   report.checks.push({ name, ok, detail });
@@ -42,22 +55,27 @@ function check(name, ok, detail) {
 const ONBOARDED = 1;
 const ACKED = 1;
 
-async function newPage(browser, { fresh = false, viewport = { width: 1280, height: 900 } } = {}) {
+async function newPage(browser, { fresh = false, guide = false, viewport = { width: 1280, height: 900 } } = {}) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
-    await context.addInitScript(([onboarded, ackVersion]) => {
+    await context.addInitScript(([onboarded, ackVersion, firstRunDone]) => {
       try {
         if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
         sessionStorage.setItem("pg-e2e-acked", "1");
         const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
         s.onboarded = Math.max(s.onboarded || 0, onboarded);
         s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
+        if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
         localStorage.setItem("posture-guard:v1", JSON.stringify(s));
       } catch { /* storage unavailable */ }
-    }, [ONBOARDED, ACKED]);
+    }, [ONBOARDED, ACKED, !guide]);
   }
   const page = await context.newPage();
+  page.on("request", (r) => {
+    const u = r.url();
+    if (/^https?:/.test(u) && new URL(u).origin !== baseOrigin) externalRequests.push(u);
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
@@ -260,6 +278,87 @@ try {
     await page.close();
   }
 
+  // 2e. Issues #38, #39, #46: first-run guide, controls gated on tracking,
+  // 320 px reflow, banner and label semantics, optional P shortcut, focus.
+  {
+    const { page, errors } = await newPage(browser, { guide: true, viewport: { width: 320, height: 640 } });
+    await page.goto(`${base}app/${bust}`);
+    const noScroll = () => page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
+    }));
+    const startW = await noScroll();
+    await page.screenshot({ path: path.join(outDir, "app-320-start.png"), fullPage: true });
+    check("reflow: no horizontal scroll at 320 px on the start screen", startW.scrollWidth <= startW.innerWidth, startW);
+    check("start screen says it works best on a laptop or desktop",
+      /laptop or desktop with a webcam/i.test(await page.textContent("#start-overlay")));
+    const pre = await page.evaluate(() => ({
+      breath: document.getElementById("breath-check").disabled,
+      good: document.getElementById("calib-good").disabled,
+      bad: document.getElementById("calib-bad").disabled,
+      tip: document.getElementById("calib-good").title,
+      bannerRole: document.getElementById("banner").getAttribute("role"),
+      bannerLive: document.getElementById("banner").getAttribute("aria-live"),
+      badLabel: document.querySelector('label[for="bad-file"]')?.textContent,
+      goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
+      mode: /Chime only still speaks/.test(document.getElementById("mode-note").textContent),
+    }));
+    check("controls: breath check and record buttons are disabled before start, with a tooltip",
+      pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip), pre);
+    check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
+    check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
+    check("chime-only note explains breath lines", pre.mode, pre);
+    await page.click("#start-demo");
+    await page.waitForTimeout(1500);
+    const post = await page.evaluate(() => ({
+      breath: document.getElementById("breath-check").disabled,
+      good: document.getElementById("calib-good").disabled,
+      bad: document.getElementById("calib-bad").disabled,
+      focus: document.activeElement && document.activeElement.id,
+      guide: !document.getElementById("first-run").hidden,
+      framing: document.querySelector("#first-run-body .framing")?.textContent,
+    }));
+    check("controls: enabled after the demo starts", !post.breath && !post.good && !post.bad, post);
+    check("a11y: focus moves to the status badge after Start", post.focus === "state-badge", post);
+    check("first run: the guide card appears after Start with live framing",
+      post.guide && /in view/.test(post.framing || ""), post);
+    await page.click("#first-run-next");
+    check("first run: step 2 offers calibration",
+      (await page.textContent("#first-run-heading")) === "Calibrate to your posture" && await page.isVisible("#first-run-body button"));
+    await page.click("#first-run-next");
+    check("first run: step 3 plays the sounds and mentions keeping the tab open",
+      /Leave this tab open/.test(await page.textContent("#first-run-body")) && (await page.locator("#first-run-body button").count()) === 3);
+    await page.click("#first-run-next");
+    const done = await page.evaluate(() => ({
+      hidden: document.getElementById("first-run").hidden,
+      flag: JSON.parse(localStorage.getItem("posture-guard:v1")).firstRunDone === true,
+    }));
+    check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
+    await page.click("#setup-panel summary");
+    await page.click("#intro-again");
+    check("first run: Show the intro again reopens it", !(await page.evaluate(() => document.getElementById("first-run").hidden)));
+    const dashW = await noScroll();
+    await page.screenshot({ path: path.join(outDir, "app-320-dashboard.png"), fullPage: true });
+    check("reflow: no horizontal scroll at 320 px on the dashboard", dashW.scrollWidth <= dashW.innerWidth, dashW);
+    // P shortcut: pauses by default, ignored once turned off, and the choice is stored.
+    await page.click("#first-run-skip");
+    await page.keyboard.press("p");
+    check("shortcut: P pauses by default", (await page.textContent("#pause")) === "Resume");
+    await page.keyboard.press("p");
+    await page.check("#pause-shortcut", { force: true });
+    await page.uncheck("#pause-shortcut", { force: true });
+    await page.locator("body").press("p");
+    check("shortcut: P does nothing once turned off", (await page.textContent("#pause")) === "Pause");
+    check("shortcut: the setting is stored",
+      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).pauseShortcut)) === false);
+    // Reduced motion: no transitions on the hold bar, score bar or banner.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const motion = await page.evaluate(() => ["hold-fill", "banner", "good-bar"].map((id) =>
+      getComputedStyle(document.getElementById(id)).transitionDuration));
+    check("a11y: prefers-reduced-motion disables transitions", motion.every((d) => d === "0s"), motion);
+    check("320 px: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
   // 2d. Not working?: the panel waits for tracking, then reports it (faults are unit-tested).
   {
     const { page, errors } = await newPage(browser);
@@ -382,7 +481,7 @@ try {
     await page.close();
   }
 
-  // 3. Webcam mode: real model from the CDN on a fake camera.
+  // 3. Webcam mode: real model from app/vendor/ on a fake camera.
   {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
@@ -394,7 +493,7 @@ try {
       null, { timeout: 90000 },
     );
     const loaded = await ui(page);
-    check("webcam mode starts (CDN bundle, WASM and model load)",
+    check("webcam mode starts (vendored bundle, WASM and model load)",
       loaded.overlay === "none" && loaded.source === "webcam", { ...loaded, seconds: (Date.now() - t0) / 1000 });
     // Give the detector a few seconds on the looping fake camera frame.
     await page.waitForTimeout(8000);
@@ -426,30 +525,38 @@ try {
         }
       });
       await page.goto(base + bust);
-      const landing = await page.evaluate(() => ({
-        banner: getComputedStyle(document.getElementById("webgl-warning")).display,
-        text: document.getElementById("webgl-warning").textContent,
-      }));
+      const landing = await page.evaluate(() => {
+        const el = document.getElementById("webgl-warning");
+        if (!el) return { banner: "element-missing", text: "" };
+        return { banner: getComputedStyle(el).display, text: el.textContent };
+      });
       check("no WebGL: landing page shows the warning banner",
         landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /demo/i.test(landing.text), landing);
       await page.goto(`${base}app/${bust}`);
       const gl = await page.evaluate(() => Boolean(
         document.createElement("canvas").getContext("webgl") ||
         (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2"))));
-      const cam = await page.evaluate(() => ({
-        text: document.getElementById("start-camera").textContent,
-        disabled: document.getElementById("start-camera").disabled,
-        help: getComputedStyle(document.getElementById("webgl-help")).display,
-      }));
+      const cam = await page.evaluate(() => {
+        const btn = document.getElementById("start-camera");
+        const helpEl = document.getElementById("webgl-help");
+        if (!btn || !helpEl) return { text: "", disabled: false, help: "element-missing" };
+        return { text: btn.textContent, disabled: btn.disabled, help: getComputedStyle(helpEl).display };
+      });
       check("no WebGL: camera button shows the WebGL message on load",
         /needs WebGL/i.test(cam.text) && cam.disabled && cam.help === "block", cam);
       await page.click("#start-camera", { force: true, timeout: 2000 }).catch(() => {});
       await page.waitForTimeout(1500);
-      const s = await page.evaluate(() => ({
-        help: getComputedStyle(document.getElementById("webgl-help")).display,
-        overlay: getComputedStyle(document.getElementById("start-overlay")).display,
-        streams: document.getElementById("video").srcObject === null ? 0 : 1,
-      }));
+      const s = await page.evaluate(() => {
+        const helpEl = document.getElementById("webgl-help");
+        const overlayEl = document.getElementById("start-overlay");
+        const video = document.getElementById("video");
+        if (!helpEl || !overlayEl || !video) return { help: "element-missing", overlay: "element-missing", streams: -1 };
+        return {
+          help: getComputedStyle(helpEl).display,
+          overlay: getComputedStyle(overlayEl).display,
+          streams: video.srcObject === null ? 0 : 1,
+        };
+      });
       await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
       check("no WebGL: explains how to turn it on", !gl && s.help === "block" && s.overlay !== "none", { gl, ...s });
       check("no WebGL: camera not opened", s.streams === 0, s);
@@ -458,6 +565,41 @@ try {
     } finally {
       await noGL.close();
     }
+  }
+  // 6. A custom sound survives a reload under the CSP (restoreSound must not
+  //    use fetch(data:), which connect-src 'self' blocks).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(base + "app/" + bust);
+    const rate = 8000, n = 800; // 0.1 s of silence as 16-bit mono PCM WAV
+    const wav = Buffer.alloc(44 + n * 2);
+    wav.write("RIFF", 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write("WAVEfmt ", 8);
+    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(n * 2, 40);
+    await page.setInputFiles("#bad-file", { name: "chime.wav", mimeType: "audio/wav", buffer: wav });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound, null, { timeout: 5000 })
+      .catch(() => {});
+    const stored = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
+    check("custom sound: an uploaded sound is stored", stored);
+    await page.reload();
+    await page.click("#start-demo"); // restoreSound runs when a session begins
+    await page.waitForTimeout(1500);
+    const kept = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
+    check("custom sound: survives a reload (not blocked by the CSP)", kept);
+    check("custom sound: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+  // 5. Self-hosting: vendored files are served, nothing left the origin.
+  {
+    const missing = [];
+    for (const f of VENDORED) {
+      const res = await fetch(`${base}app/vendor/${f}${bust}`);
+      if (!res.ok) missing.push(`${f} ${res.status}`);
+    }
+    check("vendored MediaPipe files are served", missing.length === 0, missing);
+    check("no request to a third-party host (jsDelivr, Google, ...)",
+      externalRequests.length === 0, externalRequests.slice(0, 5));
   }
 } finally {
   await browser.close();

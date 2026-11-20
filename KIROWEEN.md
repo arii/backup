@@ -2,7 +2,7 @@
 
 **Posture to die for.** (Please don't.) Leave a browser tab open; your webcam
 watches how you sit, chimes when you slouch, and tells you out loud what to fix.
-Nothing leaves your computer.
+Your camera feed never leaves your browser.
 
 - **Category:** Frankenstein
 - **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
@@ -145,7 +145,7 @@ What the Kiro phase changed (PRs #19 onward):
   real MediaPipe and OpenCV packages.
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
-  playing a photo of a person, so the real pose model loads from the CDN and
+  playing a photo of a person, so the real pose model loads from the self-hosted vendor files and
   detects her. Screenshots are kept as a workflow artifact.
 
 ## Known limitations
@@ -172,8 +172,8 @@ What the Kiro phase changed (PRs #19 onward):
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.
-- **CDN dependency.** The browser app downloads the MediaPipe runtime and model
-  from jsDelivr and Google's model bucket; video and landmarks never leave the tab.
+- **Self-hosted runtime.** The browser app serves the MediaPipe runtime and model
+  from its own site (`docs/app/vendor/`); video and landmarks never leave the tab.
 
 ## Submission checklist
 
@@ -195,7 +195,7 @@ What the Kiro phase changed (PRs #19 onward):
 2. **0:20** Sit up straight: the badge reads GOOD POSTURE, the skeleton is green.
 3. **0:40** Slouch: the needle swings right, the chime plays and the *What to fix*
    box says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
-   Drop one shoulder to show "Right shoulder dropped".
+   Drop one shoulder to show "Shoulders uneven".
 4. **1:10** Sit up: the recovery chime and "Back to good posture".
 5. **1:30** Record good and slouch posture; show the calibrated needle.
 6. **1:50** Switch tabs: reminders still fire in the background.
@@ -204,3 +204,16 @@ What the Kiro phase changed (PRs #19 onward):
    and the `.kiro/` spec, steering and hooks that were the lightning.
 8. **2:40** The build history: the RealSense prototype first, the amputation, then
    the webcam and browser version with Kiro. End on "It's alive."
+
+## Owner checklist
+
+Items only the repository owner can do (from issue #30 and the license review):
+
+- [ ] Switch the repository default branch to `main` (Settings, Branches).
+- [ ] Check WebGL in your own Chrome (`chrome://gpu`) and open the live app once.
+- [ ] Run a manual test with a real webcam: record good posture, slouch, hear the voice.
+- [ ] Record the demo video voiceover and your own webcam clip, then replace the sample photo footage. See the likeness warning in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- [ ] Replace the sample photo `id_fail_distant_waist_up.jpg` used by CI and the video with your own or a cleared image.
+- [ ] Confirm Remotion's free tier covers you, or buy a license.
+- [ ] Submit on Devpost (deadline Dec 4, 2026, 2:00 PM PT) and add the YouTube link.
+- [ ] Run a trademark search on "Posture Guard" before any commercial use.

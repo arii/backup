@@ -71,8 +71,8 @@ reminder to relax my face.
 4. THE feature SHALL state its limit in settings: "A webcam cannot see jaw tension. This
    is a reminder, not a reading."
 5. THE Face Landmarker model SHALL be downloaded only after the user enables this tool,
-   with a visible size and "uses more CPU" note, and SHALL be loaded from the same CDN
-   already used for the pose model. No new origin SHALL be added without updating the
+   with a visible size and "uses more CPU" note, and SHALL be self-hosted under
+   docs/app/vendor/ like the pose model. No new origin SHALL be added without updating the
    privacy statement.
 6. THE feature SHALL run the face model at a reduced rate (for example 2 fps) and only
    when the tool is on, to bound CPU cost.

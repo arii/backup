@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Posture Guard core, in the browser: a faithful port of scoring.py,
 // state.py, posture_needle.py, calibration.py and the pipeline frame path.

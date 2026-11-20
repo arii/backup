@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """Standard webcam frame source: cv2.VideoCapture.
 
 The default input (camera.source: webcam). Distance is judged from the frame

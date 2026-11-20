@@ -1,7 +1,8 @@
 name: demo-video
 
 # Records real footage of the deployed app with Playwright, then renders the
-# Kiroween demo video with Remotion (video/). The MP4 is uploaded as the
+# Kiroween demo video with Remotion (video/). The app is self-hosted, so the
+# recording needs only the site itself. The MP4 is uploaded as the
 # "posture-guard-demo" artifact.
 on:
   workflow_dispatch:

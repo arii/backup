@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // feedback.js: coaching level, hourly cap and milestone praise.
 

@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """WebcamFrameSource tests with a stubbed cv2.VideoCapture (no camera, no cv2)."""
 
 from __future__ import annotations

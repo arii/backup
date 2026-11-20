@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy and safety | Posture Guard</title>
+<meta name="description" content="What Posture Guard runs locally, which servers it contacts, what it stores in your browser, and how to delete it.">
+<style>
+  :root { --bg: #14171c; --panel: #1d222a; --line: #2c333e; --text: #e8ebf0; --muted: #8b95a3; --accent: #57d97a; --warn: #ffb340; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 24px; }
+  h1 { margin: 0 0 8px; }
+  h2 { margin-top: 36px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+  code { background: var(--panel); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  .muted { color: var(--muted); }
+  footer { max-width: 760px; margin: 0 auto; padding: 0 20px 48px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">&larr; Posture Guard</a> &middot; <a href="app/">Open the app</a></p>
+  <h1>Privacy and safety</h1>
+  <p class="muted">Short version: your camera feed is analyzed in this tab and never uploaded or saved. No cookies, no analytics, no accounts. This page is a plain-language summary, not legal advice.</p>
+
+  <h2 id="local">What runs on your computer</h2>
+  <p>The webcam, the pose model and the posture logic all run in your browser tab. Video frames and body landmarks are held in memory for a moment, then dropped. They are not uploaded and not written to disk. The desktop version of Posture Guard runs entirely on your machine and keeps working with the network unplugged.</p>
+
+  <h2 id="hosts">Which servers the page contacts</h2>
+  <p>Like any website, each of these sees your IP address, browser user agent and the page that referred you:</p>
+  <ul>
+    <li><b>GitHub Pages</b> hosts this site. GitHub logs visitor IP addresses under <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">its own privacy statement</a>.</li>
+  </ul>
+  <p>The MediaPipe runtime (<code>@mediapipe/tasks-vision</code>, code and WebAssembly) and the pose model file are served from this site, so no other server is contacted when you start the camera or demo. Their versions and checksums are listed in the <a href="https://github.com/arii/posture-guard/blob/main/docs/app/vendor/README.md">vendor README</a>.</p>
+  <p>The app does not send your settings, scores, calibration or any measurements to any server.</p>
+
+  <h2 id="storage">What is stored in your browser, and how to clear it</h2>
+  <p>The app keeps data in your browser's local storage under the key <code>posture-guard:v1</code>. It has no expiry. It holds:</p>
+  <ul>
+    <li>your calibration (good and slouch reference values, not images);</li>
+    <li>daily good and slouch totals;</li>
+    <li>silent test results and the count of shoulder-creep reminders;</li>
+    <li>your settings and voice choice;</li>
+    <li>any custom sound files you upload, stored as base64 data.</li>
+  </ul>
+  <p>To remove it all, open the app, then use <b>Delete my data</b> in the progress section. You can also clear this site's data in your browser settings. Nothing is stored in cookies.</p>
+
+  <h2 id="tracking">Cookies, analytics and tracking</h2>
+  <p>None. Posture Guard sets no cookies and runs no analytics, advertising or tracking scripts.</p>
+
+  <h2 id="bug-report">What a bug report shares</h2>
+  <p><b>Report a bug</b> opens a pre-filled issue on GitHub, in a <b>public</b> repository. Nothing is sent until you press Submit on github.com, and you can edit or delete any line first. The diagnostics contain your browser user agent, language, screen size, whether WebGL works and its version (not your GPU model), the app's state and settings, whether calibration exists, and the last few error messages with URLs and file paths removed. They never contain video, images, landmarks or your uploaded sounds.</p>
+
+  <h2 id="about">About and safety</h2>
+  <p>Posture Guard is a general wellness reminder, not a medical device, and it doesn't diagnose or treat any condition. It also doesn't promise results: a nudge to sit up is a nudge, not a cure. Don't hold a rigid posture, move around often, and if something hurts, stop and see a health professional. If you have an existing back, neck or shoulder condition, are pregnant, or are recovering from an injury, check with a professional first. The relax panel and breath check are gentle prompts. Stop if anything hurts.</p>
+  <p>Posture to die for, but please don't actually.</p>
+
+  <h2 id="contact">Contact</h2>
+  <p>Questions or concerns: <a href="https://github.com/arii/posture-guard/issues">open an issue on arii/posture-guard</a>. Remember that issues are public.</p>
+</main>
+<footer>
+  <a href="./">Posture Guard</a> &middot; <a href="app/">App</a> &middot;
+  <a href="https://github.com/arii/posture-guard/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+</footer>
+</body>
+</html>

@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Personal progress review: pure functions over the stored daily totals
 // (store.days, seconds keyed by UTC date) and silent-test results

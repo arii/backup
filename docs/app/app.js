@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for
@@ -11,16 +12,21 @@ import {
 } from "./posture-core.js";
 import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
 import {
   DIAGNOSIS_TEXT, Diagnosis, markOnboarded, needsAckOnly, ONBOARDING_STEPS, PRACTICE_STEPS,
   RELAX_SAFETY, SAFETY_POINTS, SAFETY_SHORT, SetupCheck, shouldShowOnboarding,
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
+import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import {
+  BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
+} from "./privacy.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
-const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+// Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
+const TASKS_VISION = new URL("./vendor", import.meta.url).href;
+const MODEL_URL = `${TASKS_VISION}/pose_landmarker_lite.task`;
 const VISIBLE_FPS = 15; // detection rate while the tab is visible
 const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
 const DEMO_CYCLE_S = 20; // synthetic demo: 20 s good, 20 s slouch
@@ -275,8 +281,10 @@ async function restoreSound(kind) {
   const dataUrl = store[`${kind}Sound`];
   if (!dataUrl) return;
   try {
-    const bytes = await (await fetch(dataUrl)).arrayBuffer();
-    custom[kind] = await ensureAudio().decodeAudioData(bytes);
+    // Decode the base64 payload directly: fetch(data:) is blocked by connect-src 'self'.
+    const bin = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    custom[kind] = await ensureAudio().decodeAudioData(bytes.buffer);
   } catch { delete store[`${kind}Sound`]; save(); }
 }
 
@@ -415,7 +423,7 @@ const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
 let goodSinceBreath = 0;
 let relaxLastT = null;
-settings.relaxReminders = store.relaxReminders !== false; // default on
+Object.assign(settings, resolveSettings(store)); // relaxReminders and pauseShortcut: on for new users, stored choices kept
 
 /** Relax lines are spoken unless the mode is silent (chime-only still talks
  *  here: a breath check without words is not a check). */
@@ -480,6 +488,20 @@ function relaxStep(landmarks, state, now) {
   const v = bracing.value;
   $("relax-shoulders").textContent = ref === null || v === null ? "learning your relaxed shoulders..."
     : v < ref * 0.88 ? "creeping up" : "relaxed";
+}
+
+// Controls that need frames from the camera or the demo stay disabled until tracking starts.
+const NEEDS_TRACKING = ["breath-check", "calib-good", "calib-bad"];
+const READY_TITLE = { "breath-check": "Breathe in: if your shoulders rise, you are bracing" };
+function setTrackingControls(on) {
+  for (const id of NEEDS_TRACKING) {
+    const el = $(id);
+    el.disabled = !on;
+    if (!on) el.title = NEEDS_TRACKING_TIP;
+    else if (READY_TITLE[id]) el.title = READY_TITLE[id];
+    else el.removeAttribute("title");
+  }
+  $("pre-start-note").hidden = on;
 }
 
 $("breath-check").addEventListener("click", startBreathCheck);
@@ -729,11 +751,12 @@ const MINI_VIEWS = ["practice", "setup"].map((pre) => {
 });
 
 function renderMiniViews(landmarks, color, needle) {
+  const open = { practice: !!practice, setup: $("setup-panel").open };
+  const draw = new Set(miniViewsToDraw(MINI_VIEWS.map((m) => m.pre), open, needle));
   for (const m of MINI_VIEWS) {
-    const visible = m.pre === "practice" ? !!practice : $("setup-panel").open;
-    if (!visible || needle === null) continue;
-    drawSkeleton(landmarks, color, m.cv, m.c, 0.6);
-    m.rotor.setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+    if (!draw.has(m.pre)) continue;
+    drawSkeleton(landmarks, color, m.cv, m.c, MINI_SCALE);
+    m.rotor.setAttribute("transform", needleTransform(needle));
   }
 }
 
@@ -749,6 +772,9 @@ function render(out, landmarks) {
     ? "settling in"
     : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  const settling = !test && !practice && badge.textContent === "settling in";
+  $("settling-note").hidden = !settling;
+  badge.title = settling ? $("settling-note").textContent : "";
   if (test) { badge.textContent = "silent test"; badge.className = "badge testing"; }
   if (practice) { badge.textContent = "practice"; badge.className = "badge practice"; }
   $("warnings").textContent = causeFor(result, landmarks);
@@ -761,7 +787,7 @@ function render(out, landmarks) {
     el.classList.toggle("over", v !== null && Math.abs(v) > cfg[key]);
   }
   if (needle !== null) {
-    $("needle-rotor").setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+    $("needle-rotor").setAttribute("transform", needleTransform(needle));
     // The threshold needle averages all metrics, so a single-metric slouch
     // sits mid-dial: the label follows the state machine, the needle shows how far.
     const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
@@ -773,6 +799,7 @@ function render(out, landmarks) {
   renderMiniViews(landmarks, test ? WIRE.slate : wireColor(transition.state, result), test ? null : needle);
   renderTest();
   renderCalibration();
+  updateFirstRunLive(result, landmarks);
   renderStats();
   if (Date.now() - lastProgressRender > 10000) renderProgress();
 }
@@ -836,11 +863,21 @@ function setPaused(on) {
 }
 
 $("pause").addEventListener("click", () => setPaused(!paused));
+// WCAG 2.1.4: the single-key shortcut can be turned off.
+const PAUSE_TITLE = "Pause tracking and all sounds";
+function renderPauseShortcut() {
+  $("pause-shortcut").checked = settings.pauseShortcut;
+  $("pause").title = settings.pauseShortcut
+    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)` : PAUSE_TITLE;
+}
+renderPauseShortcut();
+$("pause-shortcut").addEventListener("change", (e) => {
+  settings.pauseShortcut = e.target.checked;
+  store.pauseShortcut = settings.pauseShortcut; save();
+  renderPauseShortcut();
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "p" && e.key !== "P") return;
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
-  setPaused(!paused);
+  if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
 });
 
 function step() {
@@ -973,10 +1010,18 @@ function showError(message) {
 // includes video, images, landmarks or stored sounds.
 
 const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
+// Issue title from a "HH:MM:SS message" entry: drop the time, cut at a word boundary.
+function bugTitle(entry, max = 71) {
+  const msg = entry.slice(9);
+  if (msg.length <= max) return msg;
+  const cut = msg.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 1)).trimEnd()}...`;
+}
+
 const problems = []; // last few errors, newest last
 
 function logProblem(message) {
-  problems.push(`${new Date().toISOString().slice(11, 19)} ${String(message).slice(0, 300)}`);
+  problems.push(`${new Date().toISOString().slice(11, 19)} ${sanitizeError(message)}`);
   if (problems.length > 8) problems.shift();
 }
 window.addEventListener("error", (e) => logProblem(e.message || e.error || "error"));
@@ -987,11 +1032,9 @@ function webglInfo() {
     const c = document.createElement("canvas");
     const gl = c.getContext("webgl2") || c.getContext("webgl");
     if (!gl) return typeof OffscreenCanvas !== "undefined" && webglCanvas() ? "offscreen only" : "unavailable";
-    const ext = gl.getExtension("WEBGL_debug_renderer_info");
-    const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-    return `${gl instanceof WebGL2RenderingContext ? "WebGL2" : "WebGL1"} (${renderer})`;
+    return webglSummary(gl); // no GPU renderer string: it adds to a browser fingerprint
   } catch (err) {
-    return `probe failed: ${err.message || err}`;
+    return `probe failed: ${sanitizeError(err.message || err)}`;
   }
 }
 
@@ -1010,21 +1053,15 @@ function bugReportUrl() {
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
   ].join("\n");
-  const errs = problems.length ? problems.join("\n") : "(none)";
-  const body = [
-    "**What happened?**", "", "", "",
-    "**What did you expect?**", "", "", "",
-    "**Steps to reproduce** (webcam or demo? what posture?)", "", "1. ", "",
-    "<details><summary>Diagnostics (filled in by the app, no video or images)</summary>", "",
-    diag, "", "Recent errors:", "```", errs, "```", "</details>",
-  ].join("\n");
-  const title = problems.length ? `Bug: ${problems[problems.length - 1].slice(9, 80)}` : "Bug: ";
+  const body = buildBugReportBody({ diag, problems });
+  const title = problems.length ? `Bug: ${bugTitle(problems[problems.length - 1])}` : "Bug: ";
   const params = new URLSearchParams({ title, body: body.slice(0, 6000), labels: "bug" });
   return `${ISSUE_URL}?${params}`;
 }
 
 // Fill the link at click time so it carries the current state.
 for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-link")]) {
+  link.title = BUG_LINK_TIP;
   link.addEventListener("click", () => { link.href = bugReportUrl(); });
 }
 
@@ -1035,6 +1072,7 @@ function stopCamera(err) {
   if (practice) stopPractice();
   setup.reset();
   $("pause").disabled = true;
+  setTrackingControls(false);
   poseLandmarker = null;
   const stream = video.srcObject;
   if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -1057,6 +1095,9 @@ function begin(source) {
   restoreSound("bad"); restoreSound("good");
   $("pause").disabled = false;
   $("test-start").disabled = false;
+  setTrackingControls(true);
+  $("state-badge").focus(); // the Start button is gone: move focus to the status badge
+  maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   requestAnimationFrame(visibleLoop);
@@ -1090,7 +1131,7 @@ $("start-camera").addEventListener("click", async () => {
     if (err instanceof NoWebGLError) {
       showWebGLHelp(true);
     } else {
-      showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
+      showError(cameraErrorMessage(err));
     }
     $("start-demo").disabled = false;
     applyWebGLState();
@@ -1106,6 +1147,128 @@ $("start-demo").addEventListener("click", () => {
   video.style.display = "none";
   $("demo-note").style.display = "block";
   begin("demo");
+});
+
+// -- first-run guide ------------------------------------------------------------
+// Shown once, on the first Start (store.firstRunDone): check framing, record
+// good and slouch posture, then hear what the sounds mean. "Show the intro
+// again" in the Not working? panel brings it back.
+
+const FIRST_RUN = [
+  {
+    title: "Check your framing",
+    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
+  },
+  {
+    title: "Calibrate to your posture",
+    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
+  },
+  {
+    title: "You're set",
+    intro: "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
+      "Take a silent test first for a baseline. Here is what the sounds mean:",
+  },
+];
+const firstRun = { step: 0, open: false };
+let firstRunLive = null; // the element updated every frame on the current step
+
+function firstRunButton(label, onClick, secondary = true) {
+  const b = document.createElement("button");
+  b.textContent = label;
+  if (secondary) b.className = "secondary";
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function renderFirstRun() {
+  const step = FIRST_RUN[firstRun.step];
+  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${FIRST_RUN.length}`;
+  $("first-run-heading").textContent = step.title;
+  const body = $("first-run-body");
+  const intro = document.createElement("div");
+  intro.className = "note";
+  intro.style.marginTop = "0";
+  intro.textContent = step.intro;
+  const parts = [intro];
+  firstRunLive = null;
+  if (firstRun.step === 0) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "framing";
+    firstRunLive.setAttribute("aria-live", "polite");
+    parts.push(firstRunLive);
+  } else if (firstRun.step === 1) {
+    firstRunLive = document.createElement("div");
+    firstRunLive.className = "note";
+    firstRunLive.setAttribute("aria-live", "polite");
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Record good posture", () => engine.calibration.start("good"), false),
+      firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
+    );
+    parts.push(row, firstRunLive);
+  } else {
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    row.append(
+      firstRunButton("Play the reminder", () => { ensureAudio(); playBad(); }),
+      firstRunButton("Play the praise chime", () => { ensureAudio(); playGood(); }),
+      firstRunButton("Play a voice line", () => { ensureAudio(); speak(TEST_LINE); }),
+    );
+    parts.push(row);
+  }
+  body.replaceChildren(...parts);
+  $("first-run-back").hidden = firstRun.step === 0;
+  $("first-run-next").textContent = firstRun.step === FIRST_RUN.length - 1 ? "Done" : "Next";
+  $("first-run-skip").hidden = firstRun.step === FIRST_RUN.length - 1;
+}
+
+function openFirstRun(step = 0) {
+  firstRun.open = true;
+  firstRun.step = step;
+  $("first-run").hidden = false;
+  renderFirstRun();
+}
+
+function closeFirstRun() {
+  firstRun.open = false;
+  firstRunLive = null;
+  $("first-run").hidden = true;
+  if (!store.firstRunDone) { store.firstRunDone = true; save(); }
+}
+
+function maybeStartFirstRun() {
+  if (!store.firstRunDone && !firstRun.open) openFirstRun();
+}
+
+/** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
+function updateFirstRunLive(result, landmarks) {
+  if (!firstRun.open || !firstRunLive) return;
+  if (firstRun.step === 0) {
+    const ok = result.kind === "scored";
+    firstRunLive.className = ok ? "framing ok" : "framing";
+    firstRunLive.textContent = ok
+      ? "Head and shoulders in view \u2713"
+      : causeFor(result, landmarks) || "Looking for you...";
+  } else if (firstRun.step === 1) {
+    firstRunLive.textContent = $("calib-status").textContent;
+  }
+}
+
+$("first-run-next").addEventListener("click", () => {
+  if (firstRun.step >= FIRST_RUN.length - 1) { closeFirstRun(); $("state-badge").focus(); return; }
+  firstRun.step += 1; renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-back").addEventListener("click", () => {
+  firstRun.step = Math.max(0, firstRun.step - 1); renderFirstRun(); $("first-run-heading").tabIndex = -1; $("first-run-heading").focus();
+});
+$("first-run-skip").addEventListener("click", () => { closeFirstRun(); $("state-badge").focus(); });
+$("intro-again").addEventListener("click", () => {
+  if (!loopsStarted) { $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing."; return; }
+  openFirstRun();
+  $("first-run").scrollIntoView({ block: "nearest" });
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
 });
 
 // -- onboarding, safety notice and help -----------------------------------------
@@ -1128,10 +1291,7 @@ function renderOnboardingStep() {
   $("ob-title").textContent = step.title;
   fillList($("ob-body"), step.points);
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
-  window.addEventListener("pagehide", save);
-document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
-
-$("ob-next").hidden = last;
+  $("ob-next").hidden = last;
   $("ob-ack").hidden = !last;
 }
 
@@ -1219,6 +1379,7 @@ function startPractice() {
   if (paused) return "Resume tracking first.";
   if (test) return "Stop the silent test first.";
   if (practice) return "";
+  $("practice-breath").hidden = true;
   breath.cancel();
   stopSpeech();
   $("banner").classList.remove("show");
@@ -1269,11 +1430,21 @@ $("practice-start").addEventListener("click", () => {
 });
 $("practice-next").addEventListener("click", () => {
   if (!practice) return;
-  if (practice.i >= PRACTICE_STEPS.length - 1) { stopPractice(); $("practice-msg").textContent = "Practice finished."; return; }
+  if (practice.i >= PRACTICE_STEPS.length - 1) {
+    stopPractice();
+    $("practice-msg").textContent = "Practice finished. Want to try a breath check next?";
+    $("practice-breath").hidden = false;
+    return;
+  }
   practice.i += 1;
   renderPracticeStep();
 });
 $("practice-stop").addEventListener("click", () => { stopPractice(); $("practice-msg").textContent = "Practice stopped."; });
+$("practice-breath").addEventListener("click", () => {
+  $("practice-breath").hidden = true;
+  $("practice-msg").textContent = "";
+  startBreathCheck();
+});
 
 // -- your progress -----------------------------------------------------------------------
 // A personal review of coached time per day and the silent-test trend. Aggregation
@@ -1337,9 +1508,9 @@ $("progress-export").addEventListener("click", () => {
 });
 
 $("progress-delete").addEventListener("click", () => {
-  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals and tests)? This cannot be undone.")) return;
+  if (!window.confirm("Delete all Posture Guard data stored in this browser (settings, calibration, daily totals, tests and uploaded sounds)? This cannot be undone.")) return;
   deleted = true; // stop any pending save from writing it back
-  try { localStorage.removeItem(STORE); } catch { /* storage unavailable */ }
+  clearStoredData(localStorage);
   location.reload();
 });
 
@@ -1347,3 +1518,5 @@ renderCalibration();
 renderStats();
 renderTest();
 renderProgress();
+window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });

@@ -33,8 +33,8 @@ Full notice (`SAFETY_POINTS`):
 5. Webcam estimates are approximate. Lighting, camera angle, clothing and body shape
    change the result. "Good" means close to your own calibrated baseline.
 6. Your video and body landmarks are processed in your browser and are not uploaded.
-   Settings and daily totals are stored in this browser. The pose model and scripts load
-   from a CDN.
+   Settings and daily totals are stored in this browser. The pose model and scripts are
+   served from this site.
 7. The software is provided as-is, without warranty, under the MIT License.
 
 Panel line under "Relax, don't brace":

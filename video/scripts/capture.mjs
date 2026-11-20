@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 //
 // Records real footage of the DEPLOYED app for the demo video, plus the
 // timestamps the video edits on (when the reminder fired, when it spoke, ...).
@@ -8,7 +9,7 @@
 //
 // Writes <out-dir>/footage/{demo,webcam,landing}.webm and <out-dir>/capture.json
 // (Remotion props: --props=public/capture.json). Needs Chromium from Playwright
-// and the internet (GitHub Pages, jsDelivr, Google's model bucket).
+// and the site being recorded (the MediaPipe runtime and model are served by the site).
 
 import { chromium } from "playwright";
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -39,6 +40,7 @@ async function record(name, args, script) {
       const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
       s.onboarded = Math.max(s.onboarded || 0, 1);
       s.ackVersion = Math.max(s.ackVersion || 0, 1);
+      s.firstRunDone = true; // skip the first-run guide card
       localStorage.setItem("posture-guard:v1", JSON.stringify(s));
     } catch { /* storage unavailable */ }
   });

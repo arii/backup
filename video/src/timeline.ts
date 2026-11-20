@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 // The edit: which scenes play, in order, and for how long. Root.tsx sums it
 // for the composition length; Main.tsx renders it.
 import type { VideoProps } from "./props";

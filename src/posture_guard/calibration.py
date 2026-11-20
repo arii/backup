@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """Relative posture calibration: "Record good posture" / "Record slouch posture".
 
 The dashboard calls start(kind) from the web thread; the pipeline thread calls

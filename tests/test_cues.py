@@ -1,5 +1,6 @@
 # Author: Ariel Anders
-# Copyright (c) 2026 Ariel Anders. All rights reserved.
+# Copyright (c) 2026 Ariel Anders
+# SPDX-License-Identifier: MIT
 """Posture cues: what is off, which side (the person's own), and how to fix it."""
 
 from __future__ import annotations

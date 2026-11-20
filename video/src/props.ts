@@ -1,5 +1,6 @@
 // Author: Ariel Anders
-// Copyright (c) 2026 Ariel Anders. All rights reserved.
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
 // Props for the demo video. scripts/capture.mjs writes the real values to
 // public/capture.json (times are seconds into each recorded clip); the
 // defaults below are only for previewing in Remotion Studio.
