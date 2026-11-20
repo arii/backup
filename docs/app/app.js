@@ -14,6 +14,7 @@ import {
   BREAK_LINES, BREATHE_LINES, DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
 import { PromptScheduler } from "./prompts.js";
@@ -73,12 +74,19 @@ const settings = {
   voiceText: store.voiceText || DEFAULT_PROMPT,
   specificCues: store.specificCues !== false, // default on
   spokenPraise: store.spokenPraise === true, // default off: opt in
+  soundPack: SOUND_PACKS[store.soundPack] ? store.soundPack : "clean",
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
   el.addEventListener("change", () => { settings.mode = el.value; store.mode = el.value; save(); });
+});
+$("sound-pack").value = settings.soundPack;
+$("sound-pack").addEventListener("change", (e) => {
+  settings.soundPack = SOUND_PACKS[e.target.value] ? e.target.value : "clean";
+  store.soundPack = settings.soundPack; save();
+  playBad(); // a preview of the new pack's reminder
 });
 $("specific-cues").checked = settings.specificCues;
 $("specific-cues").addEventListener("change", (e) => {
@@ -169,8 +177,13 @@ function playBuffer(buffer) {
 // Same tones as audio.py: a falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
 // down, reedy odd harmonics) and a rising C-major arpeggio reward.
 const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
-const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS));
-const playGood = () => (custom.good ? playBuffer(custom.good) : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
+// An uploaded sound wins, then the chosen pack (clean by default).
+const playBad = () => (custom.bad ? playBuffer(custom.bad)
+  : settings.soundPack === "spooky" ? playSpooky(ensureAudio(), "bad")
+    : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS));
+const playGood = () => (custom.good ? playBuffer(custom.good)
+  : settings.soundPack === "spooky" ? playSpooky(ensureAudio(), "good")
+    : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
 
 // -- voice --------------------------------------------------------------------
 // Default: clips pre-rendered with Kokoro-82M (docs/app/voice, see

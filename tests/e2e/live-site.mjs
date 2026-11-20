@@ -711,6 +711,34 @@ try {
     check("custom sound: no page errors", errors.length === 0, errors);
     await page.close();
   }
+  // 4a. Sound packs: clean by default; Spooky synthesizes a bell and a ghost glide and persists.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      window.__osc = [];
+      const orig = AudioContext.prototype.createOscillator;
+      AudioContext.prototype.createOscillator = function () { const o = orig.call(this); window.__osc.push(o); return o; };
+    });
+    await page.goto(`${base}app/${bust}`);
+    const def = await page.inputValue("#sound-pack");
+    const osc = async (sel) => {
+      await page.evaluate(() => { window.__osc.length = 0; });
+      await page.click(sel);
+      await page.waitForTimeout(200);
+      return page.evaluate(() => window.__osc.length);
+    };
+    const clean = await osc("#test-bad");
+    await page.selectOption("#sound-pack", "spooky");
+    const spookyBad = await osc("#test-bad");
+    const spookyGood = await osc("#test-good");
+    await page.reload();
+    const kept = await page.inputValue("#sound-pack");
+    check("sound pack: clean is the default and Spooky plays a bell and a ghost glide",
+      def === "clean" && clean === 2 && spookyBad === 14 && spookyGood === 2 && kept === "spooky",
+      { def, clean, spookyBad, spookyGood, kept });
+    check("sound pack: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
   // 4b. Offline mode (issue #49): opt in, go offline, reload, run, remove.
   {
     const { page, errors } = await newPage(browser);
