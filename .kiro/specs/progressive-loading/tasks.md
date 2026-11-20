@@ -10,8 +10,8 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
 - [ ] 1. Measure and add load marks
   - Add `performance.now()` marks (click, stream playing, download done, warm-up done,
     first scored frame, settled) to `window.__loadMarks` and `bugReportUrl()` diagnostics.
-  - Keep the measurement script from this spec's baseline as `tests/e2e/measure-load.mjs`
-    (optional, not run in CI).
+  - [x] Keep the measurement script from this spec's baseline as `tests/e2e/measure-load.mjs`
+    (optional, not run in CI). Done in FEAT-001; baseline re-measured and matches the table.
   - _Requirements: 10_
 - [ ] 2. Parallel camera and model start, live preview
   - `app.js` `#start-camera` handler: start `loadModel` or `loadMoveNet` before awaiting

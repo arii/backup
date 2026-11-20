@@ -102,7 +102,7 @@ it is working.
 
 ### Requirement 3: A calm first paint
 1. BEFORE tracking starts, THE App SHALL show the stage, a one-sentence promise, the two Start buttons, the privacy line and (first run only) the walkthrough. The empty needle, tiles, "This session", test, progress, offline, calibration, sounds and breaks panels SHALL NOT be shown.
-2. THE page SHALL show a "Sample" still or looping demo thumbnail in the stage only if it adds no request outside `docs/app/` and no more than 50 KB (open question).
+2. THE page SHALL NOT show a "Sample" still or looping demo thumbnail before the click. Decision: skipped (the spec did not recommend it, and the Try the demo button already gives a no-camera preview).
 3. THE first paint SHALL stay under 500 ms on the local build, unchanged from the baseline.
 4. WHEN JavaScript fails to load, THE page SHALL show a `<noscript>` message that says the app needs JavaScript (today the page shows a dead dashboard).
 
