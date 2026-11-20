@@ -111,14 +111,30 @@ try {
       window.__spoken = [];
       const ss = new EventTarget();
       ss.getVoices = () => voices;
-      ss.speak = (u) => window.__spoken.push({ text: u.text, voice: u.voice && u.voice.name });
+      ss.speak = () => {};
       ss.cancel = () => {};
       Object.defineProperty(window, "speechSynthesis", { value: ss, configurable: true });
       window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+      // The app announces each spoken line and whether it used a clip.
+      document.addEventListener("pg:speak", (e) => window.__spoken.push(e.detail));
     });
     await page.goto(`${base}app/${bust}`);
-    const voiceNote = await page.textContent("#voice-note");
-    check("voice: prefers a natural voice over eSpeak", voiceNote.includes("Google US English"), { voiceNote });
+    await page.waitForFunction(() => document.getElementById("voice-note").textContent.includes("Kokoro"), null, { timeout: 10000 }).catch(() => {});
+    const voice = await page.evaluate(() => ({
+      note: document.getElementById("voice-note").textContent,
+      selected: document.getElementById("voice-pick").value,
+      praiseDefault: document.getElementById("spoken-praise").checked,
+    }));
+    check("voice: recorded Kokoro voice is the default", voice.selected.startsWith("kokoro:") && voice.note.includes("Kokoro"), voice);
+    check("voice: spoken praise is off by default", voice.praiseDefault === false, voice);
+    const clip = await page.evaluate(async () => {
+      const m = await (await fetch("./voice/manifest.json")).json();
+      const file = m.voices.af_heart["Looking good."];
+      const r = await fetch(`./voice/${file}`);
+      return { file, status: r.status, type: r.headers.get("content-type"), bytes: (await r.arrayBuffer()).byteLength };
+    });
+    check("voice: clips are deployed", clip.status === 200 && clip.bytes > 2000, clip);
+    await page.check("#spoken-praise"); // opt in, to check praise is spoken with a clip
     await page.click("#start-demo");
     await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
     const hold = await page.evaluate(() => ({
@@ -129,8 +145,8 @@ try {
     check("hold bar fills toward the next praise", hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0, hold);
     await page.waitForFunction(() => window.__spoken.length >= 1, null, { timeout: 15000 }).catch(() => {});
     const spoken = await page.evaluate(() => window.__spoken.slice());
-    check("praise: spoken during sustained good posture",
-      spoken.length >= 1 && spoken[0].voice === "Google US English" && /good|nice|posture|champion|keep/i.test(spoken[0].text),
+    check("praise: spoken with the recorded voice when opted in",
+      spoken.length >= 1 && spoken[0].engine === "kokoro" && /good|nice|posture|champion|keep/i.test(spoken[0].text),
       spoken);
     await page.keyboard.press("p");
     const pausedBadge = await page.textContent("#state-badge");

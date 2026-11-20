@@ -3,12 +3,13 @@
 //
 // Browser shell for Posture Guard: webcam + MediaPipe Pose Landmarker in the
 // page, posture-core.js for scoring/state/needle/calibration, Web Audio for
-// chimes, speechSynthesis for the spoken prompt, localStorage for settings,
+// chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
 
 import {
   DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED,
 } from "./posture-core.js";
+import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, TEST_LINE, VOICES } from "./voice-lines.js";
 
 const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 const MODEL_URL =
@@ -38,9 +39,9 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 
 const settings = {
   mode: store.mode || "chime_and_voice",
-  voiceText: store.voiceText || "Please fix your posture",
+  voiceText: store.voiceText || DEFAULT_PROMPT,
   specificCues: store.specificCues !== false, // default on
-  spokenPraise: store.spokenPraise !== false, // default on
+  spokenPraise: store.spokenPraise === true, // default off: opt in
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
@@ -60,7 +61,7 @@ $("spoken-praise").addEventListener("change", (e) => {
 });
 $("voice-text").value = settings.voiceText;
 $("voice-text").addEventListener("change", (e) => {
-  settings.voiceText = e.target.value.trim() || "Please fix your posture";
+  settings.voiceText = e.target.value.trim() || DEFAULT_PROMPT;
   store.voiceText = settings.voiceText; save();
 });
 
@@ -132,10 +133,10 @@ const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([659.25, 466.
 const playGood = () => (custom.good ? playBuffer(custom.good) : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
 
 // -- voice --------------------------------------------------------------------
-// The browser's default voice is often the OS fallback (eSpeak on Linux),
-// which sounds robotic. Rank the installed voices and use the most natural one
-// in the page's language: neural/"Natural"/"Online" voices (Edge, Windows),
-// Google's network voices (Chrome), Apple's enhanced voices (Safari/macOS).
+// Default: clips pre-rendered with Kokoro-82M (docs/app/voice, see
+// voice-lines.js), which sound like a person. Lines without a clip (a custom
+// prompt) and the "System:" choices use speechSynthesis; for those, rank the
+// installed voices and avoid OS fallbacks like eSpeak, which sound robotic.
 
 const ROBOTIC = /espeak|e-speak|mbrola|festival|pico|flite|rhvoice/i;
 function voiceScore(v, lang) {
@@ -152,60 +153,97 @@ function voiceScore(v, lang) {
   return s;
 }
 
+const KOKORO = "kokoro:";
+let clipManifest = null; // { voices: { af_heart: { text: "af_heart/x.mp3" } } }
+const clipCache = new Map(); // url -> Promise<AudioBuffer>
+let clipSource = null; // the clip playing now, so a new line can cut it off
 let voices = [];
-function refreshVoices() {
-  if (!("speechSynthesis" in window)) return;
-  const lang = navigator.language || "en-US";
-  voices = window.speechSynthesis.getVoices()
-    .slice().sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang));
-  const pick = $("voice-pick");
-  const keep = store.voiceName || "";
-  pick.replaceChildren(new Option("Best available", ""));
-  for (const v of voices) pick.add(new Option(`${v.name} (${v.lang})`, v.name));
-  pick.value = voices.some((v) => v.name === keep) ? keep : "";
-  const best = voices[0];
-  $("voice-note").textContent = !voices.length ? ""
-    : best && voiceScore(best, lang) <= 0
-      ? "Only basic system voices are installed, so speech may sound robotic. Chrome and Edge include natural-sounding voices; on Linux, Chrome's \"Google\" voices sound far better than eSpeak."
-      : `Using ${(chosenVoice() || best).name}.`;
+
+fetch("./voice/manifest.json")
+  .then((r) => (r.ok ? r.json() : null))
+  .then((m) => { clipManifest = m && m.voices ? m : null; refreshVoices(); })
+  .catch(() => {});
+
+const kokoroVoices = () => Object.keys(VOICES).filter((id) => clipManifest?.voices[id]);
+/** Selected voice: "kokoro:<id>" or a system voice name. Default: first Kokoro voice. */
+function selectedVoice() {
+  const want = store.voiceName;
+  if (want?.startsWith(KOKORO) && kokoroVoices().includes(want.slice(KOKORO.length))) return want;
+  if (want && voices.some((v) => v.name === want)) return want;
+  return kokoroVoices().length ? KOKORO + kokoroVoices()[0] : (voices[0]?.name ?? "");
 }
-function chosenVoice() {
-  return voices.find((v) => v.name === store.voiceName) || voices[0] || null;
+function chosenVoice() { // best or selected system voice (for fallback speech)
+  const sel = selectedVoice();
+  return voices.find((v) => v.name === sel) || voices[0] || null;
+}
+
+function refreshVoices() {
+  const lang = navigator.language || "en-US";
+  voices = "speechSynthesis" in window
+    ? window.speechSynthesis.getVoices().slice().sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
+    : [];
+  const pick = $("voice-pick");
+  pick.replaceChildren();
+  for (const id of kokoroVoices()) pick.add(new Option(VOICES[id], KOKORO + id));
+  for (const v of voices) pick.add(new Option(`System: ${v.name} (${v.lang})`, v.name));
+  const sel = selectedVoice();
+  pick.value = sel;
+  const best = voices[0];
+  $("voice-note").textContent = sel.startsWith(KOKORO)
+    ? "Recorded natural voice (Kokoro). A custom spoken prompt uses your browser's voice."
+    : !voices.length ? "No voice available in this browser."
+      : best && voiceScore(best, lang) <= 0
+        ? "Only basic system voices are installed here, so they may sound robotic. Pick a natural voice above."
+        : `Using ${(chosenVoice() || best).name}.`;
 }
 if ("speechSynthesis" in window) {
   refreshVoices();
   window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
 }
 $("voice-pick").addEventListener("change", (e) => {
-  if (e.target.value) store.voiceName = e.target.value; else delete store.voiceName;
-  save(); refreshVoices();
+  store.voiceName = e.target.value; save(); refreshVoices();
 });
 
-function speak(text) {
+function loadClip(url) {
+  if (!clipCache.has(url)) {
+    clipCache.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => ensureAudio().decodeAudioData(b)));
+  }
+  return clipCache.get(url);
+}
+
+function stopSpeech() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (clipSource) { try { clipSource.stop(); } catch { /* already ended */ } clipSource = null; }
+}
+
+function speakSystem(text) {
   if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   const v = chosenVoice();
   if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = 1.0;
-  u.pitch = 1.0;
   window.speechSynthesis.speak(u);
 }
 
-// Rotating praise: varied wording keeps it from fading into background noise
-// (repeating one identical phrase habituates fastest).
-const PRAISE = [
-  "Looking good.",
-  "Nice posture.",
-  "You're looking good.",
-  "Great, keep it up.",
-  "Posture to die for.",
-  "Tall and relaxed. Nice.",
-  "Spine of a champion.",
-];
+function speak(text) {
+  stopSpeech();
+  const sel = selectedVoice();
+  const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
+  document.dispatchEvent(new CustomEvent("pg:speak", { detail: { text, engine: file ? "kokoro" : "system" } }));
+  if (!file) return speakSystem(text);
+  loadClip(`./voice/${file}`).then((buffer) => {
+    if (paused) return;
+    const ac = ensureAudio();
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ac.destination);
+    src.onended = () => { if (clipSource === src) clipSource = null; };
+    clipSource = src;
+    src.start();
+  }).catch(() => speakSystem(text)); // clip missing or undecodable
+}
+
 let praiseIndex = 0;
 const nextPraise = () => PRAISE[praiseIndex++ % PRAISE.length];
-const RECOVERY_PRAISE = ["That's better.", "There you go.", "Much better."];
 let recoveryIndex = 0;
 const nextRecovery = () => RECOVERY_PRAISE[recoveryIndex++ % RECOVERY_PRAISE.length];
 
@@ -241,7 +279,7 @@ for (const kind of ["bad", "good"]) {
   });
 }
 $("test-bad").addEventListener("click", () => playBad());
-$("test-voice").addEventListener("click", () => speak("Looking good. Posture to die for."));
+$("test-voice").addEventListener("click", () => { ensureAudio(); speak(TEST_LINE); });
 $("test-good").addEventListener("click", () => playGood());
 $("clear-sounds").addEventListener("click", () => {
   custom.bad = custom.good = null;
@@ -533,7 +571,7 @@ function setPaused(on) {
   const stream = video.srcObject;
   if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
   if (on) {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    stopSpeech();
     $("banner").classList.remove("show");
     const badge = $("state-badge");
     badge.textContent = "paused";
@@ -694,7 +732,7 @@ function bugReportUrl() {
     `- WebGL: ${webglInfo()}`,
     `- Source: ${$("source").textContent} | State: ${$("state-badge").textContent} | fps: ${$("fps").textContent} | paused: ${paused}`,
     `- Mode: ${settings.mode} | specific cues: ${settings.specificCues} | spoken praise: ${settings.spokenPraise}`,
-    `- Voice: ${v ? `${v.name} (${v.lang}${v.localService ? ", local" : ""})` : "none"} of ${voices.length}`,
+    `- Voice: ${selectedVoice() || "none"}${v ? ` | system fallback ${v.name} (${v.lang})` : ""} | ${voices.length} system voices | clips ${clipManifest ? "loaded" : "missing"}`,
     `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
