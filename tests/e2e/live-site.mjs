@@ -1,9 +1,10 @@
 // Author: Ariel Anders
 // Copyright (c) 2026 Ariel Anders. All rights reserved.
 //
-// End-to-end check of the DEPLOYED browser app (GitHub Pages), run by
-// .github/workflows/live-site.yml. Not part of `node --test tests/js/`: it
-// needs the internet (Pages, jsDelivr, Google's model bucket) and Chromium.
+// End-to-end check of the browser app, run by .github/workflows/live-site.yml
+// against the deployed GitHub Pages site or, on push, a locally served
+// candidate build. Not part of `node --test tests/js/`: it needs the internet
+// (Pages, jsDelivr, Google's model bucket) and Chromium.
 //
 //   node tests/e2e/live-site.mjs <base-url> <fake-camera.y4m> <out-dir>
 //
@@ -239,17 +240,39 @@ try {
           };
         }
       });
+      await page.goto(base + bust);
+      const landing = await page.evaluate(() => {
+        const el = document.getElementById("webgl-warning");
+        if (!el) return { banner: "element-missing", text: "" };
+        return { banner: getComputedStyle(el).display, text: el.textContent };
+      });
+      check("no WebGL: landing page shows the warning banner",
+        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /demo/i.test(landing.text), landing);
       await page.goto(`${base}app/${bust}`);
       const gl = await page.evaluate(() => Boolean(
         document.createElement("canvas").getContext("webgl") ||
         (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2"))));
-      await page.click("#start-camera");
+      const cam = await page.evaluate(() => {
+        const btn = document.getElementById("start-camera");
+        const helpEl = document.getElementById("webgl-help");
+        if (!btn || !helpEl) return { text: "", disabled: false, help: "element-missing" };
+        return { text: btn.textContent, disabled: btn.disabled, help: getComputedStyle(helpEl).display };
+      });
+      check("no WebGL: camera button shows the WebGL message on load",
+        /needs WebGL/i.test(cam.text) && cam.disabled && cam.help === "block", cam);
+      await page.click("#start-camera", { force: true, timeout: 2000 }).catch(() => {});
       await page.waitForTimeout(1500);
-      const s = await page.evaluate(() => ({
-        help: getComputedStyle(document.getElementById("webgl-help")).display,
-        overlay: getComputedStyle(document.getElementById("start-overlay")).display,
-        streams: document.getElementById("video").srcObject === null ? 0 : 1,
-      }));
+      const s = await page.evaluate(() => {
+        const helpEl = document.getElementById("webgl-help");
+        const overlayEl = document.getElementById("start-overlay");
+        const video = document.getElementById("video");
+        if (!helpEl || !overlayEl || !video) return { help: "element-missing", overlay: "element-missing", streams: -1 };
+        return {
+          help: getComputedStyle(helpEl).display,
+          overlay: getComputedStyle(overlayEl).display,
+          streams: video.srcObject === null ? 0 : 1,
+        };
+      });
       await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
       check("no WebGL: explains how to turn it on", !gl && s.help === "block" && s.overlay !== "none", { gl, ...s });
       check("no WebGL: camera not opened", s.streams === 0, s);

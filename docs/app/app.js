@@ -840,6 +840,19 @@ class NoWebGLError extends Error {}
 
 function showWebGLHelp(show) { $("webgl-help").classList.toggle("show", show); }
 
+const CAMERA_LABEL = $("start-camera").textContent;
+const NO_GL_LABEL = "Camera needs WebGL \u2013 see below";
+
+/** Reflect WebGL availability on the camera button. Returns true if usable. */
+function applyWebGLState() {
+  const ok = Boolean(webglCanvas());
+  const btn = $("start-camera");
+  btn.disabled = !ok;
+  btn.textContent = ok ? CAMERA_LABEL : NO_GL_LABEL;
+  showWebGLHelp(!ok);
+  return ok;
+}
+
 async function loadModel(canvas) {
   const { FilesetResolver, PoseLandmarker } = await import(`${TASKS_VISION}/vision_bundle.mjs`);
   const fileset = await FilesetResolver.forVisionTasks(`${TASKS_VISION}/wasm`);
@@ -937,7 +950,8 @@ function stopCamera(err) {
   showError(noGL ? "" : `Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
   $("start-status").textContent = "";
   $("start-overlay").style.display = "";
-  $("start-camera").disabled = $("start-demo").disabled = false;
+  $("start-demo").disabled = false;
+  applyWebGLState();
 }
 
 let loopsStarted = false;
@@ -984,9 +998,13 @@ $("start-camera").addEventListener("click", async () => {
     } else {
       showError(`${err.name === "NotAllowedError" ? "Camera permission denied" : "Could not start"}: ${err.message || err}. Try the demo instead.`);
     }
-    $("start-camera").disabled = $("start-demo").disabled = false;
+    $("start-demo").disabled = false;
+    applyWebGLState();
   }
 });
+
+// Probe as soon as the page loads, before any click.
+applyWebGLState();
 
 $("start-demo").addEventListener("click", () => {
   ensureAudio();
