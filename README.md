@@ -164,8 +164,9 @@ In short:
   spoken praise is on) fires once at 5, 15, 30 and 60 continuous good minutes.
 - Frequent feedback can help now and hurt retention, so there is a *Coaching level*:
   **Standard** (the original behavior) or **Light** (banner and chime first, voice only
-  after a second reminder episode, praise only at milestones). Light never produces
-  more reminders than Standard.
+  after a second reminder episode, praise only at milestones). Light swaps voice for a
+  chime and drops timed praise. It never produces more reminders than Standard, and it
+  does not reduce them.
 - *Test me* is a silent retention test, the measure of learning, separate from the
   coached score. The progress panel suggests trying Light coaching when your latest
   silent score is at least your coached score.

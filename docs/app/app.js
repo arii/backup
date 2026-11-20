@@ -793,6 +793,7 @@ let paused = false;
 function setPaused(on) {
   if (!loopsStarted || on === paused) return;
   paused = on;
+  save(); // flush daily totals when pausing
   const stream = video.srcObject;
   if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
   if (on) {
@@ -1110,7 +1111,10 @@ function renderOnboardingStep() {
   $("ob-title").textContent = step.title;
   fillList($("ob-body"), step.points);
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
-  $("ob-next").hidden = last;
+  window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+
+$("ob-next").hidden = last;
   $("ob-ack").hidden = !last;
 }
 

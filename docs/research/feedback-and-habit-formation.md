@@ -29,7 +29,7 @@ same change set as the specs, **spec only** = designed but not built.
 
 | Principle | Evidence | What Posture Guard does | Status |
 |---|---|---|---|
-| Frequent feedback helps performance now but can hurt learning (guidance effect). Reduced feedback frequency improves retention. | Salmoni, Schmidt & Walter 1984; Winstein & Schmidt 1990 | Praise is faded: first praise at 15 s, then every 1 to 2 minutes. "Light" coaching level reduces reminders further. | shipped (faded praise), FEAT-003 (Light level) |
+| Frequent feedback helps performance now but can hurt learning (guidance effect). Reduced feedback frequency improves retention. | Salmoni, Schmidt & Walter 1984; Winstein & Schmidt 1990 | Praise is faded: first praise at 15 s, then every 1 to 2 minutes. "Light" coaching level swaps voice for a chime on the first reminder of an episode and drops timed praise. It does not reduce the number of reminders. | shipped (faded praise), FEAT-003 (Light level) |
 | Measure learning with a no-feedback retention test, not with the coached score. | Salmoni et al. 1984; Winstein & Schmidt 1990 | Silent "Test me" stores a separate score in `store.tests`. Progress view compares it with coached time. | shipped (test), FEAT-003 (view) |
 | Feedback can backfire. Cues that point at the task help, cues that point at the self (judgement, shame) tend not to. | Kluger & DeNisi 1996 | Cues name the metric to change ("head forward, tuck your chin"), never the person. No shame wording, no streak-loss messages. | shipped (cues), FEAT-003 (rules written down) |
 | Autonomy support and positive feedback raise expectancies and improve learning. | Wulf & Lewthwaite 2016 | Spoken praise is opt-in. Coaching level, mode and mute are user choices. Calibration makes "good" relative to the user's own baseline. | shipped, FEAT-003 (level) |
@@ -58,6 +58,8 @@ same change set as the specs, **spec only** = designed but not built.
 5. **No punishment.** No harsh sounds, no shaming text, no streak-loss messages.
 6. **Cap total prompts per hour** and tell the user when the cap is active.
 7. **Do not reward rigidity.** Reward consistency, breaks and relaxed shoulders.
+   Milestones count continuous good minutes, so the 30 and 60 minute messages
+   prompt a stretch or break, and no streak is kept across milestones.
 8. **Say what the evidence cannot say.** See limitations below.
 
 ## Limitations of the evidence

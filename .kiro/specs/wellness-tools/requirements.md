@@ -33,7 +33,7 @@ Ground truth about the sensor:
 5. NO tool SHALL prompt during pause, the silent retention test, or "Learn the cues" practice.
 6. NO frame, landmark, blendshape score or tool event SHALL leave the device. Counters
    stored locally MAY be added to `store.days` (aggregates only).
-7. EVERY tool SHALL respect the Coaching level (Light reduces tool prompts as well).
+7. EVERY tool SHALL respect the Coaching level (Light uses chime instead of voice and no timed praise for tools as well).
 8. NO new spoken text SHALL be added without a rendered voice clip (see
    `scripts/render-voice.mjs`). Until clips exist, tools use on-screen text and the chime only.
 9. EVERY tool SHALL be keyboard accessible, labelled, and use `aria-live` for text changes.

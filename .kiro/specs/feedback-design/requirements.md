@@ -39,7 +39,7 @@ Scope markers: **(shipped)**, **(FEAT-003)** implemented on this branch, **(spec
    growing gaps, so praise is rarer as good posture continues.
 2. THE App SHALL offer a **Coaching level** setting (FEAT-003): `standard` (current
    behaviour) and `light`.
-3. `light` SHALL be reduced-frequency feedback: banner and chime only on the first
+3. `light` SHALL be lower-intensity feedback (it does not reduce the reminder count): banner and chime only on the first
    reminder of an episode, voice only after a second consecutive reminder episode within
    `FEEDBACK.light_episode_window_s` (default 600), and praise only at milestones and
    recovery. It SHALL NOT fire more reminders, voice lines or praises than `standard`

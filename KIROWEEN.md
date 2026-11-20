@@ -103,7 +103,7 @@ What the Kiro phase changed (PRs #19 onward):
   labelled.
 - **Research-driven feedback.** [`docs/research/feedback-and-habit-formation.md`](docs/research/feedback-and-habit-formation.md)
   maps motor-learning and habit research to design rules: specific, task-focused
-  cues, opt-in earned praise, reduced-frequency (Light) coaching, a silent retention
+  cues, opt-in earned praise, lower-intensity (Light) coaching, a silent retention
   test, an hourly reminder cap, and no shame or streak-loss messages. Some sources
   were verified from abstracts or page text, others from citation metadata only, and
   the document says which.

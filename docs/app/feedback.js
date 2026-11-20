@@ -7,7 +7,8 @@
 // docs/research/feedback-and-habit-formation.md and .kiro/specs/feedback-design:
 //
 // - Standard: every reminder the engine emits, voice as the engine says.
-// - Light: reduced-frequency feedback (guidance hypothesis). The first
+// - Light: lower-intensity feedback (guidance hypothesis). It does not lower
+//   the number of reminders. The first
 //   reminder of an episode is chime and banner only; voice joins only when the
 //   previous episode ended recently (a second consecutive episode). No timed
 //   praise. Recovery and milestone praise stay.
