@@ -20,16 +20,27 @@ export const PRAISE = [
   "You're looking good.",
   "Great, keep it up.",
   "Posture to die for.",
-  "Tall and relaxed. Nice.",
+  "Easy does it. Looking good.",
   "Spine of a champion.",
 ];
 export const RECOVERY_PRAISE = ["That's better.", "There you go.", "Much better."];
+
+// Anti-bracing (relax.js): good posture is a relaxed stack, not a squeeze.
+export const RELAX_LINES = {
+  bracing: "Shoulders creeping up? Breathe out and let them drop.",
+  inhale: "Breath check. Take a slow, deep breath in.",
+  exhale: "And breathe out. Let your shoulders drop.",
+  rose: "Your shoulders rose as you breathed in. Let them hang, and breathe into your belly.",
+  held: "Your shoulders dropped when you let go, so you were holding them up. Stay soft.",
+  relaxed: "Nice. Relaxed and stacked.",
+  unclear: "I couldn't see your shoulders clearly. Try again facing the camera.",
+};
 
 export const CUE_LINES = CUE_METRICS.map((metric) => cueText(metric, "")[2]);
 
 /** All lines to pre-render, de-duplicated, in a stable order. */
 export const ALL_LINES = [...new Set([
-  DEFAULT_PROMPT, TEST_LINE, ...CUE_LINES, ...PRAISE, ...RECOVERY_PRAISE,
+  DEFAULT_PROMPT, TEST_LINE, ...CUE_LINES, ...PRAISE, ...RECOVERY_PRAISE, ...Object.values(RELAX_LINES),
 ])];
 
 // Kokoro voices offered in the app (id -> label). Rendered for every line.

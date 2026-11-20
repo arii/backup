@@ -9,7 +9,8 @@
 import {
   DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED,
 } from "./posture-core.js";
-import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, TEST_LINE, VOICES } from "./voice-lines.js";
+import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
+import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
 
 const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 const MODEL_URL =
@@ -312,6 +313,7 @@ function reminderText(nudge, cue) {
 
 function fire(nudge, cue) {
   if (test) return; // silent test: withhold every cue
+  if (breath.active) return; // a breath check is talking; posture cues wait ~9 s
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
   if (reminder) reminderCount += 1;
   const praise = nudge === Nudge.POSITIVE_CHIME ? nextPraise()
@@ -372,6 +374,91 @@ function renderCalibration() {
 const session = { good: 0, bad: 0, streak: 0, best: 0, lastT: null };
 store.days = store.days || {};
 
+// -- relax, don't brace -----------------------------------------------------------
+// Good posture should be a relaxed stack, not a squeeze. relax.js watches the
+// ears-to-shoulders gap for shoulders creeping up while posture reads good,
+// and runs the breath check ("if your shoulders rise when you breathe in, you
+// are bracing"). See relax.js for the measurement.
+
+const bracing = new BracingMonitor();
+const breath = new BreathCheck();
+const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
+let goodSinceBreath = 0;
+let relaxLastT = null;
+settings.relaxReminders = store.relaxReminders !== false; // default on
+
+/** Relax lines are spoken unless the mode is silent (chime-only still talks
+ *  here: a breath check without words is not a check). */
+function sayRelax(line) {
+  if (settings.mode !== "silent") speak(line);
+}
+
+function showRelaxBanner(text) {
+  const banner = $("banner");
+  banner.textContent = text;
+  banner.classList.remove("positive");
+  banner.classList.add("show", "relax");
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => banner.classList.remove("show", "relax"), 6000);
+}
+
+const VERDICT_TEXT = {
+  rose: "Shoulders rose on the breath in: you were bracing. Let them hang and breathe into your belly.",
+  held: "Shoulders dropped when you let go: you were holding them up. That lower spot is where they belong.",
+  relaxed: "Relaxed and stacked. Your shoulders stayed put through the breath.",
+  unclear: "Couldn't see your shoulders clearly. Face the camera and try again.",
+};
+
+function startBreathCheck() {
+  if (test || paused || breath.active || !loopsStarted) return;
+  ensureAudio();
+  goodSinceBreath = 0;
+  breath.start(performance.now() / 1000, bracing.value);
+  $("relax-status").textContent = "Breathe in slowly...";
+  sayRelax(RELAX_LINES.inhale);
+  showRelaxBanner("Breath check: slow, deep breath in");
+}
+
+function relaxStep(landmarks, state, now) {
+  if (test) { relaxLastT = null; return; }
+  const ratio = neckRatio(landmarks);
+  const good = state === State.GOOD;
+  const flagged = bracing.update(ratio, now, good && !breath.active);
+  if (flagged && settings.relaxReminders && !breath.active) {
+    showRelaxBanner(RELAX_LINES.bracing);
+    sayRelax(RELAX_LINES.bracing);
+    store.bracingCount = (store.bracingCount || 0) + 1; save();
+  }
+  if (breath.active) {
+    const step = breath.update(bracing.value, now);
+    if (step === "exhale") {
+      $("relax-status").textContent = "Breathe out and let your shoulders drop...";
+      sayRelax(RELAX_LINES.exhale);
+      showRelaxBanner("Breathe out, let your shoulders drop");
+    } else if (step) {
+      if (step.kind !== "unclear" && step.kind !== "rose") bracing.pinRelaxed(step.relaxed);
+      $("relax-status").textContent = VERDICT_TEXT[step.kind];
+      sayRelax(RELAX_LINES[step.kind]);
+      $("banner").classList.remove("show", "relax");
+    }
+  } else if (good && settings.relaxReminders && relaxLastT !== null) {
+    goodSinceBreath += Math.min(1, Math.max(0, now - relaxLastT));
+    if (goodSinceBreath >= AUTO_BREATH_S) startBreathCheck();
+  }
+  relaxLastT = now;
+  const ref = bracing.reference;
+  const v = bracing.value;
+  $("relax-shoulders").textContent = ref === null || v === null ? "learning your relaxed shoulders..."
+    : v < ref * 0.88 ? "creeping up" : "relaxed";
+}
+
+$("breath-check").addEventListener("click", startBreathCheck);
+$("relax-reminders").checked = settings.relaxReminders;
+$("relax-reminders").addEventListener("change", (e) => {
+  settings.relaxReminders = e.target.checked;
+  store.relaxReminders = settings.relaxReminders; save();
+});
+
 // -- silent test ("Test me") ---------------------------------------------------
 // A retention test in motor-learning terms: same tracking and state machine,
 // but every cue is withheld (no sounds, speech, banners, needle, hold bar or
@@ -384,6 +471,7 @@ let test = null; // { minutes, elapsed, good, bad } while a test runs
 function startTest() {
   if (test) return finishTest(true);
   test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
+  breath.cancel();
   stopSpeech();
   document.body.classList.add("testing");
   $("banner").classList.remove("show");
@@ -544,7 +632,7 @@ function renderFix(state, result, cue, hold) {
   } else if (bad) {
     title = "Almost there"; cls = "active"; // the hold bar shows how long is left
   } else if (state === State.GOOD) {
-    title = "Looking good"; cls = "ok";
+    title = "Looking good"; how = "Stay soft: shoulders heavy, breathing easy."; cls = "ok";
   } else {
     title = "What to fix shows up here";
   }
@@ -647,6 +735,7 @@ function setPaused(on) {
   const stream = video.srcObject;
   if (stream) stream.getVideoTracks().forEach((t) => { t.enabled = !on; });
   if (on) {
+    breath.cancel();
     stopSpeech();
     $("banner").classList.remove("show");
     const badge = $("state-badge");
@@ -655,6 +744,8 @@ function setPaused(on) {
     $("fps").textContent = "-";
   } else {
     engine.restart();
+    bracing.reset();
+    relaxLastT = null;
     session.lastT = null;
     lastFrameT = null;
     fpsEma = 0;
@@ -697,6 +788,7 @@ function step() {
   const out = engine.process(landmarks, now);
   for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
+  relaxStep(landmarks, out.transition.state, now);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
