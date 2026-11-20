@@ -82,14 +82,24 @@ function ensureAudio() {
   return audioCtx;
 }
 
-function tones(freqs, seconds) {
+// harmonics: [[k, amplitude], ...] for a custom timbre; omitted = pure sine.
+function tones(freqs, seconds, harmonics = null) {
   const ac = ensureAudio();
+  let wave = null;
+  if (harmonics) {
+    const n = Math.max(...harmonics.map(([k]) => k)) + 1;
+    const real = new Float32Array(n);
+    const imag = new Float32Array(n); // sine terms, as in audio.py
+    for (const [k, amp] of harmonics) imag[k] = amp;
+    wave = ac.createPeriodicWave(real, imag); // peak-normalized, like audio.py
+  }
   let t = ac.currentTime + 0.02;
   freqs.forEach((f, i) => {
     const dur = seconds[i];
     const osc = ac.createOscillator();
     const gain = ac.createGain();
-    osc.type = "sine";
+    if (wave) osc.setPeriodicWave(wave);
+    else osc.type = "sine";
     osc.frequency.value = f;
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
@@ -109,8 +119,10 @@ function playBuffer(buffer) {
   src.start();
 }
 
-// Same tones as audio.py: falling-then-rising two-tone reminder, C-major arpeggio reward.
-const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([660, 990], [0.15, 0.25]));
+// Same tones as audio.py: a falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
+// down, reedy odd harmonics) and a rising C-major arpeggio reward.
+const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
+const playBad = () => (custom.bad ? playBuffer(custom.bad) : tones([659.25, 466.16], [0.18, 0.42], BAD_HARMONICS));
 const playGood = () => (custom.good ? playBuffer(custom.good) : tones([523.25, 659.25, 783.99, 1046.5], [0.2, 0.2, 0.2, 0.2]));
 
 function speak(text) {
