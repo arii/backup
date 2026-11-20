@@ -46,6 +46,15 @@
   #banner.show { opacity: 1; }
   #banner.positive { background: var(--good); color: #0b2412; }
   #banner.relax { background: #6b8fd6; color: #0d1830; }
+  /* Breaks and breathing prompts (one at a time, see prompts.js). visibility keeps the hidden buttons out of the tab order. */
+  #prompt-card { position: absolute; left: 12px; right: 12px; bottom: 40px; padding: 10px 12px; border-radius: 8px; background: rgba(20, 23, 28, 0.94); border: 1px solid #6b8fd6; visibility: hidden; opacity: 0; transition: opacity 0.25s; }
+  #prompt-card.show { visibility: visible; opacity: 1; }
+  #prompt-text { font-weight: 600; font-size: 14px; }
+  #prompt-card .hold { margin-top: 6px; height: 16px; }
+  #prompt-card .hold-fill { background: #6b8fd6; }
+  #prompt-card .btn-row { margin-top: 8px; }
+  #prompt-card button { padding: 4px 10px; font-size: 13px; }
+  #prompt-card .link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px 6px; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
   .panel h2 { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
   .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -163,6 +172,17 @@
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
       <div id="banner" role="status" aria-live="polite">Reminder</div>
+      <div id="prompt-card" data-prompt="">
+        <div id="prompt-text" role="status" aria-live="polite"></div>
+        <div class="hold" id="prompt-bar" hidden role="progressbar" aria-label="Countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="hold-fill" id="prompt-fill"></div></div>
+        <div class="btn-row">
+          <button id="prompt-action" class="secondary" hidden>Breathe with me</button>
+          <button id="prompt-done" class="secondary" hidden>Done</button>
+          <button id="prompt-snooze" class="secondary">Snooze 10 min</button>
+          <button id="prompt-notnow" class="secondary">Not now</button>
+          <button id="prompt-never" class="link">Don&rsquo;t show this again</button>
+        </div>
+      </div>
       <div id="demo-note" class="note" style="position:absolute;left:12px;bottom:10px;display:none">Demo: 20 s good posture, then 20 s slouching, repeating</div>
       <div class="overlay-msg" id="start-overlay">
         <h2 id="start-title">Posture to die for.</h2>
@@ -211,7 +231,8 @@
     </div>
     <div class="panel coaching" style="margin-top:16px">
       <h2>This session</h2>
-      <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b></div>
+      <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b> &middot; breaks taken today <b id="breaks-count">0</b></div>
+      <div class="note">A break is 2 minutes or more away from the camera. Breaks are not part of the posture score.</div>
       <div class="score-bar"><div id="good-bar"></div></div>
       <div class="note">Today: <span id="today"></span></div>
     </div>
@@ -335,6 +356,27 @@
       </div>
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (on by default)</label>
+    </div>
+    <div class="panel coaching" id="breaks-panel">
+      <h2>Breaks &amp; prompts</h2>
+      <div class="note" style="margin-top:0">Gentle prompts, one at a time. None in the first 5 minutes, at most one every 10 minutes, and never during a pause or a silent test.</div>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="eye-breaks" checked> Eye break every 20 minutes at the desk: look at something 20 feet away for 20 seconds</label>
+      <label class="note" for="move-minutes" style="display:block;margin-top:6px">Stand up and move</label>
+      <div class="modes"><select id="move-minutes">
+        <option value="0">Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+        <option value="60" selected>Every 60 minutes</option>
+        <option value="90">Every 90 minutes</option>
+      </select></div>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathing-moments"> Occasional breathing moment during a long good-posture streak (at most every 30 minutes)</label>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathe-cues"> Soft voice cues in &ldquo;Breathe with me&rdquo;</label>
+      <div class="btn-row">
+        <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
+        <button id="prompts-reset" class="secondary" hidden>Show dismissed prompts again</button>
+      </div>
+      <div class="note" id="breathe-note">One minute of easy breathing, about 4 seconds in and 6 seconds out, then a breath check. Stop if you feel dizzy.</div>
+      <div class="note">Leaving the camera for 2 minutes or more counts as a break and restarts the timers. These are reminders to rest, not medical advice.</div>
     </div>
     <div class="panel">
       <h2>Calibrate to your desk</h2>

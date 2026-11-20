@@ -10,8 +10,13 @@
 import {
   DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED,
 } from "./posture-core.js";
-import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
+import {
+  BREAK_LINES, BREATHE_LINES, DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES,
+} from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { BREAKS, BreakTracker } from "./breaks.js";
+import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
+import { PromptScheduler } from "./prompts.js";
 import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
 import {
   DIAGNOSIS_TEXT, Diagnosis, markOnboarded, needsAckOnly, ONBOARDING_STEPS, PRACTICE_STEPS,
@@ -351,6 +356,7 @@ function fire(nudge, cue) {
     if (verdict.capped) { showReminderNote(true); return; } // too many in an hour: stay quiet
     if (nudge === Nudge.VOICE && !verdict.voice) nudge = Nudge.CHIME; // light: chime instead of voice
     reminderCount += 1;
+    prompts.notePosture(pclock); // a posture reminder owns the screen: other prompts wait
   } else if (nudge === Nudge.POSITIVE_CHIME && !policy.onPraise("timed")) {
     return; // light coaching: no timed praise
   }
@@ -448,7 +454,7 @@ const VERDICT_TEXT = {
 };
 
 function startBreathCheck() {
-  if (test || practice || paused || breath.active || !loopsStarted) return;
+  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
   ensureAudio();
   goodSinceBreath = 0;
   breath.start(performance.now() / 1000, bracing.value);
@@ -466,6 +472,7 @@ function relaxStep(landmarks, state, now) {
     showRelaxBanner(RELAX_LINES.bracing);
     sayRelax(RELAX_LINES.bracing);
     store.bracingCount = (store.bracingCount || 0) + 1; save();
+    prompts.enqueue("offer", pclock); // offer "Breathe with me" (scheduler rules apply)
   }
   if (breath.active) {
     const step = breath.update(bracing.value, now);
@@ -481,7 +488,7 @@ function relaxStep(landmarks, state, now) {
     }
   } else if (good && settings.relaxReminders && relaxLastT !== null) {
     goodSinceBreath += Math.min(1, Math.max(0, now - relaxLastT));
-    if (goodSinceBreath >= AUTO_BREATH_S) startBreathCheck();
+    if (goodSinceBreath >= AUTO_BREATH_S) prompts.enqueue("breath", pclock); // the scheduler decides when
   }
   relaxLastT = now;
   const ref = bracing.reference;
@@ -491,8 +498,11 @@ function relaxStep(landmarks, state, now) {
 }
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
-const NEEDS_TRACKING = ["breath-check", "calib-good", "calib-bad"];
-const READY_TITLE = { "breath-check": "Breathe in: if your shoulders rise, you are bracing" };
+const NEEDS_TRACKING = ["breath-check", "breathe-with-me", "calib-good", "calib-bad"];
+const READY_TITLE = {
+  "breath-check": "Breathe in: if your shoulders rise, you are bracing",
+  "breathe-with-me": "One minute of easy breathing, then a breath check",
+};
 function setTrackingControls(on) {
   for (const id of NEEDS_TRACKING) {
     const el = $(id);
@@ -511,6 +521,250 @@ $("relax-reminders").addEventListener("change", (e) => {
   store.relaxReminders = settings.relaxReminders; save();
 });
 
+// -- breaks and prompts ---------------------------------------------------------
+// Everything that is not a posture reminder goes through one PromptScheduler
+// (prompts.js): eye break (20-20-20), move break, breathing moments, the auto
+// breath check and the "Breathe with me" offer. One card at a time, none in the
+// first 5 min, at most one per 10 min, none while paused, in a silent test or
+// during a breath check. Prompt timers run on a prompt clock that only advances
+// while tracking is running (paused or hidden gaps never count).
+//
+// Testing hook: ?clockScale=N (1..1000) makes that prompt clock run N times
+// faster, so an end-to-end test can see a 20 minute eye break in seconds. It
+// scales only the prompt timers: tracking, reminders and countdowns stay real.
+
+const CLOCK_SCALE = (() => {
+  const n = Number(new URLSearchParams(location.search).get("clockScale"));
+  return Number.isFinite(n) && n >= 1 && n <= 1000 ? n : 1;
+})();
+const DISMISS_KEY = { eye: "eye", move: "move", breathing: "breathing", offer: "breathing" };
+const dismissed = settings.promptsDismissed;
+
+function promptEnabled(id) {
+  if (dismissed[DISMISS_KEY[id]]) return false;
+  if (id === "eye") return settings.eyeBreaks;
+  if (id === "move") return settings.moveBreakMinutes > 0;
+  if (id === "breathing") return settings.breathingMoments;
+  if (id === "breath" || id === "offer") return settings.relaxReminders;
+  return true;
+}
+
+const prompts = new PromptScheduler({ isEnabled: promptEnabled });
+const breaks = new BreakTracker(settings);
+const moments = new BreathingMoments();
+const guide = new BreatheGuide();
+let pclock = 0;   // prompt clock (scaled by clockScale)
+let preal = 0;    // real seconds of running tracking (card timers, guide)
+let plast = null;
+let pstreak = 0;  // good-posture streak on the prompt clock
+let card = null;  // the prompt on screen: { id, text, t, finished }
+
+function renderPromptSettings() {
+  $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
+  $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
+  $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing;
+  $("breathe-cues").checked = settings.breatheCues;
+  $("prompts-reset").hidden = !Object.keys(dismissed).length;
+}
+function savePromptSettings() {
+  store.eyeBreaks = settings.eyeBreaks;
+  store.moveBreakMinutes = settings.moveBreakMinutes;
+  store.breathingMoments = settings.breathingMoments;
+  store.breatheCues = settings.breatheCues;
+  store.promptsDismissed = { ...dismissed };
+  save();
+  renderPromptSettings();
+}
+$("eye-breaks").addEventListener("change", (e) => {
+  settings.eyeBreaks = e.target.checked;
+  if (e.target.checked) delete dismissed.eye;
+  breaks.setEyeBreaks(settings.eyeBreaks);
+  savePromptSettings();
+});
+$("move-minutes").addEventListener("change", (e) => {
+  breaks.setMoveMinutes(e.target.value);
+  settings.moveBreakMinutes = breaks.moveMinutes;
+  if (settings.moveBreakMinutes > 0) delete dismissed.move;
+  savePromptSettings();
+});
+$("breathing-moments").addEventListener("change", (e) => {
+  settings.breathingMoments = e.target.checked;
+  if (e.target.checked) delete dismissed.breathing;
+  savePromptSettings();
+});
+$("breathe-cues").addEventListener("change", (e) => {
+  settings.breatheCues = e.target.checked;
+  savePromptSettings();
+});
+$("prompts-reset").addEventListener("click", () => {
+  for (const k of Object.keys(dismissed)) delete dismissed[k];
+  savePromptSettings();
+});
+renderPromptSettings();
+
+function breaksTakenToday() {
+  const b = store.breaksToday;
+  return b && b.day === todayKey() ? b.n : 0;
+}
+function countBreak() {
+  store.breaksToday = { day: todayKey(), n: breaksTakenToday() + 1 };
+  save();
+}
+
+/** Prompts speak only on "Chime + voice" (they are never required to be heard). */
+function sayPrompt(line) {
+  if (settings.mode === "chime_and_voice") speak(line);
+}
+
+const CARD_UI = {
+  eye: { bar: true, snooze: true, never: true },
+  move: { action: true, done: true, snooze: true, never: true },
+  breathing: { action: true, never: true },
+  offer: { action: true, never: true },
+  guide: { bar: true, stop: true },
+};
+
+function renderCard() {
+  const el = $("prompt-card");
+  if (!card) {
+    el.classList.remove("show");
+    el.dataset.prompt = "";
+    return;
+  }
+  const ui = CARD_UI[card.id];
+  $("prompt-text").textContent = card.text;
+  $("prompt-bar").hidden = !ui.bar;
+  $("prompt-action").hidden = !ui.action;
+  $("prompt-done").hidden = !ui.done || card.finished;
+  $("prompt-snooze").hidden = !ui.snooze || card.finished;
+  $("prompt-never").hidden = !ui.never || card.finished;
+  $("prompt-notnow").hidden = card.finished;
+  $("prompt-notnow").textContent = ui.stop ? "Stop" : "Not now";
+  el.dataset.prompt = card.id;
+  el.classList.add("show");
+}
+
+function setCardFill(f) {
+  const pct = Math.round(Math.min(1, Math.max(0, f)) * 100);
+  $("prompt-fill").style.width = `${pct}%`;
+  $("prompt-bar").setAttribute("aria-valuenow", String(pct));
+}
+
+function hideCard() { card = null; renderCard(); }
+
+/** The user (or a timeout) ends the card. how: done | snooze | notnow | never. */
+function endCard(how) {
+  if (card && card.id === "guide") { guide.cancel(); hideCard(); return; }
+  const id = prompts.dismiss(pclock, how);
+  if (how === "never" && DISMISS_KEY[id]) {
+    dismissed[DISMISS_KEY[id]] = true;
+    savePromptSettings();
+  }
+  hideCard();
+}
+
+/** Drop whatever prompt is on screen (pause, silent test, practice). */
+function cancelPrompts() {
+  guide.cancel();
+  if (card) endCard("done");
+  prompts.dismiss(pclock, "done");
+}
+
+function showPrompt(item) {
+  if (item.id === "breath") { // the auto breath check has its own UI
+    prompts.dismiss(pclock, "done");
+    startBreathCheck();
+    return;
+  }
+  const text = item.id === "eye" ? BREAK_LINES.eye
+    : item.id === "move" ? BREAK_LINES.move
+      : item.id === "offer" ? BREATHE_LINES.offer : moments.take(pclock);
+  card = { id: item.id, text, t: 0, finished: false };
+  setCardFill(0);
+  renderCard();
+  if (item.id !== "offer") sayPrompt(text);
+}
+
+function startGuide() {
+  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  ensureAudio();
+  if (card) endCard("done");
+  guide.start(preal);
+  card = { id: "guide", text: `${BREATHE_LINES.intro}`, t: 0, finished: false };
+  setCardFill(0);
+  renderCard();
+  if (settings.breatheCues && settings.mode !== "silent") speak(BREATHE_LINES.intro);
+}
+
+function guideStep() {
+  const g = guide.update(preal);
+  if (!g) return;
+  if (g.phase === "done") {
+    hideCard();
+    if (settings.breatheCues && settings.mode !== "silent") speak(BREATHE_LINES.done);
+    startBreathCheck(); // ends with the existing breath check: do the shoulders stay down?
+    return;
+  }
+  setCardFill(g.fill);
+  if (g.phaseStart) {
+    card.text = `${g.phase === "in" ? "Breathe in..." : "Breathe out slowly..."} ${GUIDE_SAFETY}`;
+    $("prompt-text").textContent = card.text;
+    if (settings.breatheCues && settings.mode !== "silent" && g.cycle < 2) {
+      speak(g.phase === "in" ? BREATHE_LINES.in : BREATHE_LINES.out);
+    }
+  }
+}
+
+/** Runs every tracked frame (real `now` in seconds). */
+function promptStep(state, now) {
+  if (test || practice || paused) { plast = null; return; }
+  const dt = plast === null ? 0 : Math.min(1, Math.max(0, now - plast));
+  plast = now;
+  preal += dt;
+  pclock += dt * CLOCK_SCALE;
+  const present = state !== State.NO_PERSON;
+  if (breaks.update(present, pclock)) countBreak();
+  pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0;
+  if (!present && card && card.id !== "guide") endCard("done"); // no prompt while away
+  for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
+  if (settings.breathingMoments && moments.due(pstreak, pclock)) prompts.enqueue("breathing", pclock);
+  if (guide.active) guideStep();
+  else if (card) {
+    card.t += dt;
+    if (card.id === "eye") {
+      setCardFill(card.t / BREAKS.eye_look_s);
+      if (!card.finished && card.t >= BREAKS.eye_look_s) {
+        card.finished = true;
+        card.text = BREAK_LINES.eyeDone;
+        breaks.taken("eye");
+        renderCard();
+        sayPrompt(BREAK_LINES.eyeDone);
+      }
+      if (card.finished && card.t >= BREAKS.eye_look_s + 3) endCard("done");
+    } else if (card.t >= 60) {
+      endCard("notnow"); // ignoring a prompt counts as "Not now"
+    }
+  } else {
+    const item = prompts.poll(pclock, { paused, test: !!test || !!practice, breathCheck: breath.active || guide.active });
+    if (item) showPrompt(item);
+  }
+}
+
+$("prompt-action").addEventListener("click", () => startGuide());
+$("prompt-done").addEventListener("click", () => { if (card && card.id === "move") breaks.taken("move"); endCard("done"); });
+$("prompt-snooze").addEventListener("click", () => endCard("snooze"));
+$("prompt-notnow").addEventListener("click", () => endCard("notnow"));
+$("prompt-never").addEventListener("click", () => endCard("never"));
+$("breathe-with-me").addEventListener("click", startGuide);
+
+function resetPromptSession() {
+  prompts.startSession(pclock);
+  breaks.reset();
+  moments.last = null;
+  pstreak = 0;
+  plast = null;
+}
+
 // -- silent test ("Test me") ---------------------------------------------------
 // A retention test in motor-learning terms: same tracking and state machine,
 // but every cue is withheld (no sounds, speech, banners, needle, hold bar or
@@ -525,6 +779,7 @@ function startTest() {
   if (practice) stopPractice();
   test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
   breath.cancel();
+  cancelPrompts();
   stopSpeech();
   document.body.classList.add("testing");
   $("banner").classList.remove("show");
@@ -635,6 +890,7 @@ function renderStats() {
   $("good-bar").style.width = `${pct ?? 0}%`;
   $("best-streak").textContent = mmss(session.best);
   $("reminder-count").textContent = String(reminderCount);
+  $("breaks-count").textContent = String(breaksTakenToday());
   const day = store.days[todayKey()];
   $("today").textContent = day
     ? `${mmss(day.good)} good, ${mmss(day.bad)} slouched`
@@ -843,6 +1099,7 @@ function setPaused(on) {
   if (on) {
     if (practice) stopPractice();
     breath.cancel();
+    cancelPrompts();
     stopSpeech();
     $("banner").classList.remove("show");
     const badge = $("state-badge");
@@ -853,6 +1110,7 @@ function setPaused(on) {
     engine.restart();
     bracing.reset();
     relaxLastT = null;
+    plast = null;
     session.lastT = null;
     lastFrameT = null;
     fpsEma = 0;
@@ -910,6 +1168,7 @@ function step() {
   for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
+  promptStep(out.transition.state, now);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -1100,6 +1359,7 @@ function begin(source) {
   maybeStartFirstRun();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
+  resetPromptSession();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
 }
@@ -1383,6 +1643,7 @@ function startPractice() {
   breath.cancel();
   stopSpeech();
   $("banner").classList.remove("show");
+  cancelPrompts();
   practice = { i: 0 };
   document.body.classList.add("practicing");
   renderPracticeStep();

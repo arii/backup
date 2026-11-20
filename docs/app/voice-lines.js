@@ -37,11 +37,37 @@ export const RELAX_LINES = {
   unclear: "I couldn't see your shoulders clearly. Try again facing the camera.",
 };
 
+// Break prompts (breaks.js, prompts.js). Wellness wording only: no health claims.
+export const BREAK_LINES = {
+  eye: "Look at something 20 feet away for 20 seconds.",
+  eyeDone: "Nice. Your eyes had a rest.",
+  move: "Time to stand up and move for a couple of minutes.",
+};
+
+// Breathing moments (breathing.js): rotated so they do not fade into the background.
+export const BREATHING_MOMENTS = [
+  "Long breath out. Let your shoulders drop.",
+  "Easy now. Let your jaw go soft and breathe out slowly.",
+  "Pause for one slow breath. Let go on the way out.",
+  "Breathe in through your nose, then let it all go.",
+  "Let your arms feel heavy and breathe out easy.",
+];
+
+// "Breathe with me": about 4 s in and 6 s out for one minute, then a breath check.
+export const BREATHE_LINES = {
+  offer: "Want a minute to breathe out with me?",
+  intro: "Breathe with me for one minute. Stop if you feel dizzy.",
+  in: "Breathe in.",
+  out: "And out, nice and easy.",
+  done: "Easy. Now a breath check.",
+};
+
 export const CUE_LINES = CUE_METRICS.map((metric) => cueText(metric, "")[2]);
 
 /** All lines to pre-render, de-duplicated, in a stable order. */
 export const ALL_LINES = [...new Set([
   DEFAULT_PROMPT, TEST_LINE, ...CUE_LINES, ...PRAISE, ...RECOVERY_PRAISE, ...Object.values(RELAX_LINES),
+  ...Object.values(BREAK_LINES), ...BREATHING_MOMENTS, ...Object.values(BREATHE_LINES),
 ])];
 
 // Kokoro voices offered in the app (id -> label). Rendered for every line.

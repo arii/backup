@@ -19,6 +19,11 @@
 //    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
 //    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
 //    runs on it.)
+// 4a. Breaks & prompts (issue #49): demo mode with ?clockScale=600 (the prompt
+//    timers run 600x, 1 real second = 10 prompt minutes; see app.js). Checks the
+//    eye break shows after the quiet start, one prompt at a time with the 10
+//    minute gap between prompts, none while paused or in a silent test, and the
+//    Breaks & prompts settings persist across a reload.
 // 5. Self-hosting (issue #45): the vendored files are served, and no request
 //    leaves the site's origin (in particular none to cdn.jsdelivr.net or
 //    storage.googleapis.com). CSP violations show up as console errors, which
@@ -128,6 +133,95 @@ try {
     await page.screenshot({ path: path.join(outDir, "demo-slouch.png") });
     check("demo has no errors", errors.length === 0, errors);
     report.demo = { early, slouch };
+    await page.close();
+  }
+
+  // 2b. Breaks & prompts on an accelerated prompt clock.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      window.__shown = [];
+      window.__overlap = [];
+      let cur = null;
+      setInterval(() => {
+        const el = document.getElementById("prompt-card");
+        const banner = document.getElementById("banner");
+        if (!el) return;
+        const id = el.classList.contains("show") ? el.dataset.prompt : null;
+        if (id && id !== cur) window.__shown.push({ id, t: performance.now() });
+        cur = id;
+        // a non-guide prompt must never share the screen with a breath check banner
+        if (id && id !== "guide" && banner.classList.contains("show") && banner.classList.contains("relax")) {
+          window.__overlap.push(id);
+        }
+      }, 40);
+    });
+    await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+    const shownIds = () => page.evaluate(() => window.__shown.map((x) => x.id));
+    await page.click("#start-demo");
+    await page.waitForTimeout(400);
+    check("prompts: none in the first 5 minutes of a session", (await shownIds()).length === 0);
+    await page.waitForSelector("#prompt-card.show[data-prompt=eye]", { timeout: 20000 });
+    const eye = await page.evaluate(() => ({
+      text: document.getElementById("prompt-text").textContent,
+      role: document.getElementById("prompt-text").getAttribute("role"),
+      live: document.getElementById("prompt-text").getAttribute("aria-live"),
+      snooze: document.getElementById("prompt-snooze").textContent,
+      notnow: document.getElementById("prompt-notnow").textContent,
+      bar: !document.getElementById("prompt-bar").hidden,
+    }));
+    check("prompts: the eye break shows the 20-20-20 text, a countdown bar and Snooze / Not now",
+      /20 feet away for 20 seconds/.test(eye.text) && eye.role === "status" && eye.live === "polite"
+      && /Snooze 10 min/.test(eye.snooze) && /Not now/.test(eye.notnow) && eye.bar, eye);
+    await page.screenshot({ path: path.join(outDir, "prompt-eye-break.png") });
+    await page.waitForFunction(() => /eyes had a rest/.test(document.getElementById("prompt-text").textContent), null, { timeout: 30000 });
+    check("prompts: the eye break countdown finishes", true);
+    await page.waitForSelector("#prompt-card.show[data-prompt=move]", { timeout: 30000 });
+    const move = await page.evaluate(() => ({
+      text: document.getElementById("prompt-text").textContent,
+      breathe: !document.getElementById("prompt-action").hidden,
+      shown: window.__shown.map((x) => x.id),
+    }));
+    check("prompts: the move break follows, one at a time, with a Breathe with me choice",
+      /stand up and move/.test(move.text) && move.breathe && move.shown.join() === "eye,move", move);
+    await page.click("#prompt-done");
+    const gaps = await page.evaluate(() => window.__shown.slice(1).map((x, i) => x.t - window.__shown[i].t));
+    check("prompts: at least 10 prompt minutes (1 s here) between prompts",
+      gaps.every((g) => g >= 800) && (await page.evaluate(() => window.__overlap.length)) === 0, { gaps });
+    // Paused: nothing shows, however much prompt time passes.
+    await page.click("#pause");
+    const beforePause = (await shownIds()).length;
+    await page.waitForTimeout(3000);
+    check("prompts: none while paused",
+      (await shownIds()).length === beforePause
+      && await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")));
+    await page.click("#pause");
+    // Silent test: nothing shows either.
+    await page.click("#test-start");
+    const beforeTest = (await shownIds()).length;
+    await page.waitForTimeout(3000);
+    check("prompts: none during a silent test",
+      (await shownIds()).length === beforeTest
+      && await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")));
+    await page.click("#test-start");
+    // Breaks & prompts panel toggles persist.
+    await page.uncheck("#eye-breaks");
+    await page.selectOption("#move-minutes", "45");
+    await page.check("#breathing-moments");
+    await page.check("#breathe-cues");
+    await page.reload();
+    const panel = await page.evaluate(() => ({
+      eye: document.getElementById("eye-breaks").checked,
+      move: document.getElementById("move-minutes").value,
+      moments: document.getElementById("breathing-moments").checked,
+      cues: document.getElementById("breathe-cues").checked,
+      stored: JSON.parse(localStorage.getItem("posture-guard:v1")),
+    }));
+    check("prompts: Breaks & prompts settings persist across a reload",
+      !panel.eye && panel.move === "45" && panel.moments && panel.cues
+      && panel.stored.eyeBreaks === false && panel.stored.moveBreakMinutes === 45, panel);
+    await page.screenshot({ path: path.join(outDir, "breaks-panel.png"), fullPage: true });
+    check("prompts: no page errors", errors.length === 0, errors);
     await page.close();
   }
 
