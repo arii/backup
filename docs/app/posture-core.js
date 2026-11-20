@@ -446,6 +446,33 @@ export class PostureStateMachine {
     return gap * (1 + (pc.jitter ?? 0) * JITTER_PATTERN[count % JITTER_PATTERN.length]);
   }
 
+  /** UI-only view of the timer the user is currently racing (no Python
+   *  counterpart; it reads state, never changes it). null when no timer runs.
+   *  kind: "recover"  holding good posture to clear a reminder (recovery_good_s)
+   *        "confirm"  holding good posture to reach GOOD (good_confirm_s)
+   *        "slipping" a slouch building toward the reminder (bad_sustain_s)
+   *        "praise"   good posture held toward the next praise
+   *  fraction 0..1 of the way there, remaining seconds left. */
+  holdProgress(now) {
+    const timer = (kind, start, need) => {
+      const elapsed = Math.max(0, now - start);
+      return { kind, fraction: need > 0 ? Math.min(1, elapsed / need) : 1, remaining: Math.max(0, need - elapsed) };
+    };
+    if (BAD_STATES.has(this.state)) {
+      return this.goodSince === null ? null : timer("recover", this.goodSince, this.t.recovery_good_s);
+    }
+    if (this.badSince !== null) return timer("slipping", this.badSince, this.t.bad_sustain_s);
+    if (this.state === State.GOOD) {
+      if (!this.positive.enabled || this.goodStateSince === null) return null;
+      const since = this.positiveCount && this.positiveAt !== null ? this.positiveAt : this.goodStateSince;
+      let due = since + this.positiveGap(this.positiveCount);
+      if (this.positiveAt !== null) due = Math.max(due, this.positiveAt + this.positiveGap(0));
+      return timer("praise", since, due - since);
+    }
+    if (this.goodSince !== null) return timer("confirm", this.goodSince, this.t.good_confirm_s);
+    return null;
+  }
+
   maybePositiveChime(now, smoothedGood = true) {
     if (this.goodStateSince === null) {
       this.goodStateSince = now;
@@ -788,7 +815,8 @@ export class PostureEngine {
       : null;
     const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
-    return { result, transition: tr, needle: this.needle.value, nudges, cue };
+    const hold = this.machine.holdProgress(now);
+    return { result, transition: tr, needle: this.needle.value, nudges, cue, hold };
   }
 
   /** Resume after a user pause: start fresh as if the person just sat down

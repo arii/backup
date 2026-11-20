@@ -49,6 +49,12 @@
   .fix.ok .fix-title { color: var(--good); }
   .fix .fix-how { color: var(--text); font-size: 14px; margin-top: 2px; }
   .fix .fix-how:empty { display: none; }
+  /* Fill-on-hold bar: sweeps left to right while a posture is held. */
+  .hold { position: relative; overflow: hidden; height: 30px; margin-top: 8px; border-radius: 6px; background: #111419; border: 1px solid var(--line); }
+  .hold.idle { display: none; }
+  .hold-fill { position: absolute; inset: 0 auto 0 0; width: 0; opacity: 0.9; transition: width 0.1s linear; background: var(--good); }
+  .hold.warn .hold-fill { background: var(--warn); }
+  .hold-text { position: relative; z-index: 1; display: block; padding: 0 10px; line-height: 28px; font-size: 13px; font-weight: 600; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
   button { padding: 9px 14px; border: 0; border-radius: 6px; background: var(--good); color: #0b2412; font-weight: 600; font-size: 14px; cursor: pointer; }
   button.secondary { background: #3a4250; color: var(--text); }
   button:disabled { opacity: 0.5; cursor: default; }
@@ -134,6 +140,10 @@
       <div class="fix" id="fix-box" aria-live="polite">
         <div class="fix-title" id="fix-title">What to fix shows up here</div>
         <div class="fix-how" id="fix-how"></div>
+        <div class="hold idle" id="hold-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="hold-fill" id="hold-fill"></div>
+          <span class="hold-text" id="hold-text"></span>
+        </div>
       </div>
       <div class="tiles" style="margin-top:8px">
         <div class="tile" id="t-head_forward"><div class="label">Head forward</div><div class="value" id="m-head_forward_deg">-</div></div>
