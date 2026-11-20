@@ -13,8 +13,10 @@
 //    the real tasks-vision bundle, WASM and pose model load from the CDN and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
-// 4. Webcam mode in a browser with WebGL off (--disable-3d-apis): the app must
-//    explain how to turn it on, not ask for the camera, and not throw.
+// 4. Webcam mode with WebGL blocked on every canvas type: the app must explain
+//    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
+//    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
+//    runs on it.)
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
@@ -127,8 +129,19 @@ try {
     });
     try {
       const { page, errors } = await newPage(noGL);
+      await page.addInitScript(() => {
+        const kinds = [HTMLCanvasElement, typeof OffscreenCanvas !== "undefined" ? OffscreenCanvas : null];
+        for (const C of kinds.filter(Boolean)) {
+          const orig = C.prototype.getContext;
+          C.prototype.getContext = function (type, ...rest) {
+            return /webgl/i.test(type) ? null : orig.call(this, type, ...rest);
+          };
+        }
+      });
       await page.goto(`${base}app/${bust}`);
-      const gl = await page.evaluate(() => Boolean(document.createElement("canvas").getContext("webgl")));
+      const gl = await page.evaluate(() => Boolean(
+        document.createElement("canvas").getContext("webgl") ||
+        (typeof OffscreenCanvas !== "undefined" && new OffscreenCanvas(1, 1).getContext("webgl2"))));
       await page.click("#start-camera");
       await page.waitForTimeout(1500);
       const s = await page.evaluate(() => ({
