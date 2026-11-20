@@ -36,9 +36,27 @@ function check(name, ok, detail) {
   if (!ok) failed = true;
 }
 
-async function newPage(browser) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+// The first-run walkthrough hides the Start buttons until the safety notice is
+// acknowledged. Every check except the first-run one pre-acknowledges it.
+// Keep these in step with ONBOARDING_VERSION and ACK_VERSION in docs/app/onboarding.js.
+const ONBOARDED = 1;
+const ACKED = 1;
+
+async function newPage(browser, { fresh = false, viewport = { width: 1280, height: 900 } } = {}) {
+  const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
+  if (!fresh) {
+    await context.addInitScript(([onboarded, ackVersion]) => {
+      try {
+        if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
+        sessionStorage.setItem("pg-e2e-acked", "1");
+        const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+        s.onboarded = Math.max(s.onboarded || 0, onboarded);
+        s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
+        localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+      } catch { /* storage unavailable */ }
+    }, [ONBOARDED, ACKED]);
+  }
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -92,6 +110,154 @@ try {
     await page.screenshot({ path: path.join(outDir, "demo-slouch.png") });
     check("demo has no errors", errors.length === 0, errors);
     report.demo = { early, slouch };
+    await page.close();
+  }
+
+  // 2a. First run: a fresh profile sees the walkthrough and safety notice, and
+  // the Start buttons only work after "I understand". Help replays it.
+  {
+    const { page, errors } = await newPage(browser, { fresh: true });
+    await page.goto(`${base}app/${bust}`);
+    const first = await page.evaluate(() => ({
+      card: !document.getElementById("onboarding").hidden,
+      title: document.getElementById("ob-title").textContent,
+      demoVisible: document.getElementById("start-demo").offsetParent !== null,
+      footer: document.getElementById("safety-footer").textContent,
+    }));
+    check("first run: onboarding card shows and the Start buttons are hidden",
+      first.card && /How it works/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer), first);
+    await page.screenshot({ path: path.join(outDir, "onboarding-step1.png") });
+    await page.click("#ob-next");
+    await page.click("#ob-next");
+    const safety = await page.evaluate(() => ({
+      title: document.getElementById("ob-title").textContent,
+      text: document.getElementById("ob-body").textContent,
+      ack: !document.getElementById("ob-ack").hidden,
+    }));
+    check("first run: step 3 is the safety notice with an acknowledgement button",
+      safety.ack && /medical advice/.test(safety.text) && /rigid posture/.test(safety.text) && /numbness/.test(safety.text), safety);
+    await page.screenshot({ path: path.join(outDir, "onboarding-step3.png") });
+    await page.click("#ob-ack");
+    const acked = await page.evaluate(() => ({
+      stored: JSON.parse(localStorage.getItem("posture-guard:v1")),
+      demoVisible: document.getElementById("start-demo").offsetParent !== null,
+      cardHidden: document.getElementById("onboarding").hidden,
+    }));
+    check("first run: acknowledging stores the versions and shows the Start buttons",
+      acked.stored.ackVersion === ACKED && acked.stored.onboarded === ONBOARDED && acked.demoVisible && acked.cardHidden, acked);
+    await page.reload();
+    const again = await page.evaluate(() => ({
+      cardHidden: document.getElementById("onboarding").hidden,
+      demoVisible: document.getElementById("start-demo").offsetParent !== null,
+    }));
+    check("first run: the acknowledgement persists across a reload", again.cardHidden && again.demoVisible, again);
+    await page.click("#help-btn");
+    const help = await page.evaluate(() => ({
+      open: document.getElementById("help-dialog").open,
+      text: document.getElementById("help-body").textContent,
+    }));
+    check("help: the button reopens the walkthrough with the safety notice",
+      help.open && /How it works/.test(help.text) && /not a medical device/.test(help.text), { open: help.open });
+    await page.screenshot({ path: path.join(outDir, "help-dialog.png") });
+    await page.keyboard.press("Escape");
+    await page.click("#start-demo");
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, { timeout: 15000 });
+    check("first run: #start-demo works after acknowledging", true);
+    await page.click("#safety-link");
+    check("safety notice: the footer link opens the full notice",
+      await page.evaluate(() => document.getElementById("safety-dialog").open && /as-is/.test(document.getElementById("safety-list").textContent)));
+    await page.keyboard.press("Escape");
+    await page.click("#progress-export", { trial: true });
+    await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
+    check("first run: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 2c. Practice mode stays silent
+  // and records nothing, progress panel reads store.days, export and delete.
+  {
+    const { page, errors } = await newPage(browser, { viewport: { width: 375, height: 800 } });
+    await page.addInitScript(() => {
+      const realNow = performance.now.bind(performance);
+      const t0 = realNow();
+      performance.now = () => t0 + (realNow() - t0) * 8;
+      window.__spoken = [];
+      document.addEventListener("pg:speak", (e) => window.__spoken.push(e.detail));
+      const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+      if (!sessionStorage.getItem("pg-e2e-seeded")) {
+        sessionStorage.setItem("pg-e2e-seeded", "1");
+        const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+        s.days = { [day(1)]: { good: 1200, bad: 400 }, [day(2)]: { good: 900, bad: 900 } };
+        s.tests = [{ at: new Date().toISOString(), minutes: 10, good: 480, bad: 120 }];
+        localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+      }
+    });
+    await page.goto(`${base}app/${bust}`);
+    const prog = await page.evaluate(() => ({
+      rows: document.querySelectorAll("#progress-days .day-row").length,
+      text: document.getElementById("progress-days").textContent,
+      tests: document.getElementById("progress-tests").textContent,
+      suggest: document.getElementById("progress-suggest").textContent,
+      overflow: document.documentElement.scrollWidth > window.innerWidth,
+    }));
+    check("progress: 7 days from store.days, test trend, and a light-coaching suggestion",
+      prog.rows === 7 && /75%/.test(prog.text) && /50%/.test(prog.text) && /80%/.test(prog.tests) && /light coaching/.test(prog.suggest), prog);
+    check("375 px: no horizontal overflow on the start screen", !prog.overflow, prog);
+    await page.screenshot({ path: path.join(outDir, "app-375-start.png"), fullPage: true });
+    await page.click("#start-demo");
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, { timeout: 15000 });
+    const before = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days));
+    await page.click("#help-btn");
+    await page.click("#help-practice");
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "practice", null, { timeout: 5000 }).catch(() => {});
+    const practice = await page.evaluate(() => ({
+      on: document.body.classList.contains("practicing"),
+      badge: document.getElementById("state-badge").textContent,
+      step: document.getElementById("practice-text").textContent,
+    }));
+    check("practice: Learn the cues starts a silent practice", practice.on && practice.badge === "practice", practice);
+    await page.click("#practice-next");
+    await page.waitForTimeout(300);
+    const focus = await page.evaluate(() => document.getElementById("t-head_forward").classList.contains("focus"));
+    check("practice: the step highlights the matching tile", focus);
+    await page.waitForTimeout(3000); // sim 24 s: the demo slouches meanwhile, yet nothing may fire
+    const quiet = await page.evaluate((b) => ({
+      spoken: window.__spoken.length,
+      reminders: document.getElementById("reminder-count").textContent,
+      daysSame: JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days) === b,
+    }), before);
+    check("practice: no speech, no reminders, nothing recorded",
+      quiet.spoken === 0 && quiet.reminders === "0" && quiet.daysSame, quiet);
+    await page.screenshot({ path: path.join(outDir, "app-375-practice.png"), fullPage: true });
+    await page.click("#practice-stop");
+    await page.waitForFunction(() => !document.body.classList.contains("practicing"));
+    // Export and delete.
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("#progress-export")]);
+    const exported = JSON.parse(await (await import("node:fs")).promises.readFile(await download.path(), "utf8"));
+    check("progress: export is whitelisted JSON", exported.schema === 1 && !!exported.days && !("calibration" in exported), Object.keys(exported));
+    page.once("dialog", (d) => d.accept());
+    await page.click("#progress-delete");
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(500);
+    const gone = await page.evaluate(() => ({
+      stored: localStorage.getItem("posture-guard:v1"),
+      card: !document.getElementById("onboarding").hidden,
+    }));
+    check("progress: delete clears the stored data and shows onboarding again", gone.card && !(gone.stored || "").includes("days"), gone);
+    check("progress/practice: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 2d. Not working?: the panel waits for tracking, then reports it (faults are unit-tested).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(`${base}app/${bust}`);
+    check("not working: the panel invites you to start before tracking", /Start the camera/.test(await page.textContent("#setup-status")));
+    await page.click("#start-demo");
+    await page.waitForFunction(() => /looks good/.test(document.getElementById("setup-status").textContent), null, { timeout: 20000 });
+    check("not working: the demo reports that tracking looks good", true);
+    await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
+    check("not working: no page errors", errors.length === 0, errors);
     await page.close();
   }
 
@@ -164,7 +330,7 @@ try {
     await page.waitForFunction(() => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent), null, { timeout: 8000 }).catch(() => {});
     const breathOut = await page.evaluate(() => ({
       status: document.getElementById("relax-status").textContent,
-      lines: window.__spoken.filter((x) => /breath|shoulders/i.test(x.text)).map((x) => `${x.engine}: ${x.text}`),
+      lines: window.__spoken.filter((x) => /breath|shoulders|relaxed/i.test(x.text)).map((x) => `${x.engine}: ${x.text}`),
     }));
     check("breath check: prompts in, out, then gives a verdict with the recorded voice",
       /Relaxed and stacked/.test(breathOut.status) && breathOut.lines.length >= 3 && breathOut.lines.every((l) => l.startsWith("kokoro")), breathOut);

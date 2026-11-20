@@ -32,6 +32,16 @@ async function record(name, args, script) {
     recordVideo: { dir: rawDir, size: SIZE },
     permissions: ["camera"],
   });
+  // Skip the first-run walkthrough. Keep in step with ONBOARDING_VERSION and
+  // ACK_VERSION in docs/app/onboarding.js.
+  await context.addInitScript(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+      s.onboarded = Math.max(s.onboarded || 0, 1);
+      s.ackVersion = Math.max(s.ackVersion || 0, 1);
+      localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+    } catch { /* storage unavailable */ }
+  });
   const page = await context.newPage();
   const t0 = Date.now();
   const now = () => Math.round((Date.now() - t0) / 100) / 10; // seconds into the clip
