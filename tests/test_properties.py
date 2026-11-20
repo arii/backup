@@ -28,7 +28,7 @@ import math
 from dataclasses import replace
 
 import numpy as np
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from conftest import make_pose, mirror_x
@@ -377,6 +377,13 @@ def test_p7_cue_is_mirror_invariant_and_only_names_metrics_past_their_band(delta
     base = make_pose()
     pairs = zip(TRACKED, deltas, strict=True)
     pose = pose_from([(base[i].x + dx, base[i].y + dy) for i, (dx, dy) in pairs])
+    # Head tilt is an atan2 over the ear vector. With the ears (nearly) coincident the vector is
+    # float noise, so its direction flips under the 1 - x mirror (0 vs 180 deg). That is not a
+    # pose a camera can produce, so require a real ear separation.
+    ear_gap = math.hypot(
+        pose[RIGHT_EAR].x - pose[LEFT_EAR].x, pose[RIGHT_EAR].y - pose[LEFT_EAR].y
+    )
+    assume(ear_gap > 1e-3)
     mirrored = mirror_x(pose)
     a = score_pose(pose, CFG)
     b = score_pose(mirrored, CFG)

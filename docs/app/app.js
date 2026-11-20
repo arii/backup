@@ -11,6 +11,7 @@ import {
 } from "./posture-core.js";
 import { DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
 import {
   DIAGNOSIS_TEXT, Diagnosis, markOnboarded, needsAckOnly, ONBOARDING_STEPS, PRACTICE_STEPS,
   RELAX_SAFETY, SAFETY_POINTS, SAFETY_SHORT, SetupCheck, shouldShowOnboarding,
@@ -729,11 +730,12 @@ const MINI_VIEWS = ["practice", "setup"].map((pre) => {
 });
 
 function renderMiniViews(landmarks, color, needle) {
+  const open = { practice: !!practice, setup: $("setup-panel").open };
+  const draw = new Set(miniViewsToDraw(MINI_VIEWS.map((m) => m.pre), open, needle));
   for (const m of MINI_VIEWS) {
-    const visible = m.pre === "practice" ? !!practice : $("setup-panel").open;
-    if (!visible || needle === null) continue;
-    drawSkeleton(landmarks, color, m.cv, m.c, 0.6);
-    m.rotor.setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+    if (!draw.has(m.pre)) continue;
+    drawSkeleton(landmarks, color, m.cv, m.c, MINI_SCALE);
+    m.rotor.setAttribute("transform", needleTransform(needle));
   }
 }
 
@@ -761,7 +763,7 @@ function render(out, landmarks) {
     el.classList.toggle("over", v !== null && Math.abs(v) > cfg[key]);
   }
   if (needle !== null) {
-    $("needle-rotor").setAttribute("transform", `rotate(${((needle + 1) * 90).toFixed(1)} 100 100)`);
+    $("needle-rotor").setAttribute("transform", needleTransform(needle));
     // The threshold needle averages all metrics, so a single-metric slouch
     // sits mid-dial: the label follows the state machine, the needle shows how far.
     const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
