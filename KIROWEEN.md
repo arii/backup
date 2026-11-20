@@ -135,6 +135,11 @@ What the Kiro phase changed (PRs #19 onward):
 
 ## Known limitations
 
+- **Not medical advice.** Posture Guard is a wellness tool, not a medical device. It
+  tells users not to hold a rigid posture and to stop and see a clinician for pain,
+  numbness or dizziness. The wording is a draft that a lawyer should review before any
+  wider launch.
+
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.

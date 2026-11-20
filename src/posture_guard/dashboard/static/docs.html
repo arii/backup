@@ -73,6 +73,18 @@
   <h2>5. Roadmap: embedded Linux</h2>
   <p>The long-term goal is to run Posture Guard on small embedded Linux hardware (a Pi-class board beside the desk) rather than a full desktop. This is intent, not something we've tested on target hardware yet. What already helps: the whole stack is CPU-only with no GPU dependency, the footprint is a handful of lightweight Python processes, and the system degrades gracefully (trusted metrics only, honest UNRELIABLE status) instead of failing hard. What needs work: packaging for a minimal OS image, headless operation without a desktop audio session, and a compute assessment to confirm the pose model's frame rate fits the board's budget.</p>
 
+  <h2>6. Safety notice</h2>
+  <p>This wording is a draft and has not been reviewed by a lawyer. It is not legal advice.</p>
+  <ul>
+    <li>Posture Guard is a wellness tool. It is not medical advice and not a medical device, and it does not diagnose, treat or prevent any condition.</li>
+    <li>Do not hold a rigid posture. Relax your shoulders and change position often. Reminders are not a substitute for regular movement breaks.</li>
+    <li>Stop and see a qualified clinician if you feel pain, numbness, tingling or dizziness, or if pain persists.</li>
+    <li>If you have a spine, nerve, neuromuscular or other medical condition, are pregnant, or are recovering from an injury, check with a professional first.</li>
+    <li>Webcam estimates are approximate. Lighting, camera angle, clothing and body shape change the result. &ldquo;Good&rdquo; means close to your own calibrated baseline.</li>
+    <li>Your video and body landmarks are processed on your machine and are not uploaded. Settings and daily totals are stored locally. The browser version loads its pose model and scripts from a CDN.</li>
+    <li>The software is provided as-is, without warranty, under the MIT License.</li>
+  </ul>
+
   <a class="back" href="/">&larr; Back to the dashboard</a>
 </main>
 </body>

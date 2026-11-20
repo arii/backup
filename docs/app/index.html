@@ -11,6 +11,7 @@
     --muted: #8b95a3; --good: #4cc36a; --warn: #ffb340; --bad: #ff5c5c; --slate: #8b95a3;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   a { color: var(--good); }
   header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--line); }
@@ -31,7 +32,7 @@
   .stat { color: var(--muted); font-size: 13px; }
   .stat b { color: var(--text); }
   main { display: grid; gap: 16px; padding: 16px 20px; grid-template-columns: minmax(320px, 3fr) minmax(280px, 2fr); max-width: 1280px; margin: 0 auto; }
-  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 820px) { main { grid-template-columns: minmax(0, 1fr); } }
   .stage { position: relative; background: #000; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; aspect-ratio: 4 / 3; }
   .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
   .stage .overlay-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; background: rgba(20, 23, 28, 0.92); }
@@ -85,6 +86,44 @@
   .sound-row input[type=file] { font-size: 12px; color: var(--muted); }
   .score-bar { height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
   .score-bar div { height: 100%; width: 0; background: var(--good); transition: width 0.4s; }
+  button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid #9ec5ff; outline-offset: 2px; }
+  .badge.practice { background: #2c3a52; color: #b9cdf0; }
+  .stage .overlay-msg { overflow-y: auto; justify-content: safe center; }
+  #onboarding { text-align: left; max-width: 520px; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+  #onboarding h3, dialog h3 { margin: 0 0 6px; font-size: 16px; }
+  #onboarding ul, dialog ul, #setup-panel ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+  #onboarding li, dialog li, #setup-panel li { margin: 3px 0; }
+  #onboarding ul { font-size: 13px; }
+  .stage { min-height: 460px; }
+  .step-count { color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; max-width: min(640px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 16px 18px; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+  details.panel summary { cursor: pointer; font-weight: 600; }
+  details.panel[open] summary { margin-bottom: 8px; }
+  #setup-status { font-weight: 600; }
+  #setup-status.fault { color: var(--warn); }
+  #setup-status.ok { color: var(--good); }
+  .day-row { display: grid; grid-template-columns: 44px 1fr minmax(96px, auto); gap: 8px; align-items: center; margin-top: 6px; font-size: 13px; }
+  .day-row .score-bar { margin-top: 0; }
+  .day-row .nodata { color: var(--muted); }
+  #practice-panel { display: none; border-color: #6b8fd6; }
+  body.practicing #practice-panel { display: block; }
+  #reminder-note { display: none; color: var(--warn); font-size: 13px; margin-top: 6px; }
+  #reminder-note.show { display: block; }
+  .safety-line { margin-bottom: 8px; }
+  .modes select { padding: 5px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+  @media (max-width: 600px) {
+    .stage { aspect-ratio: auto; min-height: 560px; }
+    .stage:has(#onboarding:not([hidden])) { min-height: 860px; }
+    header { padding: 10px 12px; gap: 8px; }
+    main { padding: 12px; }
+    .day-row { grid-template-columns: 40px 1fr 88px; }
+    .sound-row { grid-template-columns: 72px minmax(0, 1fr) auto; }
+    .sound-row input[type=file] { min-width: 0; max-width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
   footer { max-width: 1280px; margin: 0 auto; padding: 0 20px 40px; color: var(--muted); font-size: 13px; }
 </style>
 </head>
@@ -95,6 +134,7 @@
   <span class="stat"><b id="fps">-</b> fps</span>
   <span class="stat">source <b id="source">-</b></span>
   <button class="secondary" id="pause" disabled title="Pause tracking and all sounds (shortcut: P)">Pause</button>
+  <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
   <span class="stat" style="margin-left:auto"><a href="../">About</a> &middot; <a href="https://github.com/arii/posture-guard">GitHub</a> &middot; <a href="https://github.com/arii/posture-guard/issues/new" id="report-bug" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue with browser and app details (no video or images)">Report a bug</a></span>
 </header>
 <main>
@@ -105,11 +145,21 @@
       <div id="banner">Reminder</div>
       <div id="demo-note" class="note" style="position:absolute;left:12px;bottom:10px;display:none">Demo: 20 s good posture, then 20 s slouching, repeating</div>
       <div class="overlay-msg" id="start-overlay">
-        <h2>Posture to die for.</h2>
-        <p style="color:var(--warn);font-weight:600">Leave this tab open. Slouch, and it will haunt you.</p>
-        <p>Your webcam, the pose model and the posture logic all run in this tab. No video or
+        <h2 id="start-title">Posture to die for.</h2>
+        <p id="start-tagline" style="color:var(--warn);font-weight:600">Leave this tab open. Slouch, and it will haunt you.</p>
+        <p id="start-intro">Your webcam, the pose model and the posture logic all run in this tab. No video or
           landmarks leave your computer. Sit facing the camera with your head and shoulders in view.</p>
-        <div class="btn-row" style="justify-content:center">
+        <section id="onboarding" aria-labelledby="ob-title" hidden>
+          <div class="step-count" id="ob-count"></div>
+          <h3 id="ob-title" tabindex="-1"></h3>
+          <ul id="ob-body" aria-live="polite"></ul>
+          <div class="btn-row">
+            <button class="secondary" id="ob-back">Back</button>
+            <button id="ob-next">Next</button>
+            <button id="ob-ack" hidden>I understand</button>
+          </div>
+        </section>
+        <div class="btn-row" id="start-actions" style="justify-content:center" hidden>
           <button id="start-camera">Start with webcam</button>
           <button id="start-demo" class="secondary">Try the demo (no camera)</button>
         </div>
@@ -133,6 +183,17 @@
       <div class="score-bar"><div id="good-bar"></div></div>
       <div class="note">Today: <span id="today"></span></div>
     </div>
+    <div class="panel" id="practice-panel" aria-labelledby="practice-title">
+      <h2 id="practice-title">Learn the cues</h2>
+      <div class="step-count" id="practice-count"></div>
+      <div id="practice-text" style="font-weight:600;font-size:16px" aria-live="polite"></div>
+      <div class="note" id="practice-live" aria-live="polite"></div>
+      <div class="note">Practice is silent: no sounds, no reminders, and nothing is recorded.</div>
+      <div class="btn-row">
+        <button class="secondary" id="practice-next">Next</button>
+        <button class="secondary" id="practice-stop">Stop practice</button>
+      </div>
+    </div>
     <div class="panel">
       <h2>Is it working? Test me</h2>
       <div class="note" style="margin-top:0">A silent check: no sounds, banners, needle or hints, so it measures your habit, not the coaching.
@@ -145,9 +206,40 @@
       <div class="score-bar" id="test-progress-wrap" style="display:none"><div id="test-progress" style="background:#6b8fd6"></div></div>
       <div id="test-compare" class="note"></div>
     </div>
+    <div class="panel" id="progress-panel" aria-labelledby="progress-title">
+      <h2 id="progress-title">Your progress</h2>
+      <div id="progress-empty" class="note" style="margin-top:0"></div>
+      <div id="progress-days" role="list" aria-label="Good posture by day, last 7 days"></div>
+      <div class="note" id="progress-total"></div>
+      <div class="note" id="progress-tests"></div>
+      <div class="note" id="progress-suggest" aria-live="polite"></div>
+      <div class="btn-row">
+        <button class="secondary" id="progress-light" hidden>Switch to light coaching</button>
+        <button class="secondary" id="progress-export">Export JSON</button>
+        <button class="secondary" id="progress-delete">Delete my data</button>
+      </div>
+      <div class="note">Stored only in this browser. Days are counted in UTC. A missed day is just a day with no data.</div>
+      <div class="note" id="progress-msg" aria-live="polite"></div>
+    </div>
   </div>
   <div>
     <div id="warnings"></div>
+    <details class="panel" id="setup-panel">
+      <summary>Not working?</summary>
+      <div id="setup-status" aria-live="polite">Start the camera or the demo and I will check your setup.</div>
+      <ul id="setup-fixes"></ul>
+      <ul>
+        <li>Camera at eye level, about an arm&rsquo;s length away, head and shoulders in frame.</li>
+        <li>Light in front of you, not behind you. A plain background helps.</li>
+        <li>Calibrate to your desk below if &ldquo;good&rdquo; and &ldquo;slouch&rdquo; look wrong for you.</li>
+        <li>Pose tracking needs WebGL. See the steps on the start screen if the webcam button is disabled.</li>
+      </ul>
+      <div class="btn-row">
+        <button class="secondary" id="practice-start">Learn the cues</button>
+        <a class="report-bug-link" href="https://github.com/arii/posture-guard/issues/new" target="_blank" rel="noopener" style="align-self:center">Report a bug</a>
+      </div>
+      <div class="note" id="practice-msg" aria-live="polite"></div>
+    </details>
     <div class="panel test-placeholder">
       <h2>Silent test running</h2>
       Posture feedback is hidden until the test ends, so the score shows your own habit.
@@ -180,7 +272,8 @@
     <div class="panel coaching">
       <h2>Relax, don&rsquo;t brace</h2>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
-        to look upright overworks your upper back. Lift your chest a little and let your shoulders hang.</div>
+        to look upright overworks your upper back. Lift your chest a little and let your shoulders hang.
+        <span id="relax-safety"></span></div>
       <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
       <div class="btn-row">
         <button id="breath-check" class="secondary" title="Breathe in: if your shoulders rise, you are bracing">Breath check</button>
@@ -205,6 +298,13 @@
         <label><input type="radio" name="mode" value="chime_only"> Chime only</label>
         <label><input type="radio" name="mode" value="silent"> Silent</label>
       </div>
+      <label class="note" for="coaching-level" style="display:block;margin-top:6px">Coaching level</label>
+      <div class="modes"><select id="coaching-level" aria-describedby="coaching-note">
+        <option value="standard">Standard: chime, then voice</option>
+        <option value="light">Light: fewer reminders, praise only at milestones</option>
+      </select></div>
+      <div class="note" id="coaching-note">Light coaching gives your own habit room to take over. Check with &ldquo;Test me&rdquo; whether it sticks.</div>
+      <div class="note" id="reminder-note" role="status">Taking a break from reminders: that is a lot in an hour. Tracking continues.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="specific-cues" checked> Say what to fix (&ldquo;Head forward. Tuck your chin&hellip;&rdquo;)</label>
       <label class="note" for="voice-text">Spoken prompt when there is nothing specific to say</label>
       <input type="text" id="voice-text" maxlength="120" value="Please fix your posture">
@@ -218,7 +318,24 @@
     </div>
   </div>
 </main>
+<dialog id="help-dialog" aria-labelledby="help-title">
+  <h2 id="help-title" style="margin-top:0">Help</h2>
+  <div id="help-body"></div>
+  <div class="btn-row">
+    <button id="help-practice" class="secondary">Learn the cues</button>
+    <button id="help-notworking" class="secondary">Not working?</button>
+    <button id="help-close">Close</button>
+  </div>
+  <div class="note" id="help-msg" aria-live="polite"></div>
+</dialog>
+<dialog id="safety-dialog" aria-labelledby="safety-title">
+  <h2 id="safety-title" style="margin-top:0">Safety notice</h2>
+  <ul id="safety-list"></ul>
+  <div class="btn-row"><button id="safety-close">Close</button></div>
+</dialog>
 <footer>
+  <div class="safety-line" id="safety-footer"></div>
+  <a href="#" id="safety-link" role="button">Safety notice</a> &middot;
   Runs on MediaPipe Pose Landmarker (loaded from a CDN) and the same scoring and state machine as the
   <a href="https://github.com/arii/posture-guard">Python app</a>, ported to <code>posture-core.js</code> and checked frame-by-frame against it.
   Keep this tab open in the background: the tracker slows to about 5 fps when hidden and keeps reminding you.

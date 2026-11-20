@@ -9,7 +9,14 @@ and it chimes. Keep slouching, and it tells you out loud exactly what is wrong a
 how to fix it. Everything runs on your computer; no video or landmark leaves it.
 
 **Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
-you have no camera).
+you have no camera). The first visit shows a short walkthrough (camera placement,
+what you will see and hear, and a safety notice). The *Help* button replays it, and
+*Not working?* diagnoses framing, lighting and speed problems.
+
+> **Safety.** Posture Guard is a wellness tool, not medical advice or a medical
+> device. Do not hold a rigid posture. Stop and see a clinician if you have pain,
+> numbness or dizziness. Webcam estimates are approximate. Provided as-is under the
+> MIT License. See [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/design.md).
 
 There is also a Linux desktop version (Python, local web dashboard) with the same
 behavior, for running offline or on a machine of your own.
