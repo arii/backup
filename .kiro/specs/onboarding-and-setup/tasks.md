@@ -1,6 +1,6 @@
 # Implementation Plan: Onboarding and Setup
 
-Checked items are implemented in FEAT-003 on branch `feat/onboarding-specs-feedback`.
+Checked items are built.
 Unchecked items are **spec only**.
 
 - [x] 1. `onboarding.js` pure module

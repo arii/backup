@@ -1,7 +1,7 @@
 # Design Document: Onboarding and Setup
 
 ## Modules
-- `docs/app/onboarding.js` (FEAT-003): pure, no DOM, injected time, unit-tested in
+- `docs/app/onboarding.js`: pure, no DOM, injected time, unit-tested in
   `tests/js/onboarding.test.mjs`. Same pattern as `relax.js`.
 - `docs/app/app.js`: wires the card, the Help button, the panel and practice mode, and
   owns `store`/`save()`.
@@ -41,7 +41,7 @@ step, not the whole walkthrough, when `onboarded` is current.
 | `ok` | `metricsPresent`, no fault, for `ok_s` | None. |
 
 The `too_close_or_far` message uses the live band from `DEFAULTS.scoring`, not a
-hard-coded number, so it follows `config.yaml`.
+hard-coded number, so it follows the defaults in `posture-core.js`.
 
 ## State machine of SetupCheck
 `candidate` diagnosis changes every frame. `since` resets when the candidate changes.

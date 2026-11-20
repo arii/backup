@@ -49,3 +49,52 @@ export function shareUrl(href) {
   u.hash = "";
   return u.href;
 }
+
+// -- Score card: a PNG drawn on a canvas from two numbers. It never contains a
+// camera frame, the skeleton or any other personal data. --
+
+export const CARD = Object.freeze({ width: 1200, height: 630, min_tracked_s: 60 });
+
+/** Card numbers from this session's seconds, or null when there is too little data to be honest. */
+export function scoreCardData({ good = 0, bad = 0, best = 0 } = {}) {
+  const g = Number.isFinite(good) && good > 0 ? good : 0;
+  const b = Number.isFinite(bad) && bad > 0 ? bad : 0;
+  if (g + b < CARD.min_tracked_s) return null;
+  const bestS = Number.isFinite(best) && best > 0 ? Math.min(best, g) : 0;
+  return {
+    pct: Math.round((100 * g) / (g + b)),
+    goodMin: Math.round(g / 60),
+    bestMin: Math.floor(bestS / 60),
+    bestSec: Math.floor(bestS % 60),
+  };
+}
+
+export const cardAltText = (d) =>
+  `BackUp score card: ${d.pct}% good posture this session, best streak ${d.bestMin} minutes ${d.bestSec} seconds.`;
+
+/** Draw the card on a 2D context (real or fake). */
+export function drawScoreCard(ctx, d, { width = CARD.width, height = CARD.height } = {}) {
+  ctx.fillStyle = "#0f1720";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "#4cc38a";
+  ctx.fillRect(0, 0, 16, height);
+  ctx.textBaseline = "alphabetic";
+  const font = (px, weight = "700") => { ctx.font = `${weight} ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`; };
+  ctx.fillStyle = "#e8eef5";
+  font(56);
+  ctx.fillText("BackUp", 80, 120);
+  font(32, "400");
+  ctx.fillStyle = "#9fb0c3";
+  ctx.fillText("Posture to Die For", 80, 168);
+  ctx.fillStyle = "#4cc38a";
+  font(240);
+  ctx.fillText(`${d.pct}%`, 80, 400);
+  ctx.fillStyle = "#e8eef5";
+  font(44, "400");
+  ctx.fillText("good posture this session", 80, 470);
+  ctx.fillStyle = "#9fb0c3";
+  font(34, "400");
+  ctx.fillText(`Best streak ${d.bestMin} min ${d.bestSec} s`, 80, 530);
+  font(28, "400");
+  ctx.fillText("Free, runs in your browser, nothing uploaded", 80, 585);
+}

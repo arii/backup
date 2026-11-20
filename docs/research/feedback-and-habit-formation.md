@@ -24,27 +24,27 @@ Fogg "Tiny Habits" book).
 
 ## Principles mapped to design decisions
 
-Status column: **shipped** = already in the app, **FEAT-003** = implemented in the
-same change set as the specs, **spec only** = designed but not built.
+Status column: **shipped** = in the app and covered by tests, **spec only** =
+designed but not built.
 
 | Principle | Evidence | What BackUp does | Status |
 |---|---|---|---|
-| Frequent feedback helps performance now but can hurt learning (guidance effect). Reduced feedback frequency improves retention. | Salmoni, Schmidt & Walter 1984; Winstein & Schmidt 1990 | Praise is faded: first praise at 15 s, then every 1 to 2 minutes. "Light" coaching level swaps voice for a chime on the first reminder of an episode and drops timed praise. It does not reduce the number of reminders. | shipped (faded praise), FEAT-003 (Light level) |
-| Measure learning with a no-feedback retention test, not with the coached score. | Salmoni et al. 1984; Winstein & Schmidt 1990 | Silent "Test me" stores a separate score in `store.tests`. Progress view compares it with coached time. | shipped (test), FEAT-003 (view) |
-| Feedback can backfire. Cues that point at the task help, cues that point at the self (judgement, shame) tend not to. | Kluger & DeNisi 1996 | Cues name the metric to change ("head forward, tuck your chin"), never the person. No shame wording, no streak-loss messages. | shipped (cues), FEAT-003 (rules written down) |
-| Autonomy support and positive feedback raise expectancies and improve learning. | Wulf & Lewthwaite 2016 | Spoken praise is opt-in. Coaching level, mode and mute are user choices. Calibration makes "good" relative to the user's own baseline. | shipped, FEAT-003 (level) |
+| Frequent feedback helps performance now but can hurt learning (guidance effect). Reduced feedback frequency improves retention. | Salmoni, Schmidt & Walter 1984; Winstein & Schmidt 1990 | Praise is faded: first praise at 15 s, then every 1 to 2 minutes. "Light" coaching level swaps voice for a chime on the first reminder of an episode and drops timed praise. It does not reduce the number of reminders. | shipped (faded praise, Light level) |
+| Measure learning with a no-feedback retention test, not with the coached score. | Salmoni et al. 1984; Winstein & Schmidt 1990 | Silent "Test me" stores a separate score in `store.tests`. Progress view compares it with coached time. | shipped (test and progress view) |
+| Feedback can backfire. Cues that point at the task help, cues that point at the self (judgement, shame) tend not to. | Kluger & DeNisi 1996 | Cues name the metric to change ("head forward, tuck your chin"), never the person. No shame wording, no streak-loss messages. | shipped |
+| Autonomy support and positive feedback raise expectancies and improve learning. | Wulf & Lewthwaite 2016 | Spoken praise is opt-in. Coaching level, mode and mute are user choices. Calibration makes "good" relative to the user's own baseline. | shipped |
 | Letting the learner decide when to get feedback works, particularly when they decide after the attempt. | Chiviacowsky & Wulf 2005 (and the Down syndrome replication, 2012) | User controls praise, mode and pause. "Test me" is user-initiated. | shipped |
 | Positive verbal feedback supports intrinsic motivation. Tangible, expected rewards undermine it. | Deci, Koestner & Ryan 1999 | Praise is verbal and tied to earned behaviour. No points, coins or prizes. Any later leaderboard must not hand out tangible rewards. | shipped, spec only (leaderboard) |
-| Support competence, autonomy and relatedness. | Ryan & Deci 2000 | Progress view shows personal improvement, not rank. Social features are opt-in. | FEAT-003 (view), spec only (social) |
-| Habits take weeks to months of consistent repetition (average about 66 days, wide range). A missed day does not erase progress. | Lally et al. 2010, as summarised by Gardner, Lally & Wardle 2012 | The progress view uses cumulative minutes and a 7-day window. No broken-streak messages. Copy says "keep going", not "streak lost". | FEAT-003 |
-| Gamification effects are mostly positive but context and user dependent. | Hamari, Koivisto & Sarsa 2014 | Light touch only: effort-based milestones, no competitive pressure by default. | FEAT-003 (milestones), spec only (leaderboard) |
+| Support competence, autonomy and relatedness. | Ryan & Deci 2000 | Progress view shows personal improvement, not rank. Social features are opt-in. | shipped (progress view), spec only (social) |
+| Habits take weeks to months of consistent repetition (average about 66 days, wide range). A missed day does not erase progress. | Lally et al. 2010, as summarised by Gardner, Lally & Wardle 2012 | The progress view uses cumulative minutes and a 7-day window. No broken-streak messages. Copy says "keep going", not "streak lost". | shipped |
+| Gamification effects are mostly positive but context and user dependent. | Hamari, Koivisto & Sarsa 2014 | Light touch only: effort-based milestones, no competitive pressure by default. | shipped (milestones), spec only (leaderboard) |
 | Wearable biofeedback can change sitting posture while it is worn. | Kuo et al. 2021 (21 healthy adults, 1 h typing task) | Real-time feedback is the core mechanism. The study does not show that the effect lasts after the device is removed. | shipped |
-| Too many alarms cause desensitisation. | Sendelbach & Funk 2013 (alarm fatigue, clinical setting) | Per-hour reminder cap with a visible "taking a break from reminders" note. Escalation: chime first, voice only after sustained slouch. | FEAT-003 |
-| Warning sounds can be designed to convey a chosen level of urgency. | Hellier & Edworthy 1999 (metadata only; title and topic) | Posture reminders are low urgency: moderate volume, short falling two-tone. Positive cue is a rising major arpeggio. | shipped (sounds), FEAT-003 (rules written down) |
-| Prompts work when behaviour is easy and a prompt arrives at a moment of ability. | Fogg 2009 (behavior model) | Prompts are brief and tell the user the one thing to change. First-run flow is three short steps. | FEAT-003 |
+| Too many alarms cause desensitisation. | Sendelbach & Funk 2013 (alarm fatigue, clinical setting) | Per-hour reminder cap with a visible "taking a break from reminders" note. Escalation: chime first, voice only after sustained slouch. | shipped |
+| Warning sounds can be designed to convey a chosen level of urgency. | Hellier & Edworthy 1999 | Posture reminders are low urgency: moderate volume, short falling two-tone. Positive cue is a rising major arpeggio. | shipped |
+| Prompts work when behaviour is easy and a prompt arrives at a moment of ability. | Fogg 2009 (behavior model) | Prompts are brief and tell the user the one thing to change. First-run flow is three short steps. | shipped |
 | Short breaks give small gains in vigor and fatigue. Longer breaks help more. | Albulescu et al. 2022 (meta-analysis, 22 samples, N = 2335) | Optional stand/move microbreak timer. | spec only |
 | 20-20-20 reminders reduced digital eye strain symptoms over two weeks, and the benefit faded one week after they stopped. | Talens-Estarelles et al. 2023 (29 symptomatic users) | Optional eye-break reminder. Copy makes no medical claim. | spec only |
-| "Perfect" upright posture is not shown to prevent pain. Variety of position and movement matter. | Slater et al. 2019 (viewpoint) | "Relax, don't brace" stance. Shoulder-rise monitor and breath check. Reminders to move, not to hold still. Disclaimer says so. | shipped (relax), FEAT-003 (notice) |
+| "Perfect" upright posture is not shown to prevent pain. Variety of position and movement matter. | Slater et al. 2019 (viewpoint) | "Relax, don't brace" stance. Shoulder-rise monitor and breath check. Reminders to move, not to hold still. Disclaimer says so. | shipped |
 | A Pose model cannot see the jaw. A Face Landmarker can output blendshape scores. | MediaPipe documentation (both pages) | Face tension is a gentle prompt, not a measurement. Needs a second model. | spec only |
 
 ## Design rules that follow
@@ -161,7 +161,9 @@ Verified (abstract or page text read):
     disease. Wording of the notice and the app's claims should stay inside that
     framing. Have counsel confirm.
 
-Metadata only (exists as cited; abstract not readable here):
+Metadata only (exists as cited). The publisher withholds the abstract, and a
+second lookup through Semantic Scholar returned none either. Items 19 and 20 were
+later verified against their PubMed abstracts and are marked as such:
 
 14. Lally, P., van Jaarsveld, C. H. M., Potts, H. W. W., & Wardle, J. (2010). How are
     habits formed: Modelling habit formation in the real world. *European Journal of
@@ -192,10 +194,17 @@ Metadata only (exists as cited; abstract not readable here):
     *AACN Advanced Critical Care*, 24(4), 378-386.
     [doi:10.4037/nci.0b013e3182a903f9](https://doi.org/10.4037/nci.0b013e3182a903f9).
     Clinical monitors, not posture apps. Used only for the general idea that
-    frequent alarms get ignored.
+    frequent alarms get ignored. **Verified** (PubMed 24153215 abstract read): 72% to
+    99% of clinical alarms are false, and the volume leads to desensitisation and
+    missed alarms.
 20. Hellier, E., & Edworthy, J. (1999). On using psychophysical techniques to achieve
     urgency mapping in auditory warnings. *Applied Ergonomics*, 30(2), 167-171.
     [doi:10.1016/s0003-6870(97)00013-6](https://doi.org/10.1016/s0003-6870(97)00013-6).
+    **Verified** (PubMed 10098809 abstract read): warnings should match perceived
+    urgency to the real urgency of the situation, and Stevens' power law relates
+    parameters such as pitch to perceived urgency.
 21. Fogg, B. J. (2009). A behavior model for persuasive design. *Proceedings of the
     4th International Conference on Persuasive Technology*.
-    [doi:10.1145/1541948.1541999](https://doi.org/10.1145/1541948.1541999).
+    [doi:10.1145/1541948.1541999](https://doi.org/10.1145/1541948.1541999). Confirmed to
+    exist with this title and venue (Semantic Scholar); the thesis is that behaviour
+    needs motivation, ability and a trigger together. Abstract not read.

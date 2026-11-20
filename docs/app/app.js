@@ -14,6 +14,7 @@ import {
   BREAK_LINES, BREATHE_LINES, DEFAULT_PROMPT, PRAISE, RECOVERY_PRAISE, RELAX_LINES, TEST_LINE, VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { createMoveNetDetector } from "./movenet-adapter.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
@@ -34,7 +35,7 @@ import {
 import {
   CONSENT_CHECKBOX, CONSENT_POINTS, CONSENT_TITLE, consentStatus, hasConsent, recordConsent, withdrawConsent,
 } from "./consent.js";
-import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl } from "./share.js";
+import { SHARE_TEXT, cardAltText, drawScoreCard, nativeSharePayload, scoreCardData, normalizeInstance, shareLinks, shareUrl } from "./share.js";
 import {
   SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, refundSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
 } from "./sponsor.js";
@@ -44,6 +45,8 @@ import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
 const MODEL_URL = `${TASKS_VISION}/pose_landmarker_lite.task`;
+// Fallback for browsers without WebGL: TF.js MoveNet on the WASM backend, fetched only when needed.
+const MOVENET_DIR = `${TASKS_VISION}/movenet`;
 const VISIBLE_FPS = 15; // detection rate while the tab is visible
 const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
 const DEMO_CYCLE_S = 20; // synthetic demo: 20 s good, 20 s slouch
@@ -144,9 +147,9 @@ function tones(freqs, seconds, harmonics = null) {
   if (harmonics) {
     const n = Math.max(...harmonics.map(([k]) => k)) + 1;
     const real = new Float32Array(n);
-    const imag = new Float32Array(n); // sine terms, as in audio.py
+    const imag = new Float32Array(n); // sine terms
     for (const [k, amp] of harmonics) imag[k] = amp;
-    wave = ac.createPeriodicWave(real, imag); // peak-normalized, like audio.py
+    wave = ac.createPeriodicWave(real, imag); // peak-normalized
   }
   let t = ac.currentTime + 0.02;
   freqs.forEach((f, i) => {
@@ -158,7 +161,7 @@ function tones(freqs, seconds, harmonics = null) {
     osc.frequency.value = f;
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur); // ~exp(-3t) decay like audio.py
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur); // ~exp(-3t) decay
     osc.connect(gain).connect(ac.destination);
     osc.start(t);
     osc.stop(t + dur + 0.02);
@@ -174,7 +177,7 @@ function playBuffer(buffer) {
   src.start();
 }
 
-// Same tones as audio.py: a falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
+// A falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
 // down, reedy odd harmonics) and a rising C-major arpeggio reward.
 const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
 // An uploaded sound wins, then the chosen pack (clean by default).
@@ -876,19 +879,54 @@ function renderShareLinks() {
   for (const [id, href] of Object.entries(links)) { const a = $(`share-${id}`); if (a) a.href = href; }
   $("share-mastodon").hidden = !links.mastodon;
 }
-async function openShare() {
+function openShare() {
   const url = shareUrl(location.href);
-  if (typeof navigator.share === "function") {
-    try { await navigator.share(nativeSharePayload(url)); return; } catch (e) { if (e && e.name === "AbortError") return; }
-  }
+  $("share-native").hidden = typeof navigator.share !== "function";
   $("share-link").value = url;
   $("share-text").textContent = SHARE_TEXT;
   $("share-msg").textContent = "";
+  $("share-card-wrap").hidden = true;
   renderShareLinks();
   $("share-dialog").showModal();
 }
 $("share-btn").addEventListener("click", openShare);
+$("share-native").addEventListener("click", async () => {
+  try { await navigator.share(nativeSharePayload(shareUrl(location.href))); } catch (e) {
+    if (!e || e.name !== "AbortError") $("share-msg").textContent = "The share menu was blocked. Use the links below.";
+  }
+});
 $("share-close").addEventListener("click", () => $("share-dialog").close());
+// The score card is drawn from this session's two numbers only. No video frame is read.
+let cardBlob = null;
+$("share-card-btn").addEventListener("click", () => {
+  const d = scoreCardData(session);
+  if (!d) { $("share-msg").textContent = "Track at least a minute of posture first, then your score card is ready."; return; }
+  const canvas = $("share-card");
+  drawScoreCard(canvas.getContext("2d"), d);
+  canvas.setAttribute("aria-label", cardAltText(d));
+  $("share-card-wrap").hidden = false;
+  $("share-msg").textContent = "";
+  cardBlob = null;
+  canvas.toBlob((b) => {
+    cardBlob = b;
+    const file = b && new File([b], "backup-score.png", { type: "image/png" });
+    $("share-card-share").hidden = !(file && navigator.canShare && navigator.canShare({ files: [file] }));
+  }, "image/png");
+});
+$("share-card-download").addEventListener("click", () => {
+  if (!cardBlob) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(cardBlob);
+  a.download = "backup-score.png";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$("share-card-share").addEventListener("click", async () => {
+  if (!cardBlob) return;
+  try {
+    await navigator.share({ files: [new File([cardBlob], "backup-score.png", { type: "image/png" })], text: SHARE_TEXT });
+  } catch (e) { if (!e || e.name !== "AbortError") $("share-msg").textContent = "Sharing the image was blocked. Use Download PNG instead."; }
+});
 $("share-instance").addEventListener("input", () => {
   renderShareLinks();
   const v = $("share-instance").value.trim();
@@ -1369,21 +1407,41 @@ function webglCanvas() {
   return null;
 }
 
-class NoWebGLError extends Error {}
-
 function showWebGLHelp(show) { $("webgl-help").classList.toggle("show", show); }
 
 const CAMERA_LABEL = $("start-camera").textContent;
-const NO_GL_LABEL = "Camera needs WebGL \u2013 see below";
 
-/** Reflect WebGL availability on the camera button. Returns true if usable. */
+/** Without WebGL the camera still works, through the slower MoveNet fallback; say so up front. */
 function applyWebGLState() {
   const ok = Boolean(webglCanvas());
-  const btn = $("start-camera");
-  btn.disabled = !ok;
-  btn.textContent = ok ? CAMERA_LABEL : NO_GL_LABEL;
+  $("start-camera").textContent = CAMERA_LABEL;
   showWebGLHelp(!ok);
   return ok;
+}
+
+/**
+ * Pose detector for browsers without WebGL: MoveNet Lightning on the TF.js
+ * WASM backend. The sync wrapper lives in movenet-adapter.js.
+ */
+let moveNetDetector = null; // TF.js detector, built once and reused across retries
+
+async function loadMoveNet() {
+  if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
+  const tfm = await import(`${MOVENET_DIR}/movenet_bundle.mjs`);
+  tfm.setWasmPaths({
+    "tfjs-backend-wasm.wasm": `${MOVENET_DIR}/tfjs-backend-wasm.wasm`,
+    "tfjs-backend-wasm-simd.wasm": `${MOVENET_DIR}/tfjs-backend-wasm-simd.wasm`,
+    "tfjs-backend-wasm-threaded-simd.wasm": `${MOVENET_DIR}/tfjs-backend-wasm-simd.wasm`,
+  });
+  if (!(await tfm.tf.setBackend("wasm"))) throw new Error("The WASM backend did not start");
+  await tfm.tf.ready();
+  const detector = await tfm.createDetector(tfm.SupportedModels.MoveNet, {
+    modelType: tfm.movenet.modelType.SINGLEPOSE_LIGHTNING,
+    modelUrl: `${MOVENET_DIR}/model.json`,
+    enableSmoothing: true,
+  });
+  moveNetDetector = detector;
+  return createMoveNetDetector(detector);
 }
 
 async function loadModel(canvas) {
@@ -1401,6 +1459,8 @@ async function loadModel(canvas) {
     return await PoseLandmarker.createFromOptions(fileset, options("CPU"));
   }
 }
+
+let lowAccuracy = false; // tracking runs on the MoveNet fallback
 
 function showError(message) {
   $("start-error").textContent = message;
@@ -1481,12 +1541,13 @@ function stopCamera(err) {
   const stream = video.srcObject;
   if (stream) stream.getTracks().forEach((t) => t.stop());
   video.srcObject = null;
-  const noGL = !webglCanvas();
-  showWebGLHelp(noGL);
-  showError(noGL ? "" : `Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
+  lowAccuracy = false;
+  $("lowpower-note").style.display = "none";
+  showWebGLHelp(!webglCanvas());
+  showError(`Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
   $("start-status").textContent = "";
   $("start-overlay").style.display = "";
-  $("start-demo").disabled = false;
+  $("start-camera").disabled = $("start-demo").disabled = false;
   applyWebGLState();
 }
 
@@ -1496,6 +1557,7 @@ function begin(source) {
   $("source").textContent = source;
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
+  $("lowpower-note").style.display = lowAccuracy ? "block" : "none";
   restoreSound("bad"); restoreSound("good");
   $("pause").disabled = false;
   $("test-start").disabled = false;
@@ -1516,30 +1578,38 @@ $("start-camera").addEventListener("click", async () => {
   showError("");
   showWebGLHelp(false);
   try {
-    // Check before asking for the camera: no point in a permission prompt
-    // for a model that cannot run.
-    const canvas = webglCanvas();
-    if (!canvas) throw new NoWebGLError("WebGL unavailable");
     $("start-status").textContent = "Asking for camera access...";
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false,
     });
     video.srcObject = stream;
     await video.play();
-    $("start-status").textContent = "Loading the pose model (about 6 MB, cached after the first visit)...";
-    poseLandmarker = await loadModel(canvas);
+    // MediaPipe needs WebGL; without it (or if it fails to start) use the MoveNet fallback.
+    const canvas = webglCanvas();
+    lowAccuracy = false;
+    if (canvas) {
+      $("start-status").textContent = "Loading the pose model (about 6 MB, cached after the first visit)...";
+      try {
+        poseLandmarker = await loadModel(canvas);
+      } catch (err) {
+        logProblem(`MediaPipe did not start, using the fallback: ${err.message || err}`);
+      }
+    }
+    if (!poseLandmarker) {
+      $("start-status").textContent = (canvas ? "The main pose model did not start, so loading" : "WebGL is off, so loading")
+        + " the simpler fallback pose model (about 6 MB, cached after the first visit)...";
+      poseLandmarker = await loadMoveNet();
+      lowAccuracy = true;
+    }
     begin("webcam");
   } catch (err) {
     $("start-status").textContent = "";
     const stream = video.srcObject;
     if (stream) stream.getTracks().forEach((t) => t.stop());
     video.srcObject = null;
-    if (err instanceof NoWebGLError) {
-      showWebGLHelp(true);
-    } else {
-      showError(cameraErrorMessage(err));
-    }
-    $("start-demo").disabled = false;
+    poseLandmarker = null;
+    showError(cameraErrorMessage(err));
+    $("start-camera").disabled = $("start-demo").disabled = false;
     applyWebGLState();
   }
 });

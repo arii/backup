@@ -6,10 +6,6 @@
 // worker calls). app.js owns the registration and the buttons; sw.js owns the
 // cache. tests/js/offline.test.mjs.
 
-export const OFFLINE_STATES = Object.freeze([
-  "unsupported", "idle", "downloading", "ready", "update-available", "error",
-]);
-
 /** Each release gets its own cache, named CACHE_PREFIX + precache version (mirrors sw.js). */
 export const CACHE_PREFIX = "posture-guard-";
 export const cacheNameFor = (version) => CACHE_PREFIX + version;
@@ -74,6 +70,6 @@ export function offlineMessage(state, info = {}) {
     case "error":
       return "The offline download did not finish, so offline mode is not on. Check your connection and try again.";
     default:
-      return `Optional: download the app to this device (about ${formatSize(info.totalBytes) || "25 MB"}) so it works without a network. Your video is never stored either way.`;
+      return `Optional: download the app to this device${info.totalBytes ? ` (about ${formatSize(info.totalBytes)})` : ""} so it works without a network. Your video is never stored either way.`;
   }
 }

@@ -7,7 +7,7 @@
 - Settings (`mode`, `specificCues`, `spokenPraise`, ...), calibration, custom sounds.
 
 ## Modules
-- `docs/app/progress.js` (FEAT-003): pure functions, unit-tested in
+- `docs/app/progress.js`: pure functions, unit-tested in
   `tests/js/progress.test.mjs`.
   ```js
   export const PROGRESS = Object.freeze({ min_tracked_s: 60, window_days: 7, max_tests: 10 });
@@ -17,9 +17,9 @@
   export function exportJson(store)     // -> string, whitelisted keys only
   ```
 - `docs/app/app.js` renders the panel, handles the download and "Delete my data".
-- Social phase (spec only): `docs/app/share.js`, plus an optional server. None in FEAT-003.
+- Social phase (spec only): `docs/app/share.js`, plus an optional server. None.
 
-## Personal review (FEAT-003)
+## Personal review
 ```
 store.days, store.tests ──> summarize(store, now) ──> panel
                                                    ├─ 7-day list (pct or "no data")
@@ -36,7 +36,7 @@ store.days, store.tests ──> summarize(store, now) ──> panel
 - Export whitelist: `schema`, `days`, `tests`, `exportedAt`. Excludes sounds, calibration.
 - Delete: `localStorage.removeItem("posture-guard:v1")`, then reset in-memory `store`.
 
-## Schema versioning (spec only for the field, FEAT-003 tolerates it)
+## Schema versioning (spec only for the field; the code tolerates it)
 `store.schema` integer. Version 1 is the shape above. Readers ignore unknown fields.
 Moving day keys to local dates is a version 2 migration. Converting old UTC keys is
 lossy (a day's seconds cannot be re-split), so keep old keys as they are, write local
@@ -74,7 +74,7 @@ dominated by good %.
 | B. Signed aggregate to a small API | Client posts the aggregate record over HTTPS. Server stores nickname, week, three numbers. | Real shared boards, simple, small data. | Needs hosting, abuse handling, retention policy, and a privacy policy. Legal review for minors and for GDPR-style rights. |
 | C. Peer share links | User exports a signed aggregate as a link or QR and friends paste it. No server. | No server, no accounts, strongest privacy. | Manual, no live ranking, easy to forge, no deletion of copies. |
 
-Recommendation: ship A (this branch). If demand exists, prototype C first (no server),
+Recommendation: ship A. If demand exists, prototype C first (no server),
 then B for groups that ask for live boards.
 
 ### Consent flow

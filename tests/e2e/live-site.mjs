@@ -11,12 +11,13 @@
 //
 // 1. Landing page loads and links to ./app/.
 // 2. Demo mode: GOOD, then the scripted slouch triggers a reminder.
-// 3. Webcam mode with Chromium's fake camera playing a photo of a person:
+// 3. Webcam mode with Chromium's fake camera playing a drawn cartoon figure:
 //    the real tasks-vision bundle, WASM and pose model load from app/vendor/ and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
-// 4. Webcam mode with WebGL blocked on every canvas type: the app must explain
-//    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
+// 4. Webcam mode with WebGL blocked on every canvas type: the app explains how
+//    to turn it on, still starts the camera on the MoveNet WASM fallback, shows
+//    the reduced accuracy notice and does not throw. (--disable-3d-apis
 //    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
 //    runs on it.)
 // 4a. Breaks & prompts (issue #49): demo mode with ?clockScale=600 (the prompt
@@ -29,6 +30,8 @@
 // 4c. Consent (issue #51): the breath check and breathing moments ask first,
 //    declining stores nothing, withdrawing and Delete my data remove the record.
 // 4d. Share menu (issue #49) without navigator.share: plain links, no third-party request.
+//    Share your score: too little data gives a hint; after a minute of demo a
+//    1200x630 PNG card is drawn and downloadable (no camera frame in it).
 // 4e. Sponsor card (issue #49): shown once after seeded sustained use, never
 //    after 3 showings, Don't ask again, Maybe later, the first week, or in a silent test.
 // 4f. Open Graph tags, privacy page sections and footer links (issues #49, #51).
@@ -378,6 +381,14 @@ try {
     await page.screenshot({ path: path.join(outDir, "app-375-practice.png"), fullPage: true });
     await page.click("#practice-stop");
     await page.waitForFunction(() => !document.body.classList.contains("practicing"));
+    // Learn the cues ends with a "Try a breath check" button (finishing the last step shows it).
+    await page.click("#help-btn");
+    await page.click("#help-practice");
+    for (let i = 0; i < 12 && await page.evaluate(() => document.body.classList.contains("practicing")); i++) {
+      await page.click("#practice-next");
+    }
+    check("practice: finishing the last step offers Try a breath check",
+      await page.isVisible("#practice-breath") && /Try a breath check/.test(await page.textContent("#practice-breath")));
     // Export and delete.
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("#progress-export")]);
     const exported = JSON.parse(await (await import("node:fs")).promises.readFile(await download.path(), "utf8"));
@@ -641,7 +652,8 @@ try {
   // 4. No WebGL: a separate browser, since the flag is per launch.
   {
     const noGL = await chromium.launch({
-      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+      args: ["--disable-3d-apis", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+        ...(y4m ? [`--use-file-for-fake-video-capture=${y4m}`] : [])],
     });
     try {
       const { page, errors } = await newPage(noGL);
@@ -661,7 +673,7 @@ try {
         return { banner: getComputedStyle(el).display, text: el.textContent };
       });
       check("no WebGL: landing page shows the warning banner",
-        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /demo/i.test(landing.text), landing);
+        landing.banner === "block" && /chrome:\/\/settings/.test(landing.text) && /fallback|simpler/i.test(landing.text), landing);
       await page.goto(`${base}app/${bust}`);
       const gl = await page.evaluate(() => Boolean(
         document.createElement("canvas").getContext("webgl") ||
@@ -669,27 +681,35 @@ try {
       const cam = await page.evaluate(() => {
         const btn = document.getElementById("start-camera");
         const helpEl = document.getElementById("webgl-help");
-        if (!btn || !helpEl) return { text: "", disabled: false, help: "element-missing" };
+        if (!btn || !helpEl) return { text: "", disabled: true, help: "element-missing" };
         return { text: btn.textContent, disabled: btn.disabled, help: getComputedStyle(helpEl).display };
       });
-      check("no WebGL: camera button shows the WebGL message on load",
-        /needs WebGL/i.test(cam.text) && cam.disabled && cam.help === "block", cam);
-      await page.click("#start-camera", { force: true, timeout: 2000 }).catch(() => {});
-      await page.waitForTimeout(1500);
-      const s = await page.evaluate(() => {
-        const helpEl = document.getElementById("webgl-help");
-        const overlayEl = document.getElementById("start-overlay");
-        const video = document.getElementById("video");
-        if (!helpEl || !overlayEl || !video) return { help: "element-missing", overlay: "element-missing", streams: -1 };
-        return {
-          help: getComputedStyle(helpEl).display,
-          overlay: getComputedStyle(overlayEl).display,
-          streams: video.srcObject === null ? 0 : 1,
-        };
+      check("no WebGL: camera button stays enabled and the notice explains the fallback",
+        !gl && !cam.disabled && /webcam/i.test(cam.text) && cam.help === "block", cam);
+      const t0 = Date.now();
+      await page.click("#start-camera");
+      await page.waitForFunction(
+        () => getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+          document.getElementById("start-error").textContent !== "",
+        null, { timeout: 120000 },
+      );
+      const s = await ui(page);
+      const note = await page.evaluate(() => {
+        const el = document.getElementById("lowpower-note");
+        return { display: getComputedStyle(el).display, text: el.textContent };
       });
+      await page.waitForTimeout(8000); // let MoveNet run on the looping fake camera frame
+      const seen = await ui(page);
       await page.screenshot({ path: path.join(outDir, "no-webgl.png") });
-      check("no WebGL: explains how to turn it on", !gl && s.help === "block" && s.overlay !== "none", { gl, ...s });
-      check("no WebGL: camera not opened", s.streams === 0, s);
+      report.noWebgl = { s, note, seen, seconds: (Date.now() - t0) / 1000 };
+      check("no WebGL: webcam starts on the MoveNet fallback",
+        s.overlay === "none" && s.source === "webcam" && s.startError === "", s);
+      check("no WebGL: shows the reduced accuracy notice",
+        note.display === "block" && /less accurate/i.test(note.text), note);
+      if (y4m) {
+        check("no WebGL: fallback finds the person on the fake camera feed",
+          seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-", seen);
+      }
       check("no WebGL: no page errors", errors.length === 0, errors);
       await page.close();
     } finally {
@@ -783,11 +803,12 @@ try {
         await page.reload();
         await page.click("#start-camera");
         await page.waitForFunction(
-          () => !/Starting|Loading/i.test(document.getElementById("source").textContent) && document.getElementById("source").textContent !== "",
+          () => document.getElementById("source").textContent === "webcam" && document.getElementById("m-head_forward_deg").textContent !== "-",
           null, { timeout: 60000 },
         ).catch(() => {});
         const cam = await ui(page);
-        check("offline: webcam mode starts and the pose model loads without a network", !cam.startError, cam);
+        check("offline: webcam mode starts and pose detection finds the person without a network",
+          !cam.startError && cam.source === "webcam" && cam.headForward !== "-", cam);
       }
       check("offline: no failed requests", failedReqs.length === 0, failedReqs.slice(0, 5));
       check("offline: no page errors", errors.length === 0, errors);
@@ -874,6 +895,33 @@ try {
     check("share: a valid Mastodon server gives a link to that host", !masto.hidden && masto.host === "fosstodon.org", masto);
     await page.screenshot({ path: path.join(outDir, "share-dialog.png") });
     check("share: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4d2. Share your score card (issue #49 part 4).
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#share-btn");
+    await page.click("#share-card-btn");
+    check("share card: too little tracked time gives a hint and no card",
+      /at least a minute/.test(await page.textContent("#share-msg")) && await page.evaluate(() => document.getElementById("share-card-wrap").hidden));
+    await page.click("#share-close");
+    await page.click("#start-demo");
+    await page.waitForTimeout(66000);
+    await page.click("#share-btn");
+    await page.click("#share-card-btn");
+    const card = await page.evaluate(() => {
+      const c = document.getElementById("share-card");
+      return { shown: !document.getElementById("share-card-wrap").hidden, w: c.width, h: c.height, label: c.getAttribute("aria-label") };
+    });
+    check("share card: a 1200x630 card with alt text is shown after a minute of tracking",
+      card.shown && card.w === 1200 && card.h === 630 && /good posture this session/.test(card.label || ""), card);
+    await page.waitForTimeout(300);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#share-card-download")]);
+    check("share card: Download PNG saves backup-score.png", dl.suggestedFilename() === "backup-score.png");
+    await page.locator("#share-card").screenshot({ path: path.join(outDir, "share-card.png") });
+    check("share card: no page errors", errors.length === 0, errors);
     await page.close();
   }
 

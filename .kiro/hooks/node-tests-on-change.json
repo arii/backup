@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run the node tests when the app or its tests change",
+      "trigger": "PostFileSave",
+      "description": "Runs node --test tests/js whenever a file under docs/app or tests/js is saved.",
+      "matcher": "(docs/app/[^/]+\\.js|tests/js/.*\\.mjs)$",
+      "action": {
+        "type": "command",
+        "command": "cd \"$(git rev-parse --show-toplevel)\" && node --test \"tests/js/*.test.mjs\""
+      }
+    }
+  ]
+}

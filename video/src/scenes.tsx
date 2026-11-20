@@ -157,7 +157,7 @@ export const Webcam: React.FC<{ p: VideoProps }> = ({ p }) => {
       <Clip src={w.src} fromSec={from} />
       {remindAt !== null && remindAt >= 0 && remindAt < 10 ? <Sound file="chime.wav" atSec={remindAt} /> : null}
       <Caption accent={color.good}>
-        The real pose model on a real person. Tilt her and it notices
+        The real pose model on a drawn stand-in. Tilt it and it notices
         {w.reminder !== null ? (
           <>
             : <b style={{ color: color.warn }}>{w.cue}.</b>
@@ -177,13 +177,13 @@ export const Webcam: React.FC<{ p: VideoProps }> = ({ p }) => {
 
 const PARTS: { name: string; donor: string; job: string; spot: { x: number; y: number; r: number } }[] = [
   { name: "Eyes", donor: "Google MediaPipe Pose, compiled to WebAssembly", job: "33 body landmarks per frame from an ordinary webcam", spot: { x: 200, y: 130, r: 75 } },
-  { name: "Brain", donor: "Python: scoring, state machine, needle, calibration", job: "Decides when you're slouching and what to say", spot: { x: 200, y: 95, r: 55 } },
-  { name: "Second brain", donor: "A JavaScript transplant of the first", job: "The same decisions, inside your browser tab", spot: { x: 200, y: 130, r: 95 } },
-  { name: "Spinal cord", donor: "A 632-frame golden timeline", job: "Python records it, Node replays it: both brains must agree on every frame", spot: { x: 200, y: 340, r: 110 } },
-  { name: "Voice", donor: "Web Audio + speech synthesis (paplay + espeak-ng on Linux)", job: "The chime, then \u201cHead forward. Tuck your chin\u2026\u201d", spot: { x: 200, y: 160, r: 45 } },
+  { name: "Brain", donor: "posture-core.js: scoring, state machine, needle, calibration", job: "Decides when you're slouching and what to say", spot: { x: 200, y: 95, r: 55 } },
+  { name: "Reflexes", donor: "Cue engine and slow drift baseline", job: "Names the one thing to fix, and notices a slow slump", spot: { x: 200, y: 130, r: 95 } },
+  { name: "Spinal cord", donor: "A 632-frame golden timeline", job: "Recorded once, replayed by Node on every change: every frame must match", spot: { x: 200, y: 340, r: 110 } },
+  { name: "Voice", donor: "Web Audio + speech synthesis", job: "The chime, then \u201cHead forward. Tuck your chin\u2026\u201d", spot: { x: 200, y: 160, r: 45 } },
   { name: "Heartbeat", donor: "A Web Worker timer", job: "Keeps it ticking after the browser throttles a background tab", spot: { x: 230, y: 290, r: 45 } },
   { name: "Memory", donor: "localStorage", job: "Your calibration, settings and daily totals", spot: { x: 150, y: 110, r: 45 } },
-  { name: "Immune system", donor: "hypothesis + node:test property tests", job: "Seven correctness properties; every planted bug caught", spot: { x: 200, y: 330, r: 200 } },
+  { name: "Immune system", donor: "node:test property tests", job: "Seeded properties throw NaNs, mirrors and jitter at the core", spot: { x: 200, y: 330, r: 200 } },
 ];
 const PART_SEC = 3.25;
 
@@ -239,9 +239,9 @@ export const Monster: React.FC = () => {
 // -- 5. Proof ---------------------------------------------------------------------
 
 const STATS = [
-  ["632 frames", "Python and JavaScript, compared frame by frame. Zero disagreements."],
-  ["7 properties", "Hypothesis throws NaNs, mirrors and jitter at it. Every planted bug caught."],
-  ["11 live checks", "Playwright visits the deployed site and makes sure a real person is found."],
+  ["632 frames", "Replayed through the core on every change. Zero disagreements."],
+  ["7 properties", "Seeded tests throw NaNs, mirrors and jitter at it."],
+  ["11 live checks", "Playwright visits the deployed site and makes sure a person is found."],
 ] as const;
 
 const KIRO_TREE = [
@@ -250,8 +250,7 @@ const KIRO_TREE = [
   "  specs/posture-guard/design.md         7 correctness properties",
   "  specs/posture-guard/tasks.md          12 tasks, all checked",
   "  steering/architecture.md              the house rules",
-  "  hooks/pytest-on-change.json           tests on every save",
-  "  hooks/browser-parity-on-change.json   twins stay twins",
+  "  hooks/node-tests-on-change.json       tests on every save",
 ];
 
 export const Proof: React.FC = () => {

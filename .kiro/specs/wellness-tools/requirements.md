@@ -8,7 +8,7 @@ not a medical measurement or treatment. Safety wording lives in
 `.kiro/specs/safety-and-disclaimers/`. Evidence: `docs/research/feedback-and-habit-formation.md`.
 
 Scope markers: **(shipped)** already in the app via PR #37 (`docs/app/relax.js`).
-**(spec only)** designed and not built. No wellness tool is built in FEAT-003.
+**(spec only)** designed and not built.
 
 Ground truth about the sensor:
 - MediaPipe Pose has 33 landmarks. The only face points are nose, eyes, ears and two

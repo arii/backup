@@ -1,6 +1,6 @@
 # Implementation Plan: Safety and Disclaimers
 
-Checked items are implemented in FEAT-003 on branch `feat/onboarding-specs-feedback`.
+Checked items are built.
 Unchecked items are **spec only**.
 
 - [x] 1. Safety text constants in `onboarding.js`
@@ -13,7 +13,7 @@ Unchecked items are **spec only**.
   - _Requirements: 3.1_
 - [x] 4. Landing page line near the call to action (`docs/index.html`)
   - _Requirements: 3.2_
-- [x] 5. Dashboard docs section (`src/posture_guard/dashboard/static/docs.html`) and
+- [x] 5. Dashboard docs section (removed with the Python app in Nov 2026) and
   one sentence under the "Relax, don't brace" panel
   - _Requirements: 3.3, 3.4, 7.2_
 - [x] 6. README and `KIROWEEN.md` short notice, privacy and accuracy lines

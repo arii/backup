@@ -19,14 +19,11 @@ shoulder dropped: lift your right shoulder and take your weight off that elbow")
 using your own left and right even when the camera image is mirrored. A posture needle shows how close you are to slouching, and
 "Record good posture" / "Record slouch posture" calibrate it to your own desk.
 
-It comes in two forms that share one behavior:
-
-- **Browser app** (GitHub Pages), the main product: webcam, pose model and posture
-  logic all run in the tab. It keeps tracking in a background tab, plays Web Audio
-  chimes and a speech-synthesis prompt, and keeps calibration and daily good/slouch
-  totals in `localStorage`.
-- **Linux desktop app** (Python, FastAPI dashboard): the same logic for offline use,
-  with a webcam or a no-camera demo.
+It is a browser app on GitHub Pages: webcam, pose model and posture logic all run in
+the tab. It keeps tracking in a background tab, plays Web Audio chimes and a
+speech-synthesis prompt, and keeps calibration and daily good/slouch totals in
+`localStorage`. (During the hackathon it also had a Python desktop twin. That code was
+removed in Nov 2026; the history below says where it mattered.)
 
 ## Devpost copy
 
@@ -35,23 +32,25 @@ parts that were never meant to share a body.
 
 **Short description:** Leave a browser tab open and BackUp watches how you
 sit. Slouch and it chimes; keep slouching and it tells you what's wrong ("Head
-forward: tuck your chin") and how to fix it. MediaPipe eyes, a Python brain and its
-JavaScript twin, kept in lockstep by a 632-frame golden timeline. Runs locally, no install.
+forward: tuck your chin") and how to fix it. MediaPipe eyes, a JavaScript brain
+checked by a 632-frame golden timeline. Runs locally, no install.
 
 ## Why Frankenstein
 
 The category asks for seemingly incompatible technologies stitched into one app.
-BackUp's body parts come from different languages and runtimes, and the
-interesting work is in the stitches:
+BackUp's body parts came from different languages and runtimes, and the
+interesting work was in the stitches. The Python parts below were the original
+brain and are history: the Python app was removed in Nov 2026 and the JavaScript
+brain is now the only one.
 
 | Part | Donor | Stitch |
 |---|---|---|
-| Eyes | MediaPipe Pose as WebAssembly in the browser, `mp.solutions.pose` in Python | Both feed the same 33-landmark format into the same scoring |
-| Brain | Python scoring, state machine, needle, calibration | Specified, property-tested, the reference implementation |
-| Second brain | JavaScript port in `docs/app/posture-core.js` | A golden timeline: Python records 632 frames, Node must reproduce every state, reminder, cue and number (within 1e-9). A Kiro hook re-runs it whenever the JS core or the fixture is saved, and a pytest fails if Python changes without regenerating it |
-| Voice | Web Audio + speech synthesis; `paplay` + pico2wave/espeak-ng | One cue text ("Your right shoulder is low...") spoken by either |
+| Eyes | MediaPipe Pose as WebAssembly in the browser (and `mp.solutions.pose` in the Python original) | Both fed the same 33-landmark format into the same scoring |
+| Brain | Python scoring, state machine, needle, calibration (history) | Specified and property-tested; the reference implementation until it was removed |
+| Second brain | JavaScript port in `docs/app/posture-core.js`, now the only brain | A golden timeline: Python recorded 632 frames and Node reproduces every state, reminder, cue and number (within 1e-9). The recording is kept as a frozen fixture in `tests/js/fixtures/`, and a Kiro hook re-runs the tests whenever the app or its tests are saved |
+| Voice | Web Audio + speech synthesis (and `paplay` + pico2wave/espeak-ng on the desktop original) | One cue text spoken by either |
 | Heartbeat | A Web Worker timer | Browsers throttle background tabs; the worker keeps ticking and the frame-rate-independent state machine still times reminders correctly at 5 fps |
-| Lab test subject | Playwright, Chromium's fake camera, ffmpeg | A photo is turned into a video feed so CI can check the deployed site detects a real person |
+| Lab test subject | Playwright, Chromium's fake camera, a Node script | A drawn cartoon figure is turned into a video feed so CI can check the deployed site detects a person |
 | Amputated limb | Intel RealSense depth camera | Removed; shoulder width in the frame replaced depth as the distance check |
 
 The README's [The monster](README.md#the-monster-kiroween-2026-frankenstein) section
@@ -76,14 +75,15 @@ What the Kiro phase changed (PRs #19 onward):
   the frame) replaced the depth-sensor distance check.
 - **From a Linux install to a web page.** A browser version on GitHub Pages:
   MediaPipe in the tab, a JavaScript port of the scoring and state machine, Web
-  Audio, background-tab tracking. No install, no special camera.
+  Audio, background-tab tracking. No install, no special camera. The Python
+  desktop app was deleted in Nov 2026.
 - **Specific advice.** Reminders name the problem, the side and the fix, instead
   of a generic "fix your posture".
 - **Robustness.** NaN/inf tracking glitches hold the current state instead of
-  resetting it; frame-rate-independent smoothing; strict `config.yaml`
-  validation; custom good/bad sounds; good/slouch calibration.
-- **Verification.** Property-based tests, a frame-by-frame parity test between
-  the Python and browser versions, and an end-to-end test of the deployed site.
+  resetting it; frame-rate-independent smoothing; custom good/bad sounds; good/slouch calibration.
+- **Verification.** Property-based tests, a frame-by-frame golden-timeline test
+  (originally a parity check against the Python version), and an end-to-end test
+  of the deployed site.
 
 ## How Kiro was used
 
@@ -92,10 +92,10 @@ What the Kiro phase changed (PRs #19 onward):
   correctness properties, and a 12-task plan that was checked off as each task's
   tests passed.
 - **Steering.** [`.kiro/steering/architecture.md`](.kiro/steering/architecture.md)
-  fixes the rules every change follows: `config.yaml` as the single source of
-  truth, injected timestamps (no wall-clock reads in the logic), frame-rate-
-  independent smoothing, lazy hardware imports, and keeping the browser port in
-  sync with Python.
+  fixes the rules every change follows: tuning defaults in one place
+  (`DEFAULTS` in `posture-core.js`), injected timestamps (no wall-clock reads in the
+  logic), frame-rate-independent smoothing, and regenerating the offline precache
+  list after every app change. (It originally also covered the Python app.)
 - **Follow-on specs.** Five more spec folders under `.kiro/specs/`
   (`onboarding-and-setup`, `progress-review`, `wellness-tools`,
   `safety-and-disclaimers`, `feedback-design`), each with EARS requirements, a design
@@ -111,10 +111,11 @@ What the Kiro phase changed (PRs #19 onward):
   disclaimers on every doc surface; the wording is a draft for a lawyer to review.
 - **Steering additions.** `.kiro/steering/architecture.md` now has rules for safety
   claims and feedback design.
-- **Hooks.** `.kiro/hooks/pytest-on-change.json` runs `pytest` when package or
-  test files are saved; `.kiro/hooks/browser-parity-on-change.json` runs the
-  browser parity tests when the JavaScript core or its fixture changes.
-- **Property-based testing.** `tests/test_properties.py` (hypothesis) checks the
+- **Hooks.** `.kiro/hooks/node-tests-on-change.json` runs `node --test tests/js` when a
+  file under `docs/app/` or `tests/js/` is saved. (There was also a `pytest` hook
+  while the Python app existed.)
+- **Property-based testing.** `tests/js/posture-core.test.mjs` (seeded random loops;
+  first written with hypothesis against the Python original) checks the
   design's properties: the needle stays finite in [-1, 1] for any input including
   NaN/inf; angles don't change when landmarks are scaled; neutral-band noise and
   short slouches never remind; one chime per slouch episode; NaN frames change
@@ -122,10 +123,10 @@ What the Kiro phase changed (PRs #19 onward):
   the posture advice. Deliberately broken versions of the
   code (removed glitch hold, broken voice cooldown, shortened sustain, removed
   clamp, doubled recovery chime) were each caught.
-- **Python-to-browser parity.** `tests/browser_golden.py` runs the real Python
-  pipeline through a scripted 632-frame session and records every frame;
-  `tests/js/` requires the browser engine to reproduce it exactly (states and
-  reminders identical, numbers within 1e-9).
+- **Golden timeline.** A scripted 632-frame session was recorded from the real
+  Python pipeline (history); `tests/js/fixtures/golden-timeline.json` keeps that
+  recording and `tests/js/` requires the browser engine to reproduce it exactly
+  (states and reminders identical, numbers within 1e-9).
 
 ### Bugs the tests found
 
@@ -140,12 +141,11 @@ What the Kiro phase changed (PRs #19 onward):
 
 ## Testing
 
-- CI on every push: `ruff`, `pytest` (including the hypothesis properties), the
-  browser parity and property tests (Node), shellcheck, and a smoke check of the
-  real MediaPipe and OpenCV packages.
+- CI on every push: the Node unit, property and golden-timeline tests, the offline
+  precache check, vendored-file checksums, a local Playwright e2e, and ShellCheck.
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
-  playing a photo of a person, so the real pose model loads from the self-hosted vendor files and
+  playing a drawn cartoon figure, so the real pose model loads from the self-hosted vendor files and
   detects her. Screenshots are kept as a workflow artifact.
 
 ## Known limitations
@@ -165,8 +165,6 @@ What the Kiro phase changed (PRs #19 onward):
   timer and the guided breathing exercise. Built: onboarding, safety acknowledgement,
   Help, *Not working?*, *Learn the cues*, the personal progress panel, Light coaching,
   milestone praise and the hourly reminder cap.
-- **Desktop app.** The Python dashboard does not have the onboarding or progress
-  panel.
 - **E2E scripts.** `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` hard-code
   onboarding version 1 and ack version 1. Update them when those versions change.
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
@@ -182,7 +180,7 @@ What the Kiro phase changed (PRs #19 onward):
 | Built during Oct 30 - Dec 4, 2026 | Yes: repo created 2026-11-13 |
 | Public repository | Yes |
 | OSI-approved license, visible | Yes: [MIT](LICENSE) |
-| `.kiro/` committed (not gitignored) | Yes: spec, steering, 2 hooks |
+| `.kiro/` committed (not gitignored) | Yes: spec, steering, 1 hook |
 | Working demo link | Yes: <https://arii.github.io/posture-guard/app/> |
 | How Kiro was used | This file and the README's "Built with Kiro" section |
 | Category | Frankenstein |
@@ -200,7 +198,7 @@ What the Kiro phase changed (PRs #19 onward):
 5. **1:30** Record good and slouch posture; show the calibrated needle.
 6. **1:50** Switch tabs: reminders still fire in the background.
 7. **2:10** The monster: the anatomy table (eyes, two brains, spinal cord, voice,
-   heartbeat), then the golden-timeline parity test and the property tests in CI,
+   heartbeat), then the golden-timeline test and the property tests in CI,
    and the `.kiro/` spec, steering and hooks that were the lightning.
 8. **2:40** The build history: the RealSense prototype first, the amputation, then
    the webcam and browser version with Kiro. End on "It's alive."

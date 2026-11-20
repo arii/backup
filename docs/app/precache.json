@@ -1,11 +1,11 @@
 {
-  "version": "71dc25a50f941cc8",
-  "totalBytes": 26231702,
+  "version": "1fbd2c3614187548",
+  "totalBytes": 32841666,
   "files": [
     {
       "url": "app.js",
-      "size": 88982,
-      "sha256": "78506d640b618f88f6f9b6e57bd1d9d7c39b8ee393125c281bef06457cc0b1c4"
+      "size": 92339,
+      "sha256": "ab8ab6853cbfa957da319926cebf89c6b255f5a403f966985f9a7ccfe6716ebd"
     },
     {
       "url": "breaks.js",
@@ -24,13 +24,13 @@
     },
     {
       "url": "feedback.js",
-      "size": 3899,
-      "sha256": "839d5f7741b2c8893f6859b9677d7ccb4e42512d36d447c9c1d8e7b3dfc6f4df"
+      "size": 3841,
+      "sha256": "34585f9d009698b548849c28d741c1ef045205bafaf5e778ccc48450e1f6cfd1"
     },
     {
       "url": "index.html",
-      "size": 39496,
-      "sha256": "60fa0303fb50c5d03b958147156a66e50002853dcb6b4d63c457fcfdc5de6b20"
+      "size": 40459,
+      "sha256": "b84f7b9bb962537606f6d55b27f309305d97466543e52e88c315fd3a5302bccf"
     },
     {
       "url": "mini-view.js",
@@ -38,9 +38,14 @@
       "sha256": "2d91899c371de85af5e90c251342573b57755046f2f5b4a28ce934431b4e2290"
     },
     {
+      "url": "movenet-adapter.js",
+      "size": 3457,
+      "sha256": "e83c42ffcd6889b381c0581b00a0c17422740e01607cfbc25b67b81e69febe87"
+    },
+    {
       "url": "offline.js",
-      "size": 3449,
-      "sha256": "26d3d296402f8becc94bf08f13d7637e0c7f6b3a5e07646d231d95e0ef9e442a"
+      "size": 3337,
+      "sha256": "b083173525beadd16aa15fe53261f2e6ed14ce8a4ae5c8db1607a134ad59b3b2"
     },
     {
       "url": "onboarding.js",
@@ -49,8 +54,8 @@
     },
     {
       "url": "posture-core.js",
-      "size": 30182,
-      "sha256": "3de5e2323786048d9c1929f71fe2ccec7f50e8cfa30d12e3a9f71e22a52c2372"
+      "size": 29762,
+      "sha256": "850bfac2f68d569e621596801d0c928db5d65ba7eddd9323bfd5d996d5ffdf6b"
     },
     {
       "url": "privacy.js",
@@ -79,8 +84,8 @@
     },
     {
       "url": "share.js",
-      "size": 2094,
-      "sha256": "c6a1ae1f43921dbf851ccfbfd333edff6a3c260c3bd3c3b43d89e6de0b971e1a"
+      "size": 4047,
+      "sha256": "bb477fcfba9013fe1f2c434083255c25c908549e346faee324ea2dd29ffc7168"
     },
     {
       "url": "sound-packs.js",
@@ -96,6 +101,36 @@
       "url": "vendor/LICENSE",
       "size": 12331,
       "sha256": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8"
+    },
+    {
+      "url": "vendor/movenet/group1-shard1of2.bin",
+      "size": 4194304,
+      "sha256": "b42c3232bf13b0efc691d3f0693dd3fc74404f709b1deee0a271828af6dbbea2"
+    },
+    {
+      "url": "vendor/movenet/group1-shard2of2.bin",
+      "size": 455912,
+      "sha256": "8253ab965aa3122c08f331777ca395ce9ca19bb9e7cb278b99de1c46dbdeb6dc"
+    },
+    {
+      "url": "vendor/movenet/model.json",
+      "size": 168013,
+      "sha256": "c65a3447162efa0c42af29498a4b151f4415b36ff3ae6fae2b28a32e840dcbfb"
+    },
+    {
+      "url": "vendor/movenet/movenet_bundle.mjs",
+      "size": 1046878,
+      "sha256": "6a2b4906222a28ed24b2ff18501b0f0f81223d36496d2ca072857a958990eec1"
+    },
+    {
+      "url": "vendor/movenet/tfjs-backend-wasm-simd.wasm",
+      "size": 424594,
+      "sha256": "77ebb28a6d34f371dbbf2086b7f2de8994acd8ea5a3cf1fa24d2c26c840cac7b"
+    },
+    {
+      "url": "vendor/movenet/tfjs-backend-wasm.wasm",
+      "size": 311123,
+      "sha256": "70a5d516060464e5269f01c74bac1772d6b8ab6cb612acf16b5cdaf61f78d892"
     },
     {
       "url": "vendor/pose_landmarker_lite.task",

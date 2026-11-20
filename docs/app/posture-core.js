@@ -2,12 +2,10 @@
 // Copyright (c) 2026 Ariel Anders
 // SPDX-License-Identifier: MIT
 //
-// BackUp core, in the browser: a faithful port of scoring.py,
-// state.py, posture_needle.py, calibration.py and the pipeline frame path.
-// Pure functions and classes, no DOM, no clock: every method takes the frame
-// time `now` (seconds), exactly like the Python code. Parity with Python is
-// enforced by tests/js/posture-core.test.mjs replaying a golden timeline
-// generated from the real Python pipeline (tests/browser_golden.py).
+// BackUp core: scoring, posture state machine, needle, calibration, cues and
+// the per-frame engine. Pure functions and classes, no DOM, no clock: every
+// method takes the frame time `now` (seconds). tests/js/posture-core.test.mjs
+// replays a golden timeline (tests/js/fixtures/golden-timeline.json) through it.
 
 // MediaPipe Pose landmark indices.
 export const LEFT_EAR = 7;
@@ -18,12 +16,12 @@ export const LEFT_HIP = 23;
 export const RIGHT_HIP = 24;
 export const TRACKED = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER, LEFT_HIP, RIGHT_HIP];
 
-const EPS = 1e-9; // state.py _EPS (window comparisons)
-const JITTER_PATTERN = [0.0, -1.0, 1.0, -0.5, 0.5]; // state.py _JITTER_PATTERN
-const NEEDLE_EPS = 1e-9; // posture_needle.py _EPS
-const RAD_TO_DEG = 180 / Math.PI; // CPython math.degrees: x * (180 / pi)
+const EPS = 1e-9; // window comparisons
+const JITTER_PATTERN = [0.0, -1.0, 1.0, -0.5, 0.5]; // praise spacing jitter
+const NEEDLE_EPS = 1e-9; // degenerate-axis guard
+const RAD_TO_DEG = 180 / Math.PI;
 
-// Defaults mirror config.yaml (the golden test asserts they match).
+// Tuning knobs. The golden test asserts they match the config recorded in its fixture.
 export const DEFAULTS = Object.freeze({
   scoring: {
     head_forward_deg: 8.0,
@@ -80,7 +78,7 @@ export const Nudge = Object.freeze({
 
 const isFinite_ = Number.isFinite;
 
-// -- scoring.py ---------------------------------------------------------------
+// -- scoring ------------------------------------------------------------------
 
 export function scored(m) {
   return {
@@ -151,7 +149,7 @@ export function lowVisibilityDetail(lm, cfg) {
   for (const [name, [l, r]] of GROUPS) {
     const below = [];
     [["left", l], ["right", r]].forEach(([side, i]) => {
-      // `<` (not `!(>=)`) on purpose: a NaN visibility is not listed, as in Python.
+      // `<` (not `!(>=)`) on purpose: a NaN visibility is not listed.
       if (lm[i].visibility < cfg.visibility_floor) below.push(`${side} ${fmt2(lm[i].visibility)}`);
     });
     if (below.length) {
@@ -168,13 +166,13 @@ function finiteXY(lm, indices) {
   return indices.every((i) => isFinite_(lm[i].x) && isFinite_(lm[i].y));
 }
 
-/** scoring.score_pose. landmarks: array of {x, y, visibility} (33) or null. */
+/** landmarks: array of {x, y, visibility} (33) or null. */
 export function scorePose(landmarks, cfg) {
   if (landmarks === null || landmarks === undefined) return unreliable(Reason.NO_POSE);
   const floor = cfg.visibility_floor;
   const earsShoulders = [LEFT_EAR, RIGHT_EAR, LEFT_SHOULDER, RIGHT_SHOULDER];
   const hips = [LEFT_HIP, RIGHT_HIP];
-  // `>=` is false for NaN, matching Python.
+  // `>=` is false for NaN, so a NaN visibility counts as hidden.
   const esVisible = earsShoulders.every((i) => landmarks[i].visibility >= floor);
   const hipsVisible = hips.every((i) => landmarks[i].visibility >= floor);
   if (!esVisible || (cfg.trunk_lean_required && !hipsVisible && !cfg.degraded_feedback)) {
@@ -293,7 +291,7 @@ export function deviationZone(m, baseline, cfg) {
   return classify(pairs, cfg);
 }
 
-// -- state.py -----------------------------------------------------------------
+// -- state machine ------------------------------------------------------------
 
 const BAD_STATES = new Set([State.BAD_CHIME, State.BAD_VOICE]);
 
@@ -357,7 +355,7 @@ export class PostureStateMachine {
 
     if (BAD_STATES.has(this.state)) return this.updateBad(smoothedGood, now);
     const tr = this.updateIdle(sustainingBad, smoothedGood, now);
-    // Never praise during the bad_sustain_s window where state is still GOOD (state.py).
+    // Never praise during the bad_sustain_s window where state is still GOOD.
     if (this.state === State.GOOD && this.positive.enabled) return this.maybePositiveChime(now, smoothedGood);
     return tr;
   }
@@ -438,7 +436,7 @@ export class PostureStateMachine {
   }
 
   /** Seconds of GOOD before praise `count` (0-based) of a streak: dense-to-lean
-   *  with a fixed jitter pattern (state.py _positive_gap). */
+   *  with a fixed jitter pattern. */
   positiveGap(count) {
     const pc = this.positive;
     const first = pc.first_after_seconds ?? null;
@@ -447,8 +445,8 @@ export class PostureStateMachine {
     return gap * (1 + (pc.jitter ?? 0) * JITTER_PATTERN[count % JITTER_PATTERN.length]);
   }
 
-  /** UI-only view of the timer the user is currently racing (no Python
-   *  counterpart; it reads state, never changes it). null when no timer runs.
+  /** UI-only view of the timer the user is currently racing (it reads
+   *  state, never changes it). null when no timer runs.
    *  kind: "recover"  holding good posture to clear a reminder (recovery_good_s)
    *        "confirm"  holding good posture to reach GOOD (good_confirm_s)
    *        "slipping" a slouch building toward the reminder (bad_sustain_s)
@@ -499,7 +497,7 @@ export class PostureStateMachine {
   }
 }
 
-// -- posture_needle.py ----------------------------------------------------------
+// -- needle ---------------------------------------------------------------------
 
 export function clamp(v, lo = -1.0, hi = 1.0) {
   if (Number.isNaN(v)) return lo;
@@ -582,7 +580,7 @@ export class NeedleSmoother {
   }
 }
 
-// -- calibration.py -----------------------------------------------------------
+// -- calibration --------------------------------------------------------------
 
 function centroid(samples) {
   const n = samples.length;
@@ -631,7 +629,7 @@ export class CalibrationRecorder {
     this.version += 1;
   }
 
-  /** Browser-only: restore centroids saved in localStorage. */
+  /** Restore centroids saved in localStorage. */
   load(saved) {
     this.centroids = { good: saved.good ? scored(saved.good) : null, bad: saved.bad ? scored(saved.bad) : null };
     this.counts = { good: saved.good_samples ?? 0, bad: saved.bad_samples ?? 0 };
@@ -703,7 +701,7 @@ export class CalibrationRecorder {
   }
 }
 
-// -- cues.py --------------------------------------------------------------------
+// -- cues -----------------------------------------------------------------------
 
 export const CUE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
 
@@ -757,7 +755,7 @@ function cueSide(metric, signed, mirror) {
   return signed * mirror > 0 ? "right" : "left";
 }
 
-/** cues.posture_cue: what is off and how to fix it, or null. */
+/** What is off and how to fix it, or null. */
 export function postureCue(m, cfg, baseline = null, mirror = 1.0) {
   const trunkOk = cfg.trunk_lean_required && m.trunk_lean_available;
   let best = null; // [ratio, metric, signed]
@@ -782,10 +780,10 @@ export function postureCue(m, cfg, baseline = null, mirror = 1.0) {
   return { id: `${metric}:${side ?? "-"}`, metric, side, title, fix, say };
 }
 
-// -- pipeline.py process_once (minus video/audio I/O) --------------------------
+// -- engine ---------------------------------------------------------------------
 
 /** One object per session: feed it landmarks + frame time, get back everything
- *  the UI needs. Order matches PosturePipeline.process_once exactly. */
+ *  the UI needs. */
 export class PostureEngine {
   constructor(config = DEFAULTS, { voiceTimings = null } = {}) {
     this.config = config;
@@ -826,8 +824,7 @@ export class PostureEngine {
   /** Resume after a user pause: start fresh as if the person just sat down
    *  (streaks, timers and the needle cleared, drift baseline back to the
    *  calibration anchor), so time spent paused can never fire a reminder.
-   *  Calibration and the praise cooldown are kept. Browser-only (no Python
-   *  counterpart: pausing is a UI feature, not part of the golden pipeline). */
+   *  Calibration and the praise cooldown are kept. */
   restart() {
     this.machine.enterNoPerson();
     this.machine.absentSince = null;

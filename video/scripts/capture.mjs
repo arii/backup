@@ -105,7 +105,7 @@ if (y4m && existsSync(y4m)) {
       () => getComputedStyle(document.getElementById("start-overlay")).display === "none", null,
       { timeout: 90000 });
     const live = now();
-    // The fake feed tilts the photo after a few seconds; see if that reminds.
+    // The fake feed tilts the drawn figure after a few seconds; see if that reminds.
     let reminder = null;
     const deadline = Date.now() + 16000;
     while (Date.now() < deadline) {

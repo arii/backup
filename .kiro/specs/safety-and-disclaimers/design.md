@@ -4,7 +4,7 @@
 Kiroween submission or any wider launch.
 
 ## Single source of truth
-`docs/app/onboarding.js` (FEAT-003) exports the text and the version:
+`docs/app/onboarding.js` exports the text and the version:
 ```js
 export const ACK_VERSION = 1;
 export const SAFETY_SHORT = "...";   // one sentence, footer and landing page
@@ -18,11 +18,11 @@ copies to it.
 
 ## Wording (draft for counsel)
 Short (footer, landing page):
-> Posture Guard is a wellness tool, not medical advice or a medical device. Do not hold a
+> BackUp is a wellness tool, not medical advice or a medical device. Do not hold a
 > rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.
 
 Full notice (`SAFETY_POINTS`):
-1. Posture Guard is a wellness tool. It is not medical advice and not a medical device,
+1. BackUp is a wellness tool. It is not medical advice and not a medical device,
    and it does not diagnose, treat or prevent any condition.
 2. Do not hold a rigid posture. Relax your shoulders and change position often. Reminders
    are not a substitute for regular movement breaks.
@@ -46,7 +46,6 @@ Panel line under "Relax, don't brace":
 | First-run walkthrough, step 3 | Full notice + "I understand" | `ACK_VERSION`, `store.ackVersion` |
 | App footer | Short + "Safety notice" link | Reopens the full notice dialog |
 | `docs/index.html` | Short, near the call to action | Static copy |
-| `docs.html` (dashboard) | Full notice section | Static copy |
 | README, `KIROWEEN.md` | Short + link to this spec | Static copy |
 | Relax panel | One sentence | Static in `index.html` |
 | Each wellness tool (spec only) | "Stop if it hurts" | Per-tool copy |

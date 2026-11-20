@@ -8,11 +8,10 @@
 // docs/research/feedback-and-habit-formation.md and .kiro/specs/feedback-design:
 //
 // - Standard: every reminder the engine emits, voice as the engine says.
-// - Light: lower-intensity feedback (guidance hypothesis). It does not lower
-//   the number of reminders. The first
-//   reminder of an episode is chime and banner only; voice joins only when the
-//   previous episode ended recently (a second consecutive episode). No timed
-//   praise. Recovery and milestone praise stay.
+// - Light: lower-intensity feedback (guidance hypothesis), not fewer
+//   reminders. The first reminder of an episode is chime and banner only; voice
+//   joins only when the previous episode ended recently. No timed praise.
+//   Recovery and milestone praise stay.
 // - An hourly cap on reminders limits alarm fatigue.
 // - Milestone praise for effort: 5, 15, 30, 60 continuous good minutes, once
 //   per streak. Absence (a gap in good samples) is not a streak.

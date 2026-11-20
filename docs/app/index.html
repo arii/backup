@@ -203,6 +203,7 @@
           <button id="prompt-never" class="link">Don&rsquo;t show this again</button>
         </div>
       </div>
+      <div id="lowpower-note" class="note" role="status" style="position:absolute;left:12px;top:10px;right:12px;display:none;background:rgba(0,0,0,.7);color:var(--warn);padding:4px 8px;border-radius:6px">Using the simpler fallback model. Tracking is less accurate and slower.</div>
       <div id="demo-note" class="note" style="position:absolute;left:12px;bottom:10px;display:none">Demo: 20 s good posture, then 20 s slouching, repeating</div>
       <div class="overlay-msg" id="start-overlay">
         <h2 id="start-title">BackUp: Posture to Die For.</h2>
@@ -227,14 +228,14 @@
         <p id="start-status" class="note"></p>
         <p id="start-error" class="error"></p>
         <div id="webgl-help" role="alert">
-          <b>Your browser has WebGL turned off, and the pose model needs it.</b>
+          <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:
           <ul>
             <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
             <li><b>Linux / Wayland:</b> start the browser with <code>--ozone-platform=x11</code>.</li>
             <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
             <li>Strict privacy settings, some extensions, remote desktops and virtual machines can also block WebGL; try another browser or machine.</li>
           </ul>
-          <p style="margin-top:8px">Then reload this page. <i>Try the demo</i> works without WebGL. Still stuck? <a href="https://github.com/arii/posture-guard/issues/new" class="report-bug-link" target="_blank" rel="noopener">Report a bug</a>.</p>
+          <p style="margin-top:8px">Then reload this page. Still stuck? <a href="https://github.com/arii/posture-guard/issues/new" class="report-bug-link" target="_blank" rel="noopener">Report a bug</a>.</p>
         </div>
       </div>
     </div>
@@ -344,7 +345,7 @@
         <li>Camera at eye level, about an arm&rsquo;s length away, head and shoulders in frame.</li>
         <li>Light in front of you, not behind you. A plain background helps.</li>
         <li>Calibrate to your desk below if &ldquo;good&rdquo; and &ldquo;slouch&rdquo; look wrong for you.</li>
-        <li>Pose tracking needs WebGL. See the steps on the start screen if the webcam button is disabled.</li>
+        <li>Without WebGL the webcam uses a simpler, less accurate fallback. Turn WebGL on (see the start screen) for the best tracking.</li>
       </ul>
       <div class="btn-row">
         <button class="secondary" id="practice-start">Learn the cues</button>
@@ -444,7 +445,7 @@
       <label class="note" for="coaching-level" style="display:block;margin-top:6px">Coaching level</label>
       <div class="modes"><select id="coaching-level" aria-describedby="coaching-note">
         <option value="standard">Standard: chime, then voice</option>
-        <option value="light">Light: fewer reminders, praise only at milestones</option>
+        <option value="light">Light: a chime before any voice, praise only at milestones</option>
       </select></div>
       <div class="note" id="coaching-note">Light coaching gives your own habit room to take over. Check with &ldquo;Test me&rdquo; whether it sticks.</div>
       <div class="note" id="reminder-note" role="status">Taking a break from reminders: that is a lot in an hour. Tracking continues.</div>
@@ -483,6 +484,7 @@
 <dialog id="share-dialog" aria-labelledby="share-title">
   <h2 id="share-title" style="margin-top:0">Share BackUp</h2>
   <div class="note" id="share-text" style="margin-top:0"></div>
+  <div class="btn-row"><button id="share-native" hidden>Share with your device</button></div>
   <div class="share-links">
     <a id="share-bluesky" href="https://bsky.app/" target="_blank" rel="noopener noreferrer">Bluesky</a>
     <a id="share-linkedin" href="https://www.linkedin.com/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
@@ -494,6 +496,11 @@
   <label class="note" for="share-link" style="display:block">Link</label>
   <div class="share-links"><input type="text" id="share-link" readonly style="flex:1 1 200px;width:auto"><button id="share-copy" class="secondary">Copy</button></div>
   <div class="note" id="share-msg" aria-live="polite"></div>
+  <div id="share-card-wrap" hidden>
+    <canvas id="share-card" width="1200" height="630" role="img" style="width:100%;height:auto;border-radius:6px"></canvas>
+    <div class="btn-row"><button class="secondary" id="share-card-download">Download PNG</button><button class="secondary" id="share-card-share" hidden>Share image</button></div>
+  </div>
+  <div class="btn-row"><button class="secondary" id="share-card-btn" title="A picture with your good-posture percentage and best streak. No camera image.">Share your score</button></div>
   <div class="note">These are plain links. Nothing is loaded from those sites until you open one, and no share counters or tracking scripts are used.</div>
   <div class="btn-row"><button id="share-close">Close</button></div>
 </dialog>
@@ -509,8 +516,8 @@
   <a href="../privacy.html">Privacy</a> &middot;
   <a href="../privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a> &middot;
   <a href="https://github.com/sponsors/arii" class="quiet-link" target="_blank" rel="noopener">&hearts; Sponsor</a> &middot;
-  Runs on MediaPipe Pose Landmarker (served from this site) and the same scoring and state machine as the
-  <a href="https://github.com/arii/posture-guard">Python app</a>, ported to <code>posture-core.js</code> and checked frame-by-frame against it.
+  Runs on MediaPipe Pose Landmarker (served from this site). Scoring and reminders run in
+  <code>posture-core.js</code>, tested against a recorded frame-by-frame timeline.
   Keep this tab open in the background: the tracker slows to about 5 fps when hidden and keeps reminding you.
   <div class="credits" id="credits">Pose: MediaPipe (Apache-2.0) &middot; Voice: Kokoro-82M (Apache-2.0) &middot;
     <a href="https://github.com/arii/posture-guard/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a></div>
