@@ -32,12 +32,21 @@ test("progress counts every byte against the expected total and ends at 100%", a
   const seen = [];
   const bufs = await downloadAll(Object.keys(files), (got, total) => seen.push([got, total]), {
     fetchImpl: fakeFetch(files),
-    sizes: new Map([["https://x/a.wasm", 1000], ["https://x/b.task", 500]]),
+    sizes: new Map([
+      ["https://x/a.wasm", 1000],
+      ["https://x/b.task", 500],
+    ]),
   });
-  assert.deepEqual(bufs.map((b) => b.byteLength), [1000, 500]);
+  assert.deepEqual(
+    bufs.map((b) => b.byteLength),
+    [1000, 500],
+  );
   assert.deepEqual(seen.at(-1), [1500, 1500]);
   for (let i = 1; i < seen.length; i++) assert.ok(seen[i][0] >= seen[i - 1][0], "never goes backwards");
-  assert.ok(seen.every(([g, t]) => g <= t), "never past 100%");
+  assert.ok(
+    seen.every(([g, t]) => g <= t),
+    "never past 100%",
+  );
 });
 
 test("gzip: a smaller Content-Length can't push progress past 100% when the real size is known", async () => {
@@ -58,7 +67,8 @@ test("unknown sizes fall back to Content-Length, then to bytes received", async 
   assert.deepEqual(withLen.at(-1), [300, 300]);
   const noLen = [];
   await downloadAll(["https://x/a"], (g, t) => noLen.push([g, t]), {
-    fetchImpl: fakeFetch(files, { contentLength: false }), sizes: new Map(),
+    fetchImpl: fakeFetch(files, { contentLength: false }),
+    sizes: new Map(),
   });
   assert.deepEqual(noLen.at(-1), [300, 300], "exact once finished");
 });

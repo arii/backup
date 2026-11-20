@@ -1754,7 +1754,10 @@ async function loadMoveNet(onProgress = () => {}) {
     "group1-shard1of2.bin",
     "group1-shard2of2.bin",
   ];
-  await downloadAll(files.map((f) => new URL(`${MOVENET_DIR}/${f}`, location.href).href), onProgress);
+  await downloadAll(
+    files.map((f) => new URL(`${MOVENET_DIR}/${f}`, location.href).href),
+    onProgress,
+  );
   const tfm = await import(`${MOVENET_DIR}/movenet_bundle.mjs`);
   tfm.setWasmPaths({
     "tfjs-backend-wasm.wasm": `${MOVENET_DIR}/tfjs-backend-wasm.wasm`,
