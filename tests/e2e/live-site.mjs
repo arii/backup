@@ -4,20 +4,24 @@
 // End-to-end check of the browser app, run by .github/workflows/live-site.yml
 // against the deployed GitHub Pages site or, on push, a locally served
 // candidate build. Not part of `node --test tests/js/`: it needs the internet
-// (Pages, jsDelivr, Google's model bucket) and Chromium.
+// (the Pages site, or a local server for the candidate build) and Chromium.
 //
 //   node tests/e2e/live-site.mjs <base-url> <fake-camera.y4m> <out-dir>
 //
 // 1. Landing page loads and links to ./app/.
 // 2. Demo mode: GOOD, then the scripted slouch triggers a reminder.
 // 3. Webcam mode with Chromium's fake camera playing a photo of a person:
-//    the real tasks-vision bundle, WASM and pose model load from the CDN and
+//    the real tasks-vision bundle, WASM and pose model load from app/vendor/ and
 //    detectForVideo finds the person (metrics shown, any state except "no one
 //    in view"), and the person - who is standing upright - gets no reminder.
 // 4. Webcam mode with WebGL blocked on every canvas type: the app must explain
 //    how to turn it on, not open the camera, and not throw. (--disable-3d-apis
 //    alone is not enough: OffscreenCanvas keeps WebGL, and the app correctly
 //    runs on it.)
+// 5. Self-hosting (issue #45): the vendored files are served, and no request
+//    leaves the site's origin (in particular none to cdn.jsdelivr.net or
+//    storage.googleapis.com). CSP violations show up as console errors, which
+//    every scenario already asserts are empty.
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
@@ -30,6 +34,13 @@ mkdirSync(outDir, { recursive: true });
 const bust = `?v=${Date.now()}`;
 const report = { base, checks: [] };
 let failed = false;
+const baseOrigin = new URL(base).origin;
+const externalRequests = [];
+const VENDORED = [
+  "vision_bundle.mjs", "pose_landmarker_lite.task", "LICENSE",
+  "wasm/vision_wasm_internal.js", "wasm/vision_wasm_internal.wasm",
+  "wasm/vision_wasm_nosimd_internal.js", "wasm/vision_wasm_nosimd_internal.wasm",
+];
 
 function check(name, ok, detail) {
   report.checks.push({ name, ok, detail });
@@ -60,6 +71,10 @@ async function newPage(browser, { fresh = false, guide = false, viewport = { wid
     }, [ONBOARDED, ACKED, !guide]);
   }
   const page = await context.newPage();
+  page.on("request", (r) => {
+    const u = r.url();
+    if (/^https?:/.test(u) && new URL(u).origin !== baseOrigin) externalRequests.push(u);
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
@@ -465,7 +480,7 @@ try {
     await page.close();
   }
 
-  // 3. Webcam mode: real model from the CDN on a fake camera.
+  // 3. Webcam mode: real model from app/vendor/ on a fake camera.
   {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
@@ -477,7 +492,7 @@ try {
       null, { timeout: 90000 },
     );
     const loaded = await ui(page);
-    check("webcam mode starts (CDN bundle, WASM and model load)",
+    check("webcam mode starts (vendored bundle, WASM and model load)",
       loaded.overlay === "none" && loaded.source === "webcam", { ...loaded, seconds: (Date.now() - t0) / 1000 });
     // Give the detector a few seconds on the looping fake camera frame.
     await page.waitForTimeout(8000);
@@ -549,6 +564,17 @@ try {
     } finally {
       await noGL.close();
     }
+  }
+  // 5. Self-hosting: vendored files are served, nothing left the origin.
+  {
+    const missing = [];
+    for (const f of VENDORED) {
+      const res = await fetch(`${base}app/vendor/${f}${bust}`);
+      if (!res.ok) missing.push(`${f} ${res.status}`);
+    }
+    check("vendored MediaPipe files are served", missing.length === 0, missing);
+    check("no request to a third-party host (jsDelivr, Google, ...)",
+      externalRequests.length === 0, externalRequests.slice(0, 5));
   }
 } finally {
   await browser.close();

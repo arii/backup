@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; media-src 'self' blob: data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Posture Guard - posture to die for</title>
 <meta name="description" content="Leave this tab open: your webcam, MediaPipe Pose and a posture state machine run entirely in your browser and chime when you slouch.">
 <style>
@@ -394,7 +395,7 @@
   <a href="#" id="safety-link" role="button">Safety notice</a> &middot;
   <a href="../privacy.html#about">About and safety</a> &middot;
   <a href="../privacy.html">Privacy</a> &middot;
-  Runs on MediaPipe Pose Landmarker (loaded from a CDN) and the same scoring and state machine as the
+  Runs on MediaPipe Pose Landmarker (served from this site) and the same scoring and state machine as the
   <a href="https://github.com/arii/posture-guard">Python app</a>, ported to <code>posture-core.js</code> and checked frame-by-frame against it.
   Keep this tab open in the background: the tracker slows to about 5 fps when hidden and keeps reminding you.
   <div class="credits" id="credits">Pose: MediaPipe (Apache-2.0) &middot; Voice: Kokoro-82M (Apache-2.0) &middot;

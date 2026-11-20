@@ -61,7 +61,7 @@ review it before any wider launch.
 - Webcam estimates are approximate. Lighting, camera angle, clothing and body shape
   change the result. "Good" means close to your own calibrated baseline.
 - Video and landmarks are processed on your machine and not uploaded. The browser
-  version loads its pose model and scripts from a CDN.
+  version serves its pose model and scripts from the same site.
 - Provided as-is, without warranty, under the [MIT License](LICENSE).
 
 How it works in the app: the first run requires an acknowledgement stored as
@@ -141,8 +141,8 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
 
 - **Everything in the tab.** MediaPipe Pose Landmarker and a JavaScript port of the
   scoring, reminder state machine, posture needle and calibration
-  (`docs/app/posture-core.js`). Only the model and its WASM runtime are downloaded
-  (from jsDelivr and Google's model bucket).
+  (`docs/app/posture-core.js`). The model and its WASM runtime are self-hosted
+  in `docs/app/vendor/`, so no third-party server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
   hidden. Chimes play through Web Audio, the prompt through the browser's speech
   synthesis, and *Notify when tab is hidden* adds desktop notifications.

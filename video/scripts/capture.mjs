@@ -8,7 +8,7 @@
 //
 // Writes <out-dir>/footage/{demo,webcam,landing}.webm and <out-dir>/capture.json
 // (Remotion props: --props=public/capture.json). Needs Chromium from Playwright
-// and the internet (GitHub Pages, jsDelivr, Google's model bucket).
+// and the site being recorded (the MediaPipe runtime and model are served by the site).
 
 import { chromium } from "playwright";
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";

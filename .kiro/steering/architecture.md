@@ -59,6 +59,11 @@
 ## Privacy
 - Frames and landmarks never leave the machine. The dashboard binds to
   `127.0.0.1` by default. Calibration lives in memory only.
+- The browser app is self-hosted: the MediaPipe runtime, WASM and pose model live in
+  `docs/app/vendor/` (versions and sha256 in its README, Apache-2.0 LICENSE alongside).
+  `docs/app/index.html` carries a meta CSP limiting everything to `'self'`. Do not add a
+  third-party origin without updating the CSP, `docs/privacy.html` and the live-site
+  e2e check that asserts no cross-origin requests.
 
 ## Testing
 - `pytest` for unit and timeline tests; `hypothesis` for the correctness properties

@@ -23,9 +23,9 @@ import {
 } from "./privacy.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
-const TASKS_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+// Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
+const TASKS_VISION = new URL("./vendor", import.meta.url).href;
+const MODEL_URL = `${TASKS_VISION}/pose_landmarker_lite.task`;
 const VISIBLE_FPS = 15; // detection rate while the tab is visible
 const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
 const DEMO_CYCLE_S = 20; // synthetic demo: 20 s good, 20 s slouch

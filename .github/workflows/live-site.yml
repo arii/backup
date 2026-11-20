@@ -2,7 +2,8 @@ name: live-site
 
 # End-to-end check of the browser app (docs/app): demo mode, plus webcam mode
 # with Chromium's fake camera playing a photo of a person, so the real
-# MediaPipe bundle, WASM and model are loaded from the CDN and run.
+# MediaPipe bundle, WASM and model are loaded from docs/app/vendor/ and run.
+# It also asserts that no request leaves the site (no CDN, no model bucket).
 #
 # Target depends on the trigger: pushes validate the candidate build served
 # from the checkout (so PR checks can cover not-yet-deployed changes), while
@@ -15,11 +16,12 @@ on:
     types: [completed]
   workflow_dispatch:
   schedule:
-    - cron: "17 6 * * 1"  # weekly: catches CDN / model URL drift
+    - cron: "17 6 * * 1"  # weekly: catches a broken deploy or missing vendored files
   push:
     paths:
       - ".github/workflows/live-site.yml"
       - "tests/e2e/**"
+      - "docs/app/**"
 
 jobs:
   live-site:
@@ -65,6 +67,13 @@ jobs:
             sleep 2
           done
           [ "$ok" = 1 ]
+      - name: Check the vendored MediaPipe files are served
+        run: |
+          for f in vision_bundle.mjs pose_landmarker_lite.task LICENSE \
+                   wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+            curl -fsS -o /dev/null "${BASE_URL}app/vendor/$f" || { echo "missing: $f"; exit 1; }
+          done
       - name: Run the live-site check
         timeout-minutes: 5
         run: node tests/e2e/live-site.mjs "$BASE_URL" "$PWD/person.y4m" live-site-report

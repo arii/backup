@@ -145,7 +145,7 @@ What the Kiro phase changed (PRs #19 onward):
   real MediaPipe and OpenCV packages.
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
-  playing a photo of a person, so the real pose model loads from the CDN and
+  playing a photo of a person, so the real pose model loads from the self-hosted vendor files and
   detects her. Screenshots are kept as a workflow artifact.
 
 ## Known limitations
@@ -172,8 +172,8 @@ What the Kiro phase changed (PRs #19 onward):
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing
   a photo; it does not cover a physical camera.
 - **2D only.** Without a depth camera, every angle comes from the 2D landmarks.
-- **CDN dependency.** The browser app downloads the MediaPipe runtime and model
-  from jsDelivr and Google's model bucket; video and landmarks never leave the tab.
+- **Self-hosted runtime.** The browser app serves the MediaPipe runtime and model
+  from its own site (`docs/app/vendor/`); video and landmarks never leave the tab.
 
 ## Submission checklist
 

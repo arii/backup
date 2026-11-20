@@ -36,6 +36,28 @@ jobs:
       - name: Browser core parity + properties
         run: node --test "tests/js/*.test.mjs"
 
+  vendored-files:
+    # The app is self-hosted (issue #45): vendored MediaPipe files must exist
+    # and match the sha256 values recorded in docs/app/vendor/README.md.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify vendored files and checksums
+        working-directory: docs/app/vendor
+        run: |
+          test -s LICENSE
+          for f in vision_bundle.mjs pose_landmarker_lite.task \
+                   wasm/vision_wasm_internal.js wasm/vision_wasm_internal.wasm \
+                   wasm/vision_wasm_nosimd_internal.js wasm/vision_wasm_nosimd_internal.wasm; do
+            sum=$(sha256sum "$f" | cut -d' ' -f1)
+            grep -q "$sum" README.md || { echo "checksum not in README: $f"; exit 1; }
+          done
+      - name: No third-party hosts in the app
+        run: |
+          if grep -rnE "cdn\.jsdelivr\.net|storage\.googleapis\.com" docs/app/*.js docs/app/index.html; then
+            echo "app must not load from third-party hosts"; exit 1
+          fi
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

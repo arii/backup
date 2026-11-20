@@ -50,8 +50,8 @@ THE README and `KIROWEEN.md` SHALL carry the short notice (FEAT-003 docs step).
 ### Requirement 4: Privacy statement (FEAT-003)
 1. THE app SHALL state that video frames and landmarks are processed on the device and
    not uploaded, and that settings and daily totals are stored in the browser (`localStorage`).
-2. THE app SHALL state that the model and scripts load from a CDN, which sees the
-   request, and which assets those are (MediaPipe model and wasm).
+2. THE app SHALL state that the model and scripts are self-hosted on the same origin
+   (docs/app/vendor/), so only GitHub Pages sees the request.
 3. WHEN any future feature sends data off the device (see `progress-review` social
    phase), THE privacy statement SHALL be updated first and consent SHALL be explicit.
 
@@ -85,7 +85,7 @@ THE owner SHOULD ask counsel to confirm:
 3. Data protection duties if any data leaves the device (GDPR, CCPA), and rules for minors.
 4. Whether the limitation of liability in the MIT License is sufficient for consumer
    use in the target markets, and whether terms of use are needed.
-5. Open source and contributor obligations for the CDN assets used.
+5. Open source and contributor obligations for the vendored MediaPipe assets (Apache-2.0 LICENSE in docs/app/vendor/).
 
 ### Requirement 9: Accessibility of the notice (FEAT-003)
 1. THE notice SHALL be readable at 375 px, keyboard operable, and have a visible focus state.
