@@ -342,7 +342,8 @@ export const Outro: React.FC<{ p: VideoProps }> = ({ p }) => (
     <Clip src={p.landing.src} fromSec={p.landing.start} dim={0.72} />
     <AbsoluteFill style={{ ...center, gap: 24 }}>
       <Rise>
-        <div style={{ fontSize: 120, fontWeight: 800 }}>Posture to die for.</div>
+        <div style={{ fontSize: 120, fontWeight: 800 }}>BackUp</div>
+        <div style={{ fontSize: 64, fontWeight: 700 }}>Posture to Die For.</div>
       </Rise>
       <Rise delay={20}>
         <div style={{ fontSize: 54, color: color.good, fontFamily: mono }}>arii.github.io/posture-guard</div>

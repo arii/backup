@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How it works — Posture Guard</title>
+<title>How it works — BackUp</title>
 <style>
   :root {
     --bg: #14171c; --panel: #1d222a; --line: #2c333e; --text: #e8ebf0;
@@ -30,7 +30,7 @@
 <body>
 <main>
   <h1>How it works</h1>
-  <p class="muted">Posture Guard &mdash; the five-minute tour. Written for the demo, so you can answer every question on this page without leaving the app.</p>
+  <p class="muted">BackUp &mdash; the five-minute tour. Written for the demo, so you can answer every question on this page without leaving the app.</p>
 
   <h2>1. The pipeline, end to end</h2>
   <ol class="pipeline">
@@ -55,7 +55,7 @@
   </ol>
 
   <h2>2. The model</h2>
-  <p>Posture Guard uses <b>MediaPipe Pose</b>, the legacy Solutions API, pinned to <code>&gt;=0.10.14,&lt;0.10.30</code> because the Solutions interface was removed from later pip releases. It runs <b>fully in-process, on CPU</b> &mdash; no GPU, no server, no model download at runtime. It gives us 33 2D body landmarks plus a visibility estimate per landmark.</p>
+  <p>BackUp uses <b>MediaPipe Pose</b>, the legacy Solutions API, pinned to <code>&gt;=0.10.14,&lt;0.10.30</code> because the Solutions interface was removed from later pip releases. It runs <b>fully in-process, on CPU</b> &mdash; no GPU, no server, no model download at runtime. It gives us 33 2D body landmarks plus a visibility estimate per landmark.</p>
   <p>Everything on top of the model is ours: the angle geometry, the thresholds, hysteresis, smoothing, the state machine, and the audio flow are plain Python you can read in this repo (<code>scoring.py</code>, <code>state.py</code>, <code>audio.py</code>). The model finds a body; the posture judgment is code we wrote. We plan to migrate to MediaPipe's newer Tasks <i>PoseLandmarker</i> API when we need features the legacy API can't give us &mdash; the pin above keeps the current build honest until then.</p>
 
   <h2>3. Privacy: what is recorded</h2>
@@ -71,12 +71,12 @@
   <p>The same scoring and reminder logic also runs entirely in a browser tab, with nothing to install: <a href="https://arii.github.io/posture-guard/app/">arii.github.io/posture-guard/app</a>. The browser port is tested frame by frame against this Python code, so both versions remind you at the same moments.</p>
 
   <h2>5. Roadmap: embedded Linux</h2>
-  <p>The long-term goal is to run Posture Guard on small embedded Linux hardware (a Pi-class board beside the desk) rather than a full desktop. This is intent, not something we've tested on target hardware yet. What already helps: the whole stack is CPU-only with no GPU dependency, the footprint is a handful of lightweight Python processes, and the system degrades gracefully (trusted metrics only, honest UNRELIABLE status) instead of failing hard. What needs work: packaging for a minimal OS image, headless operation without a desktop audio session, and a compute assessment to confirm the pose model's frame rate fits the board's budget.</p>
+  <p>The long-term goal is to run BackUp on small embedded Linux hardware (a Pi-class board beside the desk) rather than a full desktop. This is intent, not something we've tested on target hardware yet. What already helps: the whole stack is CPU-only with no GPU dependency, the footprint is a handful of lightweight Python processes, and the system degrades gracefully (trusted metrics only, honest UNRELIABLE status) instead of failing hard. What needs work: packaging for a minimal OS image, headless operation without a desktop audio session, and a compute assessment to confirm the pose model's frame rate fits the board's budget.</p>
 
   <h2>6. Safety notice</h2>
   <p>This wording is a draft and has not been reviewed by a lawyer. It is not legal advice.</p>
   <ul>
-    <li>Posture Guard is a wellness tool. It is not medical advice and not a medical device, and it does not diagnose, treat or prevent any condition.</li>
+    <li>BackUp is a wellness tool. It is not medical advice and not a medical device, and it does not diagnose, treat or prevent any condition.</li>
     <li>Do not hold a rigid posture. Relax your shoulders and change position often. Reminders are not a substitute for regular movement breaks.</li>
     <li>Stop and see a qualified clinician if you feel pain, numbness, tingling or dizziness, or if pain persists.</li>
     <li>If you have a spine, nerve, neuromuscular or other medical condition, are pregnant, or are recovering from an injury, check with a professional first.</li>

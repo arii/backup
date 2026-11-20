@@ -1,4 +1,4 @@
-# Posture Guard: Kiroween 2026 submission
+# BackUp: Kiroween 2026 submission
 
 **Posture to die for.** (Please don't.) Leave a browser tab open; your webcam
 watches how you sit, chimes when you slouch, and tells you out loud what to fix.
@@ -11,7 +11,7 @@ Your camera feed never leaves your browser.
 
 ## What it does
 
-Posture Guard runs MediaPipe Pose on your webcam, measures head-forward, head
+BackUp runs MediaPipe Pose on your webcam, measures head-forward, head
 tilt, shoulder level and trunk lean, and runs a reminder state machine: a chime
 after 2 s of sustained slouching, a spoken prompt 10 s later, and a reward chime
 when you sit back up. Reminders say what is wrong and how to fix it ("Right
@@ -33,7 +33,7 @@ It comes in two forms that share one behavior:
 **Tagline:** Posture to die for. A webcam posture coach stitched together from
 parts that were never meant to share a body.
 
-**Short description:** Leave a browser tab open and Posture Guard watches how you
+**Short description:** Leave a browser tab open and BackUp watches how you
 sit. Slouch and it chimes; keep slouching and it tells you what's wrong ("Head
 forward: tuck your chin") and how to fix it. MediaPipe eyes, a Python brain and its
 JavaScript twin, kept in lockstep by a 632-frame golden timeline. Runs locally, no install.
@@ -41,7 +41,7 @@ JavaScript twin, kept in lockstep by a 632-frame golden timeline. Runs locally, 
 ## Why Frankenstein
 
 The category asks for seemingly incompatible technologies stitched into one app.
-Posture Guard's body parts come from different languages and runtimes, and the
+BackUp's body parts come from different languages and runtimes, and the
 interesting work is in the stitches:
 
 | Part | Donor | Stitch |
@@ -150,7 +150,7 @@ What the Kiro phase changed (PRs #19 onward):
 
 ## Known limitations
 
-- **Not medical advice.** Posture Guard is a wellness tool, not a medical device. It
+- **Not medical advice.** BackUp is a wellness tool, not a medical device. It
   tells users not to hold a rigid posture and to stop and see a clinician for pain,
   numbness or dizziness. The wording is a draft that a lawyer should review before any
   wider launch.
@@ -216,4 +216,4 @@ Items only the repository owner can do (from issue #30 and the license review):
 - [ ] Replace the sample photo `id_fail_distant_waist_up.jpg` used by CI and the video with your own or a cleared image.
 - [ ] Confirm Remotion's free tier covers you, or buy a license.
 - [ ] Submit on Devpost (deadline Dec 4, 2026, 2:00 PM PT) and add the YouTube link.
-- [ ] Run a trademark search on "Posture Guard" before any commercial use.
+- [ ] Run a trademark search on "BackUp" before any commercial use.

@@ -1,11 +1,11 @@
 {
-  "version": "252d12fb0f91d90b",
-  "totalBytes": 26228013,
+  "version": "1836df8160faf7aa",
+  "totalBytes": 26227971,
   "files": [
     {
       "url": "app.js",
-      "size": 88380,
-      "sha256": "823199d3810a2c6c40e88b9a51f723dc63b284786835670d971540570e3d5e98"
+      "size": 88352,
+      "sha256": "b97a2df0ca1c5990f676e9a76f7c636688e422cf79e22a11392a2671d4908f3e"
     },
     {
       "url": "breaks.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 39287,
-      "sha256": "938f0e27c99c3c9b0fcff3ec82d79e4d3f05fafd989142603ada0f725d8b88f3"
+      "size": 39265,
+      "sha256": "67d8a6329c97efad3c133657644363dd87a673d25de86057ec1576b28b8b6fee"
     },
     {
       "url": "mini-view.js",
@@ -44,13 +44,13 @@
     },
     {
       "url": "onboarding.js",
-      "size": 8854,
-      "sha256": "e05eaa32522017667d17005e22b9a7f6b3b9c4d57b8d3d93fca97986875e22f1"
+      "size": 8833,
+      "sha256": "3f6c6e2c99b01217230b6db108d8772e1630292225b4ef574d2c4d8a664ec831"
     },
     {
       "url": "posture-core.js",
-      "size": 30189,
-      "sha256": "ff12e7c12a4dc569cc0f7d8d3d6593cf0d6a8a3b2f9852817efb8a01ce2d0195"
+      "size": 30182,
+      "sha256": "3de5e2323786048d9c1929f71fe2ccec7f50e8cfa30d12e3a9f71e22a52c2372"
     },
     {
       "url": "privacy.js",
@@ -79,13 +79,13 @@
     },
     {
       "url": "share.js",
-      "size": 2051,
-      "sha256": "ecd8dc29115f1975574d17ceffd7db41fcad90eb71d0092a0e8ab2b220471875"
+      "size": 2094,
+      "sha256": "c6a1ae1f43921dbf851ccfbfd333edff6a3c260c3bd3c3b43d89e6de0b971e1a"
     },
     {
       "url": "sponsor.js",
-      "size": 4212,
-      "sha256": "0d94c68f9a1363153cd5bcfc1f485f44cbd7f86c182b9ef4d3f7a07e627fbb2e"
+      "size": 4205,
+      "sha256": "2ae4e72b0133b61a49981b73242f13a2b34ded8c4cd39d5f1b7b0fafbc9ca7f8"
     },
     {
       "url": "vendor/LICENSE",

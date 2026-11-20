@@ -1,4 +1,4 @@
-# Posture Guard: Steering and Engineering Standards
+# BackUp: Steering and Engineering Standards
 
 ## File headers and style
 - Every newly created `.py` file starts with:
@@ -77,7 +77,7 @@
 - CI (`.github/workflows/ci.yml`) runs lint + the full suite on every branch.
 
 ## Safety and claims
-- Posture Guard is a wellness tool. No copy, spec or code comment may claim to
+- BackUp is a wellness tool. No copy, spec or code comment may claim to
   diagnose, treat, prevent or cure a condition, or that it improves health outcomes.
   Do not call the research "proof" or the app "clinically validated".
 - The safety notice text lives in one place (`SAFETY_SHORT` and `SAFETY_POINTS` in
