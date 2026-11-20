@@ -60,9 +60,9 @@ All copy follows the wellness rules (#41, #51): it **notices, reminds and helps 
 **Hackathon (Kiroween 2026, Frankenstein)**
 - *One-liner:* BackUp — Posture to Die For: a webcam posture coach stitched together from a pose model, a state machine, a natural TTS voice and some behavior science, all running in one browser tab.
 - *Pitch:*
-  > Started as a RealSense desktop app; rebuilt in Kiro into a browser app anyone can open. MediaPipe pose runs in the tab, a deterministic posture core is checked frame-by-frame against the original Python, Kokoro renders a natural voice offline in CI, and a silent "Test me" mode measures whether the habit actually sticks. Posture to die for (please don't).
+  > Started as a RealSense desktop app; rebuilt in Kiro into a browser app anyone can open. MediaPipe pose runs in the tab, a deterministic posture core is replayed against a recorded frame-by-frame timeline on every change, Kokoro renders a natural voice offline in CI, and a silent "Test me" mode measures whether the habit actually sticks. Posture to die for (please don't).
 
 ## Brand use in the product
 - **UI:** "BackUp", plain and functional. The tagline appears on the start screen, page titles and the share text.
 - **Audio:** clean chimes by default. An optional spooky chime pack is planned, to play up the tagline without making it the default.
-- **Internal names stay as they are:** the `posture-guard:v1` storage key (so existing users keep their data), the Python package `posture_guard`, and the repo URL until the domain move.
+- **Internal names stay as they are:** the `posture-guard:v1` storage key (so existing users keep their data) and the repo URL until the domain move.

@@ -14,7 +14,7 @@ the live site, renders `out/posture-guard-demo.mp4`, and uploads it as the
 
 ## Render it locally
 
-Needs Node 20+, Python 3, `ffmpeg` and `espeak-ng`.
+Needs Node 20+, `ffmpeg` and `espeak-ng`.
 
 ```bash
 cd video

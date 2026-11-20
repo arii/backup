@@ -144,9 +144,9 @@ function tones(freqs, seconds, harmonics = null) {
   if (harmonics) {
     const n = Math.max(...harmonics.map(([k]) => k)) + 1;
     const real = new Float32Array(n);
-    const imag = new Float32Array(n); // sine terms, as in audio.py
+    const imag = new Float32Array(n); // sine terms
     for (const [k, amp] of harmonics) imag[k] = amp;
-    wave = ac.createPeriodicWave(real, imag); // peak-normalized, like audio.py
+    wave = ac.createPeriodicWave(real, imag); // peak-normalized
   }
   let t = ac.currentTime + 0.02;
   freqs.forEach((f, i) => {
@@ -158,7 +158,7 @@ function tones(freqs, seconds, harmonics = null) {
     osc.frequency.value = f;
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur); // ~exp(-3t) decay like audio.py
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur); // ~exp(-3t) decay
     osc.connect(gain).connect(ac.destination);
     osc.start(t);
     osc.stop(t + dur + 0.02);
@@ -174,7 +174,7 @@ function playBuffer(buffer) {
   src.start();
 }
 
-// Same tones as audio.py: a falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
+// A falling "uh-oh" reminder (E5 -> B-flat 4, a tritone
 // down, reedy odd harmonics) and a rising C-major arpeggio reward.
 const BAD_HARMONICS = [[1, 1.0], [3, 0.35], [5, 0.15]];
 // An uploaded sound wins, then the chosen pack (clean by default).

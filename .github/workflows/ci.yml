@@ -7,33 +7,15 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install
-        run: pip install -e '.[dev]'
-      - name: Lint
-        run: ruff check .
-      - name: Test
-        run: pytest
-
   browser-core:
-    # docs/app/posture-core.js (the GitHub Pages app) must match the Python
-    # pipeline frame-for-frame on tests/fixtures/browser_golden.json.
+    # Unit, property and golden-timeline tests for the GitHub Pages app.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Browser core parity + properties
+      - name: Unit, property and golden-timeline tests
         run: node --test "tests/js/*.test.mjs"
       - name: Offline precache list is current
         run: node scripts/gen-precache.mjs --check
@@ -96,20 +78,4 @@ jobs:
       - name: ShellCheck
         run: |
           sudo apt-get install -y -qq shellcheck
-          shellcheck setup.sh
-          shellcheck -x Makefile
-
-  webcam-smoke:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install with webcam extra
-        run: pip install '.[webcam,dev]'
-      - name: Smoke-check real SDK APIs
-        # Asserts the installed mediapipe/opencv wheels expose every
-        # attribute webcam.py and pose.py use, so stubbed unit tests cannot
-        # hide API drift. A missing wheel for this Python fails loudly here.
-        run: python tests/smoke_hardware.py
+          shellcheck video/scripts/*.sh

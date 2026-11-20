@@ -29,9 +29,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: System packages (ffmpeg, espeak-ng, fonts)
         timeout-minutes: 8
         run: |
@@ -47,9 +44,7 @@ jobs:
       - name: Fake camera feed
         run: bash scripts/make-fake-camera.sh person.y4m
       - name: Sounds
-        run: |
-          pip install -q pyyaml
-          bash scripts/make-audio.sh
+        run: bash scripts/make-audio.sh
       - name: Record footage from the live site
         timeout-minutes: 6
         run: node scripts/capture.mjs "$BASE_URL" "$PWD/person.y4m" public

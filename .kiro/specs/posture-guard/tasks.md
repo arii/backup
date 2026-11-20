@@ -1,5 +1,12 @@
 # Implementation Plan: Posture Guard
 
+> **History note (Nov 2026).** This spec was written while a Python desktop app
+> (`src/posture_guard`, FastAPI dashboard, `config.yaml`) existed next to the browser
+> app. That app was removed. Items naming Python modules, `pytest`, `hypothesis`, the
+> dashboard, `paplay` or `config.yaml` describe the removed implementation. The
+> behavior they specify lives on in `docs/app/posture-core.js` (tuning defaults in
+> `DEFAULTS`) and is tested by `tests/js/`.
+
 - [x] 1. Strict configuration
   - `ConfigError` for unknown keys (full key path) and wrong types; `validate()` for
     ranges and `camera.source`. New sections: `needle`, `calibration`,
@@ -33,14 +40,14 @@
     Tests: `tests/test_audio.py`, `tests/test_dashboard.py`.
   - _Requirements: 6_
 - [x] 8. Property-based tests
-  - `tests/test_properties.py`: P1-P7 from design.md, plus mutation checks.
+  - `tests/js/posture-core.test.mjs`: P1-P7 from design.md (first written as `tests/test_properties.py` with mutation checks).
 - [x] 9. Kiro hook, CI and docs
-  - `.kiro/hooks/pytest-on-change.json`; CI runs on branches with `/`; README.
+  - `.kiro/hooks/node-tests-on-change.json` (was `pytest-on-change.json`); CI runs on branches with `/`; README.
 - [x] 10. Browser version on GitHub Pages (`docs/app/`)
   - `posture-core.js` port, `app.js` shell (webcam, MediaPipe tasks-vision, Web Audio,
     speech, hidden-tab worker ticks, localStorage), landing-page link.
-  - Golden parity: `tests/browser_golden.py` -> `tests/fixtures/browser_golden.json`,
-    `tests/js/posture-core.test.mjs`, `tests/test_browser_golden.py`; CI `browser-core` job.
+  - Golden timeline: recorded by the removed `tests/browser_golden.py`, kept as `tests/js/fixtures/golden-timeline.json`,
+    `tests/js/posture-core.test.mjs`; CI `browser-core` job.
   - _Requirements: 8_
 - [x] 11. Remove RealSense support
   - The browser version is the primary product and needs no special camera. Delete

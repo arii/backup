@@ -46,7 +46,6 @@ Panel line under "Relax, don't brace":
 | First-run walkthrough, step 3 | Full notice + "I understand" | `ACK_VERSION`, `store.ackVersion` |
 | App footer | Short + "Safety notice" link | Reopens the full notice dialog |
 | `docs/index.html` | Short, near the call to action | Static copy |
-| `docs.html` (dashboard) | Full notice section | Static copy |
 | README, `KIROWEEN.md` | Short + link to this spec | Static copy |
 | Relax panel | One sentence | Static in `index.html` |
 | Each wellness tool (spec only) | "Stop if it hurts" | Per-tool copy |

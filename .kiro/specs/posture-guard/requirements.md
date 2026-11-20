@@ -1,5 +1,12 @@
 # Requirements Document: Posture Guard
 
+> **History note (Nov 2026).** This spec was written while a Python desktop app
+> (`src/posture_guard`, FastAPI dashboard, `config.yaml`) existed next to the browser
+> app. That app was removed. Items naming Python modules, `pytest`, `hypothesis`, the
+> dashboard, `paplay` or `config.yaml` describe the removed implementation. The
+> behavior they specify lives on in `docs/app/posture-core.js` (tuning defaults in
+> `DEFAULTS`) and is tested by `tests/js/`.
+
 ## Introduction
 Posture Guard is a local posture monitor. It reads a standard webcam (or a synthetic
 demo stream), runs MediaPipe Pose, scores head and shoulder geometry, and reminds the
@@ -82,7 +89,7 @@ coached to better posture with nothing to install.
 
 #### Acceptance Criteria
 1. `docs/app/` SHALL run on GitHub Pages: webcam via `getUserMedia`, MediaPipe Pose Landmarker (tasks-vision, VIDEO mode), and a demo mode with no camera.
-2. Scoring, the state machine, the needle and calibration SHALL be a port of the Python modules (`docs/app/posture-core.js`) and SHALL match the Python pipeline frame-for-frame on the golden timeline (states, reminders, reasons exactly; numbers within 1e-9).
+2. Scoring, the state machine, the needle and calibration SHALL live in `docs/app/posture-core.js` (originally a port of the Python modules) and SHALL reproduce the recorded golden timeline frame-for-frame (states, reminders, reasons exactly; numbers within 1e-9).
 3. WHEN the tab is hidden, THE page SHALL keep tracking (worker-driven ticks, about 5 fps) and keep reminding.
 4. Audio SHALL start only inside a user gesture; chimes use Web Audio, the prompt uses speech synthesis; custom good/bad sounds can be picked from files.
 5. Video and landmarks SHALL never leave the browser; calibration, settings and daily totals persist in `localStorage`.
@@ -96,4 +103,4 @@ it ("your neck is too far forward"), not just "fix your posture".
 2. Sides in a cue SHALL be the person's own left and right, and SHALL NOT change when the camera image is mirrored.
 3. WHEN a chime or voice reminder fires and a cue exists, THE reminder banner SHALL show it; WHEN `audio.specific_cues` (browser: *Say what to fix*) is on, THE spoken prompt SHALL be the cue's sentence, otherwise `audio.voice_text`.
 4. THE dashboard and browser app SHALL show the cue live while a reminder is active or a metric is past its threshold.
-5. THE browser and Python versions SHALL produce the same cue on every frame of the golden timeline.
+5. THE browser SHALL produce the recorded cue on every frame of the golden timeline.

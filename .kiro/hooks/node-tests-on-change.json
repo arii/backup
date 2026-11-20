@@ -2,10 +2,10 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "Run browser parity tests when the JS core or golden timeline changes",
+      "name": "Run the node tests when the app or its tests change",
       "trigger": "PostFileSave",
-      "description": "Replays the Python-generated golden timeline through docs/app/posture-core.js whenever the JS core, the golden generator or the fixture is saved.",
-      "matcher": "(docs/app/posture-core\\.js|tests/browser_golden\\.py|tests/fixtures/browser_golden\\.json|tests/js/.*\\.mjs)$",
+      "description": "Runs node --test tests/js whenever a file under docs/app or tests/js is saved.",
+      "matcher": "(docs/app/[^/]+\\.js|tests/js/.*\\.mjs)$",
       "action": {
         "type": "command",
         "command": "cd \"$(git rev-parse --show-toplevel)\" && node --test \"tests/js/*.test.mjs\""

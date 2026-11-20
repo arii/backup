@@ -41,7 +41,7 @@ step, not the whole walkthrough, when `onboarded` is current.
 | `ok` | `metricsPresent`, no fault, for `ok_s` | None. |
 
 The `too_close_or_far` message uses the live band from `DEFAULTS.scoring`, not a
-hard-coded number, so it follows `config.yaml`.
+hard-coded number, so it follows the defaults in `posture-core.js`.
 
 ## State machine of SetupCheck
 `candidate` diagnosis changes every frame. `since` resets when the candidate changes.

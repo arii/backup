@@ -44,7 +44,7 @@ THE notice or a link to it SHALL appear in:
 1. the browser app footer (`docs/app/index.html`), as a short line with a "Safety notice" link that reopens the full text;
 2. the landing page `docs/index.html` near the call to action;
 3. one sentence under the "Relax, don't brace" panel;
-4. the dashboard docs page `src/posture_guard/dashboard/static/docs.html`.
+4. (removed with the Python dashboard in Nov 2026) the dashboard docs page.
 THE README and `KIROWEEN.md` SHALL carry the short notice (FEAT-003 docs step).
 
 ### Requirement 4: Privacy statement (FEAT-003)
