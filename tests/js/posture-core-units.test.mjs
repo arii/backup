@@ -294,6 +294,41 @@ test("a posture far from the slow baseline breaches while raw angles stay good",
   assert.equal(run(plain, GOOD, 0, 5).length, 0);
 });
 
+test("demo started during its slouch half can never return to good until the drift baseline is off (#67)", () => {
+  // The demo alternates a fixed good pose and a fixed slouch pose. Pressing
+  // its button during the slouch half seeds the drift baseline from a slouch
+  // frame; after that, every good phase scores as a deviation from that seed
+  // and the machine stays bad for the whole demo.
+  const stuck = machine();
+  run(stuck, BAD, 0, 5); // demo's slouch pose is what tracking sees first
+  assert.equal(stuck.state, State.BAD_CHIME);
+  run(stuck, GOOD, 5.1, 12); // demo's good pose, well past recovery_good_s
+  assert.notEqual(stuck.state, State.GOOD);
+
+  // The demo disables the drift baseline, so absolute angles classify it and
+  // the same sequence recovers as soon as the good pose is held.
+  const fixed = machine();
+  fixed.setDriftBaselineEnabled(false);
+  assert.equal(fixed.baseline, null);
+  run(fixed, BAD, 0, 5);
+  assert.equal(fixed.state, State.BAD_CHIME);
+  run(fixed, GOOD, 5.1, 9);
+  assert.equal(fixed.state, State.GOOD);
+});
+
+test("setDriftBaselineEnabled re-enables from scoring config and re-applies calibration", () => {
+  const engine = new PostureEngine();
+  engine.setDriftBaselineEnabled(false);
+  assert.equal(engine.machine.baseline, null);
+  engine.setDriftBaselineEnabled(true);
+  assert.ok(engine.machine.baseline !== null);
+  engine.machine.baseline.setAnchor(GOOD);
+  run(engine.machine, BAD, 0, 3); // updates the EMA away from the anchor
+  engine.setDriftBaselineEnabled(false);
+  engine.setDriftBaselineEnabled(true); // a fresh baseline, not the drifted one
+  assert.ok(engine.machine.baseline !== null);
+});
+
 test("baseline anchor survives no_person and feature off restores plain behavior", () => {
   const sm = machine();
   sm.setBaselineAnchor(GOOD);

@@ -325,6 +325,18 @@ export class PostureStateMachine {
     if (this.baseline !== null) this.baseline.setAnchor(m);
   }
 
+  /** Synthetic pose sources (the demo) have no real desk to adapt to. Without
+   *  this, the drift baseline seeds itself from the first tracked frame: when
+   *  that frame is a demo slouch pose, every later good phase scores as a
+   *  deviation and the machine can never return to good (issue #67). */
+  setDriftBaselineEnabled(enabled) {
+    if (!enabled) {
+      this.baseline = null;
+    } else if (this.baseline === null && this.th.baseline_deviation.enabled) {
+      this.baseline = new PostureBaseline(this.th.baseline_deviation);
+    }
+  }
+
   update(result, now) {
     if (result.kind === "unreliable") return this.onUnreliable(result, now);
     this.absentSince = null;
@@ -819,6 +831,16 @@ export class PostureEngine {
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
     const hold = this.machine.holdProgress(now);
     return { result, transition: tr, needle: this.needle.value, nudges, cue, hold };
+  }
+
+  /** Demo poses are synthetic: turn the drift baseline off while they run and
+   *  back on for real tracking, re-anchoring to the recorded calibration. */
+  setDriftBaselineEnabled(enabled) {
+    const wasOff = this.machine.baseline === null;
+    this.machine.setDriftBaselineEnabled(enabled);
+    if (enabled && wasOff && this.machine.baseline !== null && this.calibration.calibration !== null) {
+      this.machine.setBaselineAnchor(this.calibration.centroids.good);
+    }
   }
 
   /** Resume after a user pause: start fresh as if the person just sat down

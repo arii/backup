@@ -1574,6 +1574,7 @@ function begin(source) {
 
 $("start-camera").addEventListener("click", async () => {
   ensureAudio(); // inside the click: browsers only allow audio after a gesture
+  engine.setDriftBaselineEnabled(true); // back from the demo: real tracking adapts again
   $("start-camera").disabled = $("start-demo").disabled = true;
   showError("");
   showWebGLHelp(false);
@@ -1620,6 +1621,7 @@ applyWebGLState();
 $("start-demo").addEventListener("click", () => {
   ensureAudio();
   demo = true;
+  engine.setDriftBaselineEnabled(false); // synthetic poses: no desk baseline to adapt (#67)
   video.style.display = "none";
   $("demo-note").style.display = "block";
   begin("demo");
