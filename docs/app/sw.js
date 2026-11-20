@@ -11,8 +11,11 @@
 // changes whenever a precached file changes, which makes the browser update it.
 // Plain script (not a module): the constants below mirror offline.js.
 
-const PRECACHE_VERSION = "6f7941881d988be5";
-const CACHE_NAME = "posture-guard-offline";
+const PRECACHE_VERSION = "ed35cd643478409b";
+const CACHE_PREFIX = "posture-guard-";
+// One cache per release. The worker only ever reads and writes its own cache,
+// so an update never changes what the currently active worker serves.
+const CACHE_NAME = CACHE_PREFIX + PRECACHE_VERSION;
 const META_URL = "./__offline-meta.json";
 
 const abs = (u) => new URL(u, self.registration.scope).href;
@@ -23,38 +26,58 @@ async function broadcast(msg) {
 
 async function readMeta(cache) {
   const res = await cache.match(abs(META_URL));
-  try { return res ? await res.json() : { version: null, hashes: {} }; } catch { return { version: null, hashes: {} }; }
+  try { return res ? await res.json() : null; } catch { return null; }
+}
+
+/** The newest other release cache that finished installing (has meta), or null. */
+async function previousComplete() {
+  for (const k of await caches.keys()) {
+    if (k === CACHE_NAME || !k.startsWith(CACHE_PREFIX)) continue;
+    const cache = await caches.open(k);
+    const meta = await readMeta(cache);
+    if (meta) return { cache, meta };
+  }
+  return null;
 }
 
 async function precacheAll() {
   // cache:'reload' skips the 10 minute HTTP cache GitHub Pages applies.
   const pre = await (await fetch(abs("precache.json"), { cache: "reload" })).json();
+  if (pre.version !== PRECACHE_VERSION) throw new Error("app files changed during download, try again");
+  if (await caches.has(CACHE_NAME)) {
+    const done = await readMeta(await caches.open(CACHE_NAME));
+    if (done && done.version === pre.version) { await broadcast({ type: "offline-ready", version: pre.version }); return; }
+    await caches.delete(CACHE_NAME); // leftovers of an interrupted install
+  }
   const cache = await caches.open(CACHE_NAME);
-  const old = await readMeta(cache);
-  // Reuse files whose hash is unchanged so an update re-downloads only what changed.
-  const todo = [];
-  for (const f of pre.files) {
-    const hit = old.hashes[f.url] === f.sha256 && (await cache.match(abs(f.url)));
-    if (!hit) todo.push(f);
+  try {
+    const prev = await previousComplete();
+    // Copy files whose hash is unchanged so an update re-downloads only what changed.
+    const todo = [];
+    for (const f of pre.files) {
+      const hit = prev && prev.meta.hashes[f.url] === f.sha256 ? await prev.cache.match(abs(f.url)) : null;
+      if (hit) await cache.put(abs(f.url), hit);
+      else todo.push(f);
+    }
+    const total = todo.reduce((n, f) => n + f.size, 0);
+    let done = 0;
+    await broadcast({ type: "offline-progress", percent: 0, totalBytes: total });
+    for (const f of todo) {
+      const res = await fetch(abs(f.url), { cache: "reload" });
+      if (!res.ok) throw new Error(`download failed: ${f.url} ${res.status}`);
+      await cache.put(abs(f.url), res);
+      done += f.size;
+      await broadcast({ type: "offline-progress", percent: total ? Math.min(99, Math.floor((done / total) * 100)) : 99, totalBytes: total });
+    }
+    // The meta entry is written last: its presence means this release's copy is complete.
+    const hashes = Object.fromEntries(pre.files.map((f) => [f.url, f.sha256]));
+    await cache.put(abs(META_URL), new Response(JSON.stringify({ version: pre.version, hashes }), {
+      headers: { "content-type": "application/json" },
+    }));
+  } catch (err) {
+    await caches.delete(CACHE_NAME); // the previous release's cache is untouched
+    throw err;
   }
-  const total = todo.reduce((n, f) => n + f.size, 0);
-  let done = 0;
-  await broadcast({ type: "offline-progress", percent: 0, totalBytes: total });
-  for (const f of todo) {
-    const res = await fetch(abs(f.url), { cache: "reload" });
-    if (!res.ok) throw new Error(`download failed: ${f.url} ${res.status}`);
-    await cache.put(abs(f.url), res);
-    done += f.size;
-    await broadcast({ type: "offline-progress", percent: total ? Math.min(99, Math.floor((done / total) * 100)) : 99, totalBytes: total });
-  }
-  // Drop files that are no longer part of the app.
-  const keep = new Set(pre.files.map((f) => abs(f.url)).concat(abs(META_URL)));
-  for (const req of await cache.keys()) if (!keep.has(req.url)) await cache.delete(req);
-  // The meta entry is written last: its presence means the copy is complete.
-  const hashes = Object.fromEntries(pre.files.map((f) => [f.url, f.sha256]));
-  await cache.put(abs(META_URL), new Response(JSON.stringify({ version: pre.version, hashes }), {
-    headers: { "content-type": "application/json" },
-  }));
   await broadcast({ type: "offline-ready", version: pre.version });
 }
 
@@ -69,7 +92,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    for (const k of await caches.keys()) if (k !== CACHE_NAME && k.startsWith("posture-guard-")) await caches.delete(k);
+    for (const k of await caches.keys()) if (k !== CACHE_NAME && k.startsWith(CACHE_PREFIX)) await caches.delete(k);
     await self.clients.claim();
   })());
 });

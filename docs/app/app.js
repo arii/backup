@@ -28,14 +28,14 @@ import {
   BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary,
 } from "./privacy.js";
 import {
-  CACHE_NAME, META_URL, isOfflineReady, offlineMessage, offlineState, progressPercent,
+  META_URL, CACHE_PREFIX, cacheNameFor, isOfflineReady, offlineMessage, offlineState, progressPercent,
 } from "./offline.js";
 import {
   CONSENT_CHECKBOX, CONSENT_POINTS, CONSENT_TITLE, consentStatus, hasConsent, recordConsent, withdrawConsent,
 } from "./consent.js";
 import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl } from "./share.js";
 import {
-  SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
+  SPONSOR, SPONSOR_URL, answerSponsor, markSponsorShown, refundSponsorShown, recordSession, shouldOfferSponsor, sponsorText,
 } from "./sponsor.js";
 import { COACH_INTRO, DONE_INTRO } from "./onboarding.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
@@ -789,7 +789,7 @@ function promptStep(state, now) {
   if (breaks.update(present, pclock)) countBreak();
   pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0;
   if (!present && card && card.id !== "guide") endCard("done"); // no prompt while away
-  if (!present && sponsorCard) answerSponsorCard("later");
+  if (!present && sponsorCard) { refundSponsorShown(store); save(); hideSponsor(); } // walking away is not an answer
   if (shouldOfferSponsor(store, { nowMs: Date.now(), good: pstreak >= SPONSOR.good_streak_s, silent: !!test || !!practice || paused })) {
     prompts.enqueue("share", pclock);
   }
@@ -1997,14 +1997,20 @@ async function refreshOffline() {
   if (!offlineSupported) return renderOffline();
   try {
     offline.registered = !!(await navigator.serviceWorker.getRegistration());
-    const hasCache = await caches.has(CACHE_NAME); // caches.open would create an empty one
-    const cache = hasCache ? await caches.open(CACHE_NAME) : null;
-    const metaRes = cache && await cache.match(META_URL);
-    const meta = metaRes ? await metaRes.json() : null;
     // precache.json always comes from the network; skip it when offline.
     let pre = null;
     if (navigator.onLine) pre = await (await fetch("./precache.json", { cache: "no-cache" })).json();
-    else if (meta) pre = { version: meta.version, totalBytes: offline.totalBytes, files: Object.keys(meta.hashes).map((url) => ({ url })) };
+    // Prefer the cache for the current release, else any complete older one (then stale).
+    let cache = null, meta = null;
+    const names = (await caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX)); // caches.open would create an empty one
+    if (pre) names.sort((a, b) => (b === cacheNameFor(pre.version)) - (a === cacheNameFor(pre.version)));
+    for (const k of names) {
+      const c = await caches.open(k);
+      const res = await c.match(META_URL);
+      const m = res ? await res.json().catch(() => null) : null;
+      if (m) { cache = c; meta = m; break; }
+    }
+    if (!pre && meta) pre = { version: meta.version, totalBytes: offline.totalBytes, files: Object.keys(meta.hashes).map((url) => ({ url })) };
     if (!pre) throw new Error("offline and nothing cached");
     offline.totalBytes = pre.totalBytes;
     const base = new URL("./", location.href).href;
@@ -2040,10 +2046,13 @@ $("offline-enable").addEventListener("click", async () => {
     const sw = reg.installing || reg.waiting;
     if (sw) {
       await new Promise((resolve, reject) => {
-        sw.addEventListener("statechange", () => {
+        const check = () => {
           if (sw.state === "activated") resolve();
           else if (sw.state === "redundant") reject(new Error("install failed"));
-        });
+          else return false;
+          return true;
+        };
+        if (!check()) sw.addEventListener("statechange", check); // it may already be done
       });
     }
     offline.downloading = false;

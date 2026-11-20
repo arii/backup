@@ -89,3 +89,14 @@ test("the card text states tracked hours, no outcome claim", () => {
   assert.match(t, /about 3 hours/);
   assert.doesNotMatch(t, /better|reduce|fix|prevent/i);
 });
+
+test("refundSponsorShown gives back one show and never goes below zero", async () => {
+  const { markSponsorShown, refundSponsorShown } = await import("../../docs/app/sponsor.js");
+  const store = {};
+  markSponsorShown(store);
+  refundSponsorShown(store);
+  assert.equal(store.sponsor.shown, 0);
+  refundSponsorShown(store);
+  assert.equal(store.sponsor.shown, 0);
+  assert.equal(store.sponsor.laterOn, undefined);
+});

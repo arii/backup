@@ -1,11 +1,11 @@
 {
-  "version": "6f7941881d988be5",
-  "totalBytes": 25862762,
+  "version": "ed35cd643478409b",
+  "totalBytes": 25863759,
   "files": [
     {
       "url": "app.js",
-      "size": 87852,
-      "sha256": "2094f9f3c17cbb8147b3b886f4f8b32d5247daf101dbf0e6c6b3bd054ac8c615"
+      "size": 88380,
+      "sha256": "823199d3810a2c6c40e88b9a51f723dc63b284786835670d971540570e3d5e98"
     },
     {
       "url": "breaks.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "offline.js",
-      "size": 3291,
-      "sha256": "d8b445805dad7dabde39e59fa2a252f8f29fad24bf8c70348051bfc13cfc4826"
+      "size": 3449,
+      "sha256": "26d3d296402f8becc94bf08f13d7637e0c7f6b3a5e07646d231d95e0ef9e442a"
     },
     {
       "url": "onboarding.js",
@@ -84,8 +84,8 @@
     },
     {
       "url": "sponsor.js",
-      "size": 3901,
-      "sha256": "62d2eb3a84ff704c987c8f51c1ba5c800ec85244b560af2948e94bf9b13cd9bf"
+      "size": 4212,
+      "sha256": "0d94c68f9a1363153cd5bcfc1f485f44cbd7f86c182b9ef4d3f7a07e627fbb2e"
     },
     {
       "url": "vendor/LICENSE",

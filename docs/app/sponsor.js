@@ -80,6 +80,13 @@ export function markSponsorShown(store) {
   return store;
 }
 
+/** The card was hidden before the user could answer (they left the frame): give the show back. */
+export function refundSponsorShown(store) {
+  const sp = (store.sponsor = store.sponsor && typeof store.sponsor === "object" ? store.sponsor : {});
+  sp.shown = Math.max(0, num(sp.shown) - 1);
+  return store;
+}
+
 /** The user's answer: "later" (comes back after later_days), "never" (permanent). */
 export function answerSponsor(store, how, nowMs) {
   const sp = (store.sponsor = store.sponsor && typeof store.sponsor === "object" ? store.sponsor : {});

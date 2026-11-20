@@ -10,13 +10,15 @@ export const OFFLINE_STATES = Object.freeze([
   "unsupported", "idle", "downloading", "ready", "update-available", "error",
 ]);
 
-/** Cache that holds the offline copy. Shared by sw.js and app.js. */
-export const CACHE_NAME = "posture-guard-offline";
+/** Each release gets its own cache, named CACHE_PREFIX + precache version (mirrors sw.js). */
+export const CACHE_PREFIX = "posture-guard-";
+export const cacheNameFor = (version) => CACHE_PREFIX + version;
 /** Cache entry that records which precache version and file hashes are stored. */
 export const META_URL = "./__offline-meta.json";
 
 export const READY_TEXT =
   "Offline mode is ready. You can disconnect Wi-Fi now. Your video is never stored. " +
+  "Links to the home page and the privacy page still need a network. " +
   "Close this tab and clear site data afterwards if you want to be sure nothing stays on this device.";
 
 /** Human size, e.g. 25.3 MB. */
