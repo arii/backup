@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 //
 // Personal progress review: pure functions over the stored daily totals
-// (store.days, seconds keyed by UTC date) and silent-test results
-// (store.tests). No DOM, no network, no streak counter: a missed day is just a
+// (store.days, seconds keyed by UTC date), silent-test results
+// (store.tests) and the water count (store.water). No DOM, no network, no streak counter: a missed day is just a
 // day with no data. See .kiro/specs/progress-review.
 
 export const PROGRESS = Object.freeze({
@@ -75,7 +75,11 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
       pct: pctOf(t.good, t.bad),
     }));
   const latest = tests[tests.length - 1];
+  const water = store?.water && typeof store.water === "object" ? store.water : {};
+  const waterOf = (date) => Math.floor(secs(water[date]));
   return {
+    water_today: waterOf(days[days.length - 1].date),
+    water_7d: days.reduce((a, d) => a + waterOf(d.date), 0),
     days,
     cumulative_good_s: cumulative,
     tests,
@@ -100,5 +104,13 @@ export function exportJson(store, now = Date.now()) {
     good: Math.round(t.good),
     bad: Math.round(t.bad),
   }));
-  return JSON.stringify({ schema: EXPORT_SCHEMA, exportedAt: new Date(toMs(now)).toISOString(), days, tests }, null, 2);
+  const water = {};
+  for (const [key, n] of Object.entries(store?.water && typeof store.water === "object" ? store.water : {})) {
+    if (DATE_KEY.test(key) && secs(n) > 0) water[key] = Math.floor(secs(n));
+  }
+  return JSON.stringify(
+    { schema: EXPORT_SCHEMA, exportedAt: new Date(toMs(now)).toISOString(), days, tests, water },
+    null,
+    2,
+  );
 }

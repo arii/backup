@@ -42,7 +42,7 @@
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
@@ -1927,6 +1927,186 @@ try {
       );
       await page.close();
     }
+  }
+
+  // 4g. Intent prefetch (spec progressive-loading task 6): the landing page fetches the model
+  // and WASM only after pointer intent, never under Save-Data, and the app then reuses them.
+  {
+    const vendorHits = (urls) => {
+      const n = {};
+      for (const u of urls) n[u] = (n[u] || 0) + 1;
+      return n;
+    };
+    const fetched = [];
+    const cached = [];
+    const track = (page) =>
+      page.on("request", (r) => {
+        if (/\/app\/vendor\/(pose_landmarker_lite\.task|wasm\/vision_wasm)/.test(r.url())) fetched.push(r.url());
+      });
+    {
+      // A persistent profile has a disk cache; a plain test context only keeps a small in-memory one.
+      const profileDir = path.join(outDir, "prefetch-profile");
+      rmSync(profileDir, { recursive: true, force: true }); // a stale disk cache would hide the landing download
+      const context = await chromium.launchPersistentContext(profileDir, {
+        permissions: ["camera"],
+        args,
+      });
+      await context.addInitScript(() => {
+        try {
+          const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+          Object.assign(s, {
+            onboarded: 1,
+            ackVersion: 1,
+            firstRunDone: true,
+            setupDone: true,
+            breathIntroShown: true,
+          });
+          localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+        } catch {
+          /* storage unavailable */
+        }
+      });
+      const page = await context.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(String(e)));
+      track(page);
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Network.enable");
+      const byId = new Map();
+      cdp.on("Network.requestWillBeSent", (e) => byId.set(e.requestId, e.request.url));
+      cdp.on("Network.requestServedFromCache", (e) => cached.push(byId.get(e.requestId)));
+      // Chromium reports a disk cache hit on the response, not always as a separate event.
+      cdp.on("Network.responseReceived", (e) => {
+        if (e.response.fromDiskCache || e.response.fromServiceWorker) cached.push(byId.get(e.requestId));
+      });
+      await page.goto(`${base}${bust}`);
+      await page.waitForTimeout(1500);
+      check("prefetch: nothing is fetched on landing page load or idle", fetched.length === 0, fetched);
+      await page.hover('a[href="./app/"] >> nth=0');
+      // Let both downloads finish; navigating away would abort them before they reach the cache.
+      await page
+        .waitForFunction(
+          () => {
+            const done = (re) =>
+              performance.getEntriesByType("resource").some((e) => re.test(e.name) && e.responseEnd > 0);
+            return done(/pose_landmarker_lite\.task$/) && done(/vision_wasm.*\.wasm$/);
+          },
+          null,
+          { timeout: 60000 },
+        )
+        .catch(() => {});
+      await page.waitForTimeout(300);
+      check(
+        "prefetch: hovering the app link fetches the model and one WASM file",
+        fetched.some((u) => u.endsWith("pose_landmarker_lite.task")) &&
+          fetched.filter((u) => /vision_wasm.*\.wasm$/.test(u)).length === 1,
+        fetched,
+      );
+      if (y4m) {
+        await page.goto(`${base}app/${bust}`);
+        await page.click("#start-camera");
+        await page
+          .waitForFunction(() => window.__loadMarks && window.__loadMarks.warmupDone != null, null, { timeout: 60000 })
+          .catch(() => {});
+        const hits = vendorHits(fetched.filter((u) => /\.(task|wasm)$/.test(u)));
+        for (const u of Object.keys(hits)) hits[u] -= cached.filter((c) => c === u).length;
+        check(
+          "prefetch: one network request per model and WASM file across landing then app (the app reuses the cache)",
+          Object.keys(hits).length >= 2 && Object.values(hits).every((n) => n === 1),
+          hits,
+        );
+      }
+      check("prefetch: no page errors", errors.length === 0, errors);
+      await context.close();
+    }
+    {
+      fetched.length = 0;
+      const { page } = await newPage(browser);
+      track(page);
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+      });
+      await page.goto(`${base}${bust}`);
+      await page.hover('a[href="./app/"] >> nth=0');
+      await page.focus('a[href="./app/"] >> nth=0');
+      await page.waitForTimeout(600);
+      check("prefetch: skipped under Save-Data", fetched.length === 0, fetched);
+      await page.close();
+    }
+  }
+
+  // 4h. "Take a break" menu (spec task 7): keyboard, 320 px, guided demo, water count.
+  {
+    const { page, errors } = await newPage(browser, { viewport: { width: 320, height: 640 } });
+    page.on("dialog", (d) => d.accept());
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    await page.waitForTimeout(1500);
+    const ids = ["break-stretch", "breathe-with-me", "breath-check", "break-eye", "break-move", "break-water"];
+    check(
+      "break menu: lists the six entries as buttons",
+      await page.evaluate(
+        (ids) =>
+          ids.every(
+            (id) =>
+              document.getElementById(id)?.tagName === "BUTTON" && !document.getElementById(id).closest("[hidden]"),
+          ),
+        ids,
+      ),
+    );
+    check(
+      "break menu: fits 320 px",
+      await page.evaluate(
+        (ids) =>
+          document.documentElement.scrollWidth <= window.innerWidth &&
+          ids.every((id) => document.getElementById(id).getBoundingClientRect().right <= window.innerWidth),
+        ids,
+      ),
+    );
+    await page.focus("#break-stretch");
+    const order = [];
+    for (let i = 0; i < ids.length; i++) {
+      order.push(await page.evaluate(() => document.activeElement.id));
+      await page.keyboard.press("Tab");
+    }
+    check("break menu: reachable by keyboard in order", order.join() === ids.join(), order);
+    await page.screenshot({ path: path.join(outDir, "break-menu-320.png"), fullPage: true });
+    await page.focus("#break-stretch");
+    await page.keyboard.press("Enter");
+    check(
+      "break menu: Stretch shows every step at once under reduced motion",
+      await page.evaluate(
+        () =>
+          document.getElementById("prompt-card").classList.contains("show") &&
+          /1\. .*\n2\. .*\n3\. /s.test(document.getElementById("prompt-text").textContent),
+      ),
+    );
+    await page.click("#prompt-notnow");
+    await page.click("#break-water");
+    await page.click("#prompt-action");
+    await page.click("#break-water");
+    await page.click("#prompt-action");
+    const count = () => page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).water);
+    const water = await count();
+    const day = new Date().toISOString().slice(0, 10);
+    check("break menu: I drank stores a daily count", water?.[day] === 2, water);
+    check(
+      "break menu: the count shows in Your progress",
+      /2 today/.test(await page.textContent("#progress-water")),
+      await page.textContent("#progress-water"),
+    );
+    await page.reload();
+    check("break menu: the count persists across a reload", (await count())?.[day] === 2);
+    await page.click("#progress-delete");
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(500);
+    check(
+      "break menu: Delete my data clears the water count",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water),
+    );
+    check("break menu: no page errors", errors.length === 0, errors);
+    await page.close();
   }
 
   // 5. Self-hosting: vendored files are served, nothing left the origin.

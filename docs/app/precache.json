@@ -1,16 +1,16 @@
 {
-  "version": "988b1ce907b74b91",
-  "totalBytes": 32882217,
+  "version": "9c5e382fe60629d2",
+  "totalBytes": 32896488,
   "files": [
     {
       "url": "app.js",
-      "size": 107426,
-      "sha256": "daa2f0e1ec6fdf4c79a8a73c675b421d7531cc0b89c51e19daf5f0e5ef41b701"
+      "size": 112326,
+      "sha256": "5d2ba0d08f1ed63fa9ca48b1456600630f8ca35ab1acc2851dc51e04ae3ffdc2"
     },
     {
       "url": "breaks.js",
-      "size": 2877,
-      "sha256": "390a50586d8895257b3ce021a3532f36749a967e13578000f0fe80a275248fbd"
+      "size": 3892,
+      "sha256": "5c38cf46d0f38da69f5de8063bcaa892a27d9bc0a9c9efde058f26fa870dc3ac"
     },
     {
       "url": "breathing.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 46158,
-      "sha256": "a59edeec26dcf28295bb0c16354954c2c71f89fc8b8e75195d8b25916a395042"
+      "size": 50101,
+      "sha256": "4807fded94ce02251f20c9218b13749e7eebeb18115ed542ae936e51867109a2"
     },
     {
       "url": "loading.js",
@@ -69,13 +69,13 @@
     },
     {
       "url": "progress.js",
-      "size": 3661,
-      "sha256": "74ab8e3436301473f155e5f2a83808283501a5700732b4753da9d3629889dfdd"
+      "size": 4186,
+      "sha256": "6a1725bb4a365d6c8ce7b2ed160b75cd99335d8ba68700f22f5b564c49adaa6b"
     },
     {
       "url": "prompts.js",
-      "size": 5498,
-      "sha256": "58ec2ae1dcd5b69dccd461e77460982f6f46c08207de49f988a3c4038f455325"
+      "size": 5590,
+      "sha256": "3f9f4fcd680bbee0dfcdf0f1b8ea366e94e24deec56e43d3ef69d8615fd0aeef"
     },
     {
       "url": "relax.js",
@@ -89,8 +89,8 @@
     },
     {
       "url": "settings.js",
-      "size": 2658,
-      "sha256": "696503de0544fe210dda760ba13c597405d9a1140de64e11c0ef5239aa6ce875"
+      "size": 2915,
+      "sha256": "62e195e5c3553a56f1b1d11e4e9a3b17ba30c8ecbe1be5629b1f9ccd65145cae"
     },
     {
       "url": "share.js",
@@ -539,8 +539,13 @@
     },
     {
       "url": "voice-lines.js",
-      "size": 3335,
-      "sha256": "62045930d42b95ac3e56f69da454c75b5da40b78bc905ab4b443ae46ef06f3ae"
+      "size": 4205,
+      "sha256": "3702ecb753d376f77627814350fb9b048b2f65859a60c7e426595df49673e100"
+    },
+    {
+      "url": "wellness.js",
+      "size": 2669,
+      "sha256": "322e413ed418ce9b2cba79d20c7204388a573309d8306c3f6da3ec8c24255277"
     }
   ]
 }

@@ -60,6 +60,25 @@
   #banner.relax { background: #6b8fd6; color: #0d1830; }
   /* Breaks and breathing prompts (one at a time, see prompts.js). visibility keeps the hidden buttons out of the tab order. */
   #prompt-card { position: absolute; left: 12px; right: 12px; bottom: 40px; padding: 10px 12px; border-radius: 8px; background: rgba(20, 23, 28, 0.94); border: 1px solid #6b8fd6; visibility: hidden; opacity: 0; transition: opacity 0.25s; }
+  #prompt-text { white-space: pre-line; }
+  #prompt-figure { float: left; margin: 0 8px 4px 0; }
+  #prompt-figure * { fill: none; stroke: #6b8fd6; stroke-width: 2; transform-box: fill-box; transform-origin: center; }
+  #prompt-figure #fig-cup { visibility: hidden; }
+  #prompt-figure[data-pose="cup"] #fig-cup, #prompt-figure[data-pose="sip"] #fig-cup { visibility: visible; }
+  #prompt-figure[data-pose="neck"] #fig-head { animation: fig-tilt 3s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="roll"] #fig-body { animation: fig-lift 1.5s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="chest"] #fig-body { animation: fig-open 2s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="stand"] #fig-all, #prompt-figure[data-pose="reach"] #fig-all { animation: fig-up 1.5s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="walk"] #fig-all { animation: fig-sway 1s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="sip"] #fig-cup { animation: fig-sip 1.5s ease-in-out infinite alternate; }
+  @keyframes fig-tilt { from { transform: translateX(-4px) rotate(-18deg); } to { transform: translateX(4px) rotate(18deg); } }
+  @keyframes fig-lift { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+  @keyframes fig-open { from { transform: scaleX(1); } to { transform: scaleX(1.2); } }
+  @keyframes fig-up { from { transform: translateY(2px); } to { transform: translateY(-3px); } }
+  @keyframes fig-sway { from { transform: translateX(-3px); } to { transform: translateX(3px); } }
+  @keyframes fig-sip { from { transform: rotate(0); } to { transform: rotate(-35deg); } }
+  .break-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+  .break-menu button { width: 100%; }
   #prompt-card.show { visibility: visible; opacity: 1; }
   #prompt-text { font-weight: 600; font-size: 14px; }
   #prompt-card .hold { margin-top: 6px; height: 16px; }
@@ -230,6 +249,7 @@
       <canvas id="overlay"></canvas>
       <div id="banner" role="status" aria-live="polite">Reminder</div>
       <div id="prompt-card" data-prompt="">
+        <svg id="prompt-figure" viewBox="0 0 40 32" width="40" height="32" aria-hidden="true" hidden><g id="fig-all"><circle id="fig-head" cx="20" cy="9" r="5"/><path id="fig-body" d="M8 30 Q8 17 20 17 Q32 17 32 30"/><rect id="fig-cup" x="30" y="4" width="6" height="8" rx="1"/></g></svg>
         <div id="prompt-text" role="status" aria-live="polite"></div>
         <div class="hold" id="prompt-bar" hidden role="progressbar" aria-label="Countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="hold-fill" id="prompt-fill"></div></div>
         <div class="btn-row">
@@ -351,6 +371,7 @@
       <div id="progress-days" role="list" aria-label="Good posture by day, last 7 days"></div>
       <div class="note" id="progress-total"></div>
       <div class="note" id="progress-tests"></div>
+      <div class="note" id="progress-water"></div>
       <div class="note" id="progress-suggest" aria-live="polite"></div>
       <div class="btn-row">
         <button class="secondary" id="progress-light" hidden>Switch to light coaching</button>
@@ -431,15 +452,25 @@
         <div class="tile" id="t-trunk_lean"><div class="label">Trunk lean</div><div class="value" id="m-trunk_lean_deg">-</div></div>
       </div>
     </div>
+    <div class="panel coaching" id="break-menu" data-stage="4" hidden>
+      <h2 id="break-menu-title">Take a break</h2>
+      <div class="note" style="margin-top:0">Pick one. Each shows a short guided demo on the video. No camera analysis for stretch, move or water, and it never affects your score.</div>
+      <div class="break-menu" role="group" aria-labelledby="break-menu-title">
+        <button id="break-stretch" class="secondary" disabled title="Start the webcam or demo first">Stretch</button>
+        <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
+        <button id="breath-check" class="secondary" disabled title="Start the webcam or demo first">Breath check</button>
+        <button id="break-eye" class="secondary" disabled title="Start the webcam or demo first">Look away</button>
+        <button id="break-move" class="secondary" disabled title="Start the webcam or demo first">Stand and move</button>
+        <button id="break-water" class="secondary" disabled title="Start the webcam or demo first">Drink water</button>
+      </div>
+      <div class="note" id="break-menu-note" role="status"></div>
+    </div>
     <div class="panel coaching" data-stage="4" hidden>
       <h2>Relax, don&rsquo;t brace</h2>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
         to look upright is tiring for your upper back. Lift your chest a little and let your shoulders hang.
         <span id="relax-safety"></span></div>
       <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
-      <div class="btn-row">
-        <button id="breath-check" class="secondary" disabled title="Start the webcam or demo first">Breath check</button>
-      </div>
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (asks for your OK first)</label>
     </div>
@@ -457,11 +488,26 @@
         <option value="60" selected>Every 60 minutes</option>
         <option value="90">Every 90 minutes</option>
       </select></div>
+      <label class="note" for="stretch-minutes" style="display:block;margin-top:6px">Stretch reminder</label>
+      <div class="modes"><select id="stretch-minutes">
+        <option value="0" selected>Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+        <option value="60">Every 60 minutes</option>
+        <option value="90">Every 90 minutes</option>
+      </select></div>
+      <label class="note" for="water-minutes" style="display:block;margin-top:6px">Water reminder</label>
+      <div class="modes"><select id="water-minutes">
+        <option value="0" selected>Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+        <option value="60">Every 60 minutes</option>
+        <option value="90">Every 90 minutes</option>
+      </select></div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathing-moments"> Occasional breathing moment during a long good-posture streak (at most every 30 minutes)</label>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathe-cues"> Soft voice cues in &ldquo;Breathe with me&rdquo;</label>
       </details>
       <div class="btn-row">
-        <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
         <button id="prompts-reset" class="secondary" hidden>Show dismissed prompts again</button>
       </div>
       <div class="note" id="breathe-note">One minute of easy breathing, about 4 seconds in and 6 seconds out, then a breath check. Stop if you feel dizzy.</div>

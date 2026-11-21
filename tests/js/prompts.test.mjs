@@ -183,3 +183,12 @@ test("breath_intro ranks as a breath check and a disabled one is never queued", 
   assert.equal(off.enqueue("breath_intro", 80), false);
   assert.equal(off.poll(80), null);
 });
+
+test("stretch and water are break prompts that wait for the quiet start", () => {
+  const s = make();
+  assert.equal(ask(s, "stretch", 10), null);
+  assert.equal(ask(s, "stretch", 400)?.id, "stretch");
+  s.dismiss(401, "snooze");
+  assert.equal(ask(s, "water", 410), null, "the global gap holds it back");
+  assert.equal(ask(s, "water", 1100)?.id, "water");
+});

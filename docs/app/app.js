@@ -40,6 +40,7 @@ import {
   shouldShowOnboarding,
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
+import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText } from "./wellness.js";
 import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
@@ -727,7 +728,16 @@ function relaxStep(landmarks, state, now) {
 }
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
-const NEEDS_TRACKING = ["breath-check", "breathe-with-me", "calib-good", "calib-bad"];
+const NEEDS_TRACKING = [
+  "breath-check",
+  "breathe-with-me",
+  "break-stretch",
+  "break-eye",
+  "break-move",
+  "break-water",
+  "calib-good",
+  "calib-bad",
+];
 const READY_TITLE = {
   "breath-check": "Breathe in: if your shoulders rise, you are bracing",
   "breathe-with-me": "One minute of easy breathing, then a breath check",
@@ -772,13 +782,22 @@ const CLOCK_SCALE = (() => {
   const n = Number(new URLSearchParams(location.search).get("clockScale"));
   return Number.isFinite(n) && n >= 1 && n <= 1000 ? n : 1;
 })();
-const DISMISS_KEY = { eye: "eye", move: "move", breathing: "breathing", offer: "breathing" };
+const DISMISS_KEY = {
+  eye: "eye",
+  move: "move",
+  stretch: "stretch",
+  water: "water",
+  breathing: "breathing",
+  offer: "breathing",
+};
 const dismissed = settings.promptsDismissed;
 
 function promptEnabled(id) {
   if (dismissed[DISMISS_KEY[id]]) return false;
   if (id === "eye") return settings.eyeBreaks;
   if (id === "move") return settings.moveBreakMinutes > 0;
+  if (id === "stretch") return settings.stretchMinutes > 0;
+  if (id === "water") return settings.waterMinutes > 0;
   if (id === "breathing") return settings.breathingMoments && hasConsent(store);
   if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
   if (id === "breath_intro") return settings.relaxReminders && !store.breathIntroShown; // asks for consent itself
@@ -798,6 +817,8 @@ let card = null; // the prompt on screen: { id, text, t, finished }
 function renderPromptSettings() {
   $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
   $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
+  $("stretch-minutes").value = String(dismissed.stretch ? 0 : settings.stretchMinutes);
+  $("water-minutes").value = String(dismissed.water ? 0 : settings.waterMinutes);
   $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
   $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
   $("breathe-cues").checked = settings.breatheCues;
@@ -806,6 +827,8 @@ function renderPromptSettings() {
 function savePromptSettings() {
   store.eyeBreaks = settings.eyeBreaks;
   store.moveBreakMinutes = settings.moveBreakMinutes;
+  store.stretchMinutes = settings.stretchMinutes;
+  store.waterMinutes = settings.waterMinutes;
   store.breathingMoments = settings.breathingMoments;
   store.breatheCues = settings.breatheCues;
   store.promptsDismissed = { ...dismissed };
@@ -822,6 +845,18 @@ $("move-minutes").addEventListener("change", (e) => {
   breaks.setMoveMinutes(e.target.value);
   settings.moveBreakMinutes = breaks.moveMinutes;
   if (settings.moveBreakMinutes > 0) delete dismissed.move;
+  savePromptSettings();
+});
+$("stretch-minutes").addEventListener("change", (e) => {
+  breaks.setStretchMinutes(e.target.value);
+  settings.stretchMinutes = breaks.stretchMinutes;
+  if (settings.stretchMinutes > 0) delete dismissed.stretch;
+  savePromptSettings();
+});
+$("water-minutes").addEventListener("change", (e) => {
+  breaks.setWaterMinutes(e.target.value);
+  settings.waterMinutes = breaks.waterMinutes;
+  if (settings.waterMinutes > 0) delete dismissed.water;
   savePromptSettings();
 });
 $("breathing-moments").addEventListener("change", (e) => {
@@ -862,6 +897,9 @@ function sayPrompt(line) {
 const CARD_UI = {
   eye: { bar: true, snooze: true, never: true },
   move: { action: true, done: true, snooze: true, never: true },
+  stretch: { action: true, actionLabel: "Show me", done: true, snooze: true, never: true },
+  water: { action: true, actionLabel: "I drank", snooze: true, never: true },
+  demo: { bar: true, stop: true },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
   breath_intro: { action: true, actionLabel: "Try it" },
@@ -872,10 +910,12 @@ function renderCard() {
   const el = $("prompt-card");
   if (!card) {
     el.classList.remove("show");
+    $("prompt-figure").hidden = true;
     el.dataset.prompt = "";
     return;
   }
-  const ui = CARD_UI[card.id];
+  const ui = card.ui || CARD_UI[card.id];
+  if (card.id !== "demo") $("prompt-figure").hidden = true;
   $("prompt-text").textContent = card.text;
   $("prompt-bar").hidden = !ui.bar;
   $("prompt-action").hidden = !ui.action;
@@ -904,6 +944,11 @@ function hideCard() {
 function endCard(how) {
   if (card && card.id === "guide") {
     guide.cancel();
+    hideCard();
+    return;
+  }
+  if (card && card.id === "demo") {
+    prompts.dismiss(pclock, "done");
     hideCard();
     return;
   }
@@ -939,13 +984,11 @@ function showPrompt(item) {
     return;
   }
   const text =
-    item.id === "eye"
-      ? BREAK_LINES.eye
-      : item.id === "move"
-        ? BREAK_LINES.move
-        : item.id === "offer"
-          ? BREATHE_LINES.offer
-          : moments.take(pclock);
+    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water"
+      ? BREAK_LINES[item.id]
+      : item.id === "offer"
+        ? BREATHE_LINES.offer
+        : moments.take(pclock);
   card = { id: item.id, text, t: 0, finished: false };
   setCardFill(0);
   renderCard();
@@ -1071,6 +1114,11 @@ function promptStep(state, now) {
         sayPrompt(BREAK_LINES.eyeDone);
       }
       if (card.finished && card.t >= BREAKS.eye_look_s + 3) endCard("done");
+    } else if (card.id === "demo" && !card.static) {
+      demoStep();
+      if (card.finished && card.t >= demoLength(card.kind) + 8) endCard("done");
+    } else if (card.id === "demo") {
+      if (card.t >= 120) endCard("done");
     } else if (card.t >= 60) {
       endCard("notnow"); // ignoring a prompt counts as "Not now"
     }
@@ -1086,16 +1134,106 @@ function promptStep(state, now) {
 
 $("prompt-action").addEventListener("click", () => {
   if (card && card.id === "breath_intro") acceptBreathIntro();
-  else startGuide();
+  else if (card && (card.id === "water" || card.act === "drink")) drank();
+  else if (card && card.id === "stretch") {
+    endCard("done");
+    startDemo("stretch");
+  } else startGuide();
 });
 $("prompt-done").addEventListener("click", () => {
-  if (card && card.id === "move") breaks.taken("move");
+  if (card && (card.id === "move" || card.id === "stretch")) breaks.taken(card.id);
+  if (card && card.static) breaks.taken(card.kind);
   endCard("done");
 });
 $("prompt-snooze").addEventListener("click", () => endCard("snooze"));
 $("prompt-notnow").addEventListener("click", () => endCard("notnow"));
 $("prompt-never").addEventListener("click", () => endCard("never"));
 $("breathe-with-me").addEventListener("click", startGuide);
+
+// -- "Take a break" menu: guided demos and the water count -----------------------
+// Demos are text steps with a small outline, 10 to 20 s, no camera analysis.
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+function showFigure(pose) {
+  const fig = $("prompt-figure");
+  fig.hidden = !pose;
+  if (pose && !reducedMotion.matches) fig.dataset.pose = pose;
+  else if (pose) fig.dataset.pose = pose === "sip" ? "cup" : "";
+}
+
+function startDemo(kind) {
+  if (card) endCard("done");
+  const still = reducedMotion.matches;
+  const finalAct = kind === "water" ? "drink" : "";
+  card = { id: "demo", kind, text: "", t: 0, finished: false, act: finalAct, ui: { bar: !still, stop: true } };
+  if (still) {
+    // Reduced motion: every step at once, no timer, the person ends it.
+    card.text = demoStaticText(kind);
+    card.finished = false;
+    card.ui = { done: true, action: kind === "water", actionLabel: "I drank" };
+    card.static = true;
+  }
+  setCardFill(0);
+  renderCard();
+  showFigure(still ? "" : demoAt(kind, 0).pose);
+  if (!still) demoStep(true);
+}
+
+function demoStep(first = false) {
+  const d = demoAt(card.kind, card.t);
+  if (d.index === card.demoIndex && !first && !d.done) {
+    setCardFill(card.t / demoLength(card.kind));
+    return;
+  }
+  card.demoIndex = d.index;
+  setCardFill(Math.min(1, card.t / demoLength(card.kind)));
+  if (d.done) {
+    if (!card.finished) {
+      card.finished = true;
+      breaks.taken(card.kind);
+      if (DEMO_DONE[card.kind]) {
+        card.text = DEMO_DONE[card.kind];
+        sayPrompt(card.text);
+      }
+      if (card.kind === "water") {
+        card.ui = { action: true, actionLabel: "I drank" };
+      }
+      renderCard();
+      showFigure("");
+    }
+    return;
+  }
+  card.text = d.line;
+  showFigure(d.pose);
+  renderCard();
+  sayPrompt(d.line);
+}
+
+function openBreak(kind) {
+  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (kind === "eye") {
+    if (card) endCard("done");
+    card = { id: "eye", text: BREAK_LINES.eye, t: 0, finished: false };
+    setCardFill(0);
+    renderCard();
+    sayPrompt(BREAK_LINES.eye);
+    return;
+  }
+  ensureAudio();
+  startDemo(kind);
+}
+
+function drank() {
+  const n = addWater(store, todayKey());
+  breaks.taken("water");
+  save();
+  renderProgress();
+  $("break-menu-note").textContent = `Added. ${n} ${n === 1 ? "drink" : "drinks"} today.`;
+  endCard("done");
+}
+
+for (const kind of ["stretch", "eye", "move", "water"])
+  $(`break-${kind}`).addEventListener("click", () => openBreak(kind));
 
 // -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
 // A small non-modal card in the session panel. Gating is in sponsor.js; the
@@ -2357,6 +2495,8 @@ function setupControls(key) {
     return [
       setupRow("Eye break every 20 minutes", mirrorCheck($("eye-breaks"), "coach-eye")),
       setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
+      setupRow("Stretch reminder", mirrorSelect($("stretch-minutes"), "coach-stretch", "Stretch reminder")),
+      setupRow("Water reminder", mirrorSelect($("water-minutes"), "coach-water", "Water reminder")),
     ];
   }
   if (key === "shoulders") {
@@ -2804,6 +2944,9 @@ function renderProgress() {
   else if (!s.empty) parts.push("No silent tests yet. Take one for a baseline.");
   if (s.coached_pct_7d !== null) parts.push(`With coaching over the last 7 days: ${s.coached_pct_7d}%.`);
   $("progress-tests").textContent = parts.join(" ");
+  $("progress-water").textContent = s.water_7d
+    ? `Water you logged: ${s.water_today} today, ${s.water_7d} in the last 7 days.`
+    : "";
   const suggest = s.try_light && settings.coachingLevel !== "light";
   $("progress-suggest").textContent = suggest
     ? "Your latest silent score is at least as good as your coached score. You could try light coaching."

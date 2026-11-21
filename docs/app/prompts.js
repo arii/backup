@@ -29,6 +29,8 @@ const PROMPT_DEFS = Object.freeze({
   breath_intro: { type: "breath", cooldown_s: 600 }, // the first offer; may skip the quiet start once
   eye: { type: "break", cooldown_s: 600 },
   move: { type: "break", cooldown_s: 600 },
+  stretch: { type: "break", cooldown_s: 600 },
+  water: { type: "break", cooldown_s: 600 },
   breathing: { type: "breathing", cooldown_s: 1800 }, // breathing moments: at most every 30 min
   offer: { type: "breathing", cooldown_s: 600 }, // "Breathe with me" after a shoulder-creep reminder
   share: { type: "share", cooldown_s: 3600 },

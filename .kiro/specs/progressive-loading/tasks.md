@@ -59,18 +59,21 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     `store.breathIntroShown`. e2e seeds `breathIntroShown` unless a check opts in with
     `intro: true`, because the offer holds back the first eye break by the 10 min gap.
   - _Requirements: 6_
-- [ ] 6. Intent prefetch on the landing page (decision needed)
+- [x] 6. Intent prefetch on the landing page
   - `docs/prefetch.js`, linked from `docs/index.html`; skips on Save-Data and 2g.
   - Privacy wording in `docs/privacy.html` (line 50) and `docs/index.html` (line 412).
   - e2e: one request per vendor file across landing then app.
-  - Only build after the user confirms option B (see open questions).
+  - Built: `docs/prefetch.js` fetches the model and WASM on pointerdown, focus, or hover over 150 ms
+    of the Launch link; skipped on Save-Data and 2g; privacy text updated.
   - _Requirements: 8.2 to 8.4, 9.1_
-- [ ] 7. Wellness menu: stretch and water (spec only)
+- [x] 7. Wellness menu: stretch and water
   - "Take a break" menu consolidating Stretch, Breathe with me, Breath check, Look away,
     Stand and move, Drink water; guided demos in `#prompt-card`; `stretch` and `water`
     scheduler ids; local water count in "Your progress".
   - Build on `wellness-tools` Requirement 5 (stretch). Water camera detection is not
     planned.
+  - Built: `docs/app/wellness.js`; water reminder off by default plus an "I drank" count in
+    "Your progress", cleared by Delete my data.
   - _Requirements: 7_
 - [ ] 8. Update e2e and capture scripts
   - `tests/e2e/live-site.mjs`: seed `setupDone` and `revealAll` next to `onboarded`,
@@ -97,9 +100,11 @@ finished last; do not leave e2e red between tasks.
 1. Camera on page load, or only after the click? Recommended: only after the click.
 2. Prefetch the 15 MB model: never, on intent (hover or focus on "Open the app"), or for
    every visitor on idle? Recommended: on intent, plus parallel start on click.
+   **Decision: on intent (hover, focus, pointerdown), skipped on Save-Data and 2g.**
 3. Should the first breath check ignore the 5 minute quiet start once, or wait for it?
 4. Water: reminder and "I drank" tap only, or also camera-based detection later (new
    consent text, false positives with eating and phone calls)?
+   **Decision: reminder (off by default) and "I drank" tap only, no camera detection.**
 5. How strict should staging be: reveal by time and tracking state as designed, or let
    people open everything with one click from the start (design has both)?
 6. Show a sample looping demo in the stage before the click (small asset), or keep it text?
