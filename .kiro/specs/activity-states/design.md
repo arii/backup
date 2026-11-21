@@ -49,6 +49,15 @@ Fields: `frames` (landmarks are processed at all), `engine` (`track` feeds `Post
 ## Grace
 When EYE_BREAK, DEMO or BREATHE_GUIDE ends (any reason, not a hand-off), `graceUntil = now + 10`. While TRACKING and `now < graceUntil` the policy is the grace row. The app calls `engine.restart()` at the same time, so the 2 s `bad_sustain_s` dwell begins after the restart and a reminder cannot appear when a break ends. Resume from PAUSED keeps today's `restart()` and needs no grace.
 
+Edges around the suppressed window (all in `app.js`, not in the machine):
+
+- **Start of a break.** On the first held frame the app hides `#banner`, clears `bannerTimer` and the pending spoken-praise timer. The praise timer callback also re-checks `rules().praise`. Speech already playing is not cut, because the break's own narration starts at the same moment.
+- **Nudges during grace.** The engine restarts when the break ends and may emit its chime inside grace, where the policy discards it. The app remembers the first reminder nudge emitted in grace (`owedNudge`) and fires it when grace ends if the user is still slouching, so the reminder is the first chime, not an escalated voice cue. A new held run or a mode (pause, test, practice) drops it.
+- **Presence after a restart.** The restarted engine reads NO_PERSON until posture is clearly good or bad. For `leave_s` seconds after the restart (or until the engine leaves NO_PERSON) the app treats the user as present, so offer cards, sponsor cards and the natural-break counter do not see an absence. A user who really left stays absent after that window.
+- **Held presence has no debounce (not changed).** `BreakTracker.update` resets `away` on any present frame and needs 2 minutes of continuous absence to count a break, so a one-frame pose dropout cannot reset the work timer. `observePresence` already waits `leave_s` before ending a break.
+- **Breath check after the guide (not changed).** The check starts from `bracing.value`, the smoothed ratio, which `BracingMonitor.update` refreshes on every frame whether or not posture is good. Only the reference window pauses while held, so the verdict is unaffected by the guide's length.
+- **Camera failure.** `stopCamera` cancels the guide, a running breath check and any card, so no activity outlives the camera.
+
 ## Cancel, timeout, leave
 All endings go through `stop(state, now, reason)`. `observePresence` is fed once per frame; it ends EYE_BREAK or DEMO with `left_frame` after `leave_s` of continuous absence, only once, and the absence timer resets at every start and end. No break credit comes from `left_frame` or `cancelled`; `breaks.taken` stays on completion only.
 

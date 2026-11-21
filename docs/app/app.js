@@ -566,6 +566,7 @@ const BANNERS = {
 };
 let reminderCount = 0;
 let bannerTimer = null;
+let praiseTimer = null; // the spoken half of a praise line, queued after the arpeggio
 
 /** Banner text for a reminder: what is off and how to fix it when the engine
  *  has a cue for this frame, the generic wording otherwise. */
@@ -614,7 +615,13 @@ function fire(nudge, cue) {
     playGood();
     // Spoken praise rides on "Chime + voice": after the arpeggio (~0.8 s).
     if (praise && settings.spokenPraise && settings.mode === "chime_and_voice") {
-      setTimeout(() => speak(praise), custom.good ? 400 : 850);
+      clearTimeout(praiseTimer);
+      praiseTimer = setTimeout(
+        () => {
+          if (rules().praise) speak(praise); // a break may have started since
+        },
+        custom.good ? 400 : 850,
+      );
     }
   }
   if (notifyEnabled && document.hidden && reminder) {
@@ -2132,12 +2139,22 @@ applyReveal();
 $("reveal-note").textContent = "";
 
 let wasHeld = false; // the previous frame was scored by hold()
+let settleUntil = -Infinity; // after a held run the restarted engine reads NO_PERSON until posture is clear
+
+/** A suppressing activity just began: take back what was already on screen or queued. */
+function clearCoaching() {
+  clearTimeout(bannerTimer);
+  clearTimeout(praiseTimer);
+  $("banner").classList.remove("show", "relax");
+}
 
 /** Someone is in view. While held the machine state is frozen, so read the frame itself. */
 function framePresent(out, held) {
   if (!held) return out.transition.state !== State.NO_PERSON;
   return !(out.result.kind === "unreliable" && out.result.reason === Reason.NO_POSE);
 }
+
+let owedNudge = null; // a reminder the engine emitted during grace, delivered when grace ends
 
 function step() {
   if (!rules().frames) return;
@@ -2163,15 +2180,34 @@ function step() {
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
   const held = activity.policy(now).engine === "hold";
-  if (wasHeld && !held) engine.restart(); // the activity ended: start fresh (calibration kept), nothing carries over
+  if (!wasHeld && held) {
+    clearCoaching(); // a reminder banner or queued praise from just before the break
+    owedNudge = null;
+  }
+  if (wasHeld && !held) {
+    engine.restart(); // the activity ended: start fresh (calibration kept), nothing carries over
+    settleUntil = now + activity.leave_s;
+  }
   wasHeld = held;
   const out = held ? engine.hold(landmarks, now) : engine.process(landmarks, now);
-  const present = framePresent(out, held);
+  if (out.transition.state !== State.NO_PERSON) settleUntil = -Infinity;
+  // While held, and while the restarted engine settles, read the frame itself: NO_PERSON there is not an absence.
+  const settling = now < settleUntil;
+  const present = settling || framePresent(out, held);
   if (activity.observePresence(present, now) && card) endCard("done"); // left the frame during a break
   const slouching = out.transition.state === State.BAD_CHIME || out.transition.state === State.BAD_VOICE;
   if (slouching && !lastBad) episode += 1; // a new slouch episode
   lastBad = slouching;
-  for (const nudge of out.nudges) fire(nudge, out.cue);
+  if (inMode()) owedNudge = null;
+  for (const nudge of out.nudges) {
+    if (activity.inGrace(now) && (nudge === Nudge.CHIME || nudge === Nudge.VOICE)) owedNudge ??= nudge;
+    else fire(nudge, out.cue);
+  }
+  if (owedNudge && !activity.inGrace(now)) {
+    // The engine advanced its reminder clock while grace kept the cue quiet: deliver the first one now if still slouching.
+    if (slouching) fire(owedNudge, out.cue);
+    owedNudge = null;
+  }
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now, present);
@@ -2448,6 +2484,10 @@ for (const link of [$("report-bug"), ...document.querySelectorAll(".report-bug-l
  *  screen back with the reason, and leave the demo available. */
 function stopCamera(err) {
   setPaused(false);
+  guide.cancel();
+  breath.cancel?.();
+  activity.stop(ACTIVITY.BREATH_CHECK, clockS(), "cancelled");
+  if (card) endCard("done"); // an eye break or demo card ends its activity with it
   if (practice) stopPractice();
   setup.reset();
   $("pause").disabled = true;
