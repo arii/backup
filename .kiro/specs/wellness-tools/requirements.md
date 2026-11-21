@@ -60,7 +60,7 @@ Ground truth about the sensor:
    text countdown.
 5. THE App SHALL NOT claim physiological effects. Copy: "A slow breathing break."
 
-### Requirement 4: Face and jaw tension prompt (time-based prompt built, blendshape proxy spec only)
+### Requirement 4: Face and jaw tension prompt (time-based prompt built, blendshape proxy deferred: no-go, see `docs/research/face-landmarker-evaluation.md`)
 **User Story:** As a user who clenches my jaw while concentrating, I want an occasional
 reminder to relax my face.
 
@@ -93,7 +93,7 @@ reminder to relax my face.
    global prompt budget.
 4. THE App SHALL NOT use pose angles to coach stretch depth or form.
 
-### Requirement 6: 20-20-20 eye breaks and blink reminder (spec only)
+### Requirement 6: 20-20-20 eye breaks and blink reminder (eye break built, blink reminder deferred: no-go, see `docs/research/face-landmarker-evaluation.md`)
 1. THE App SHALL offer an optional eye-break reminder every 20 minutes of tracked time:
    "Look at something about 20 feet (6 m) away for 20 seconds."
 2. THE reminder SHALL include a 20 second on-screen countdown the user can dismiss.
