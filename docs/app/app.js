@@ -7,6 +7,7 @@
 // chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
 
+import { ACTIVITY, ActivityMachine } from "./activity.js";
 import { DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED } from "./posture-core.js";
 import {
   BREAK_LINES,
@@ -178,6 +179,24 @@ const settings = {
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
+
+// -- activity ---------------------------------------------------------------------
+// One answer to "what is the user doing, and what may the app do right now?"
+// (activity.js). Pause, silent test, practice, breath check, breathing guide, eye
+// break and demos all go through it; the per-frame code asks rules() instead of
+// reading flags. `test` and `practice` below only hold their progress data.
+
+const activity = new ActivityMachine();
+const clockS = () => performance.now() / 1000;
+const rules = () => activity.policy(clockS());
+const isPaused = () => activity.isActive(ACTIVITY.PAUSED);
+const MODE_STATES = new Set([ACTIVITY.PAUSED, ACTIVITY.SILENT_TEST, ACTIVITY.PRACTICE]);
+/** A pause, silent test or practice is running: the prompt and relax loops stand still. */
+const inMode = () => MODE_STATES.has(activity.current);
+const BREAK_STATES = new Set([ACTIVITY.EYE_BREAK, ACTIVITY.DEMO]);
+/** A new foreground activity may begin: nothing is running, or only a break that it replaces. */
+const canBegin = (replaceBreaks = false) =>
+  activity.current === ACTIVITY.TRACKING || (replaceBreaks && BREAK_STATES.has(activity.current));
 const MODE_RANK = { chime_and_voice: 2, chime_only: 1, silent: 0 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
@@ -453,7 +472,7 @@ function speakSystem(text) {
 }
 
 function speak(text) {
-  if (test || practice || paused) return; // a line queued just before a pause or silent test must not play
+  if (!rules().speak) return; // a line queued just before a pause, silent test or practice must not play
   stopSpeech();
   const sel = selectedVoice();
   const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
@@ -461,7 +480,7 @@ function speak(text) {
   if (!file) return speakSystem(text);
   loadClip(`./voice/${file}`)
     .then((buffer) => {
-      if (paused || test || practice) return;
+      if (!rules().speak) return;
       const ac = ensureAudio();
       const src = ac.createBufferSource();
       src.buffer = buffer;
@@ -564,9 +583,9 @@ function showReminderNote(on) {
 }
 
 function fire(nudge, cue) {
-  if (test || practice) return; // silent test or practice: withhold every cue
-  if (breath.active) return; // a breath check is talking; posture cues wait ~9 s
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
+  const allow = rules();
+  if (!(reminder ? allow.reminders : allow.praise)) return; // silent test, practice, breath check, a break or its grace
   const nowS = performance.now() / 1000;
   if (reminder) {
     const verdict = policy.onReminder(nowS, { episodeId: episode, voice: nudge === Nudge.VOICE });
@@ -702,6 +721,7 @@ $("consent-withdraw").addEventListener("click", () => {
   save();
   guide.cancel();
   breath.cancel?.();
+  activity.stop(ACTIVITY.BREATH_CHECK, clockS(), "cancelled");
   if (card) hideCard();
   prompts.dismiss(pclock, "done");
   renderConsentStatus();
@@ -739,9 +759,15 @@ const VERDICT_TEXT = {
 };
 
 function startBreathCheck() {
-  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (!loopsStarted || !canBegin()) return;
   if (!requireConsent(startBreathCheck)) return;
   ensureAudio();
+  runBreathCheck();
+}
+
+/** Begin the check itself (consent is settled). The breathing guide hands off to it. */
+function runBreathCheck() {
+  if (!activity.start(ACTIVITY.BREATH_CHECK, clockS())) return;
   goodSinceBreath = 0;
   breath.start(performance.now() / 1000, bracing.value);
   $("relax-status").textContent = "Breathe in slowly...";
@@ -750,7 +776,7 @@ function startBreathCheck() {
 }
 
 function relaxStep(landmarks, state, now) {
-  if (test || practice) {
+  if (inMode()) {
     relaxLastT = null;
     return;
   }
@@ -760,13 +786,14 @@ function relaxStep(landmarks, state, now) {
     return;
   }
   const ratio = neckRatio(landmarks);
-  const good = state === State.GOOD;
+  const allow = rules();
+  const good = state === State.GOOD && allow.engine === "track"; // the held state says nothing about posture
   const flagged = bracing.update(ratio, now, good && !breath.active);
-  if (flagged && !breath.active) {
+  if (flagged && allow.score === "day" && !breath.active) {
     const day = todayRecord();
     day.brace_events = (day.brace_events || 0) + 1;
   }
-  if (flagged && settings.relaxReminders && !breath.active) {
+  if (flagged && settings.relaxReminders && allow.reminders) {
     showRelaxBanner(RELAX_LINES.bracing);
     sayRelax(RELAX_LINES.bracing);
     store.bracingCount = (store.bracingCount || 0) + 1;
@@ -780,6 +807,7 @@ function relaxStep(landmarks, state, now) {
       sayRelax(RELAX_LINES.exhale);
       showRelaxBanner("Breathe out, let your shoulders drop");
     } else if (step) {
+      activity.stop(ACTIVITY.BREATH_CHECK, now, "completed");
       if (step.kind !== "unclear" && step.kind !== "rose") bracing.pinRelaxed(step.relaxed);
       $("relax-status").textContent = VERDICT_TEXT[step.kind];
       sayRelax(RELAX_LINES[step.kind]);
@@ -1020,7 +1048,13 @@ function setCardFill(f) {
   $("prompt-bar").setAttribute("aria-valuenow", String(pct));
 }
 
+const CARD_ACTIVITY = { eye: ACTIVITY.EYE_BREAK, demo: ACTIVITY.DEMO, guide: ACTIVITY.BREATHE_GUIDE };
+
+/** Every card removal comes through here, so the activity a card stands for can never outlive it.
+ *  Finished activities were already stopped as "completed"; this records the rest as cancelled. */
 function hideCard() {
+  const act = card && CARD_ACTIVITY[card.id];
+  if (act) activity.stop(act, clockS(), "cancelled");
   card = null;
   renderCard();
 }
@@ -1074,6 +1108,10 @@ function showPrompt(item) {
       : item.id === "offer"
         ? BREATHE_LINES.offer
         : moments.take(pclock);
+  if (item.id === "eye" && !activity.start(ACTIVITY.EYE_BREAK, clockS())) {
+    prompts.dismiss(pclock, "done");
+    return;
+  }
   card = { id: item.id, text, t: 0, finished: false };
   setCardFill(0);
   renderCard();
@@ -1108,10 +1146,11 @@ function acceptBreathIntro() {
 }
 
 function startGuide() {
-  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (!loopsStarted || !canBegin(true)) return;
   if (!requireConsent(startGuide)) return;
   ensureAudio();
   if (card) endCard("done");
+  if (!activity.start(ACTIVITY.BREATHE_GUIDE, clockS())) return;
   guide.start(preal);
   card = { id: "guide", text: `${BREATHE_LINES.intro}`, t: 0, finished: false };
   setCardFill(0);
@@ -1123,9 +1162,9 @@ function guideStep() {
   const g = guide.update(preal);
   if (!g) return;
   if (g.phase === "done") {
-    hideCard();
     if (settings.breatheCues && settings.mode !== "silent") speak(BREATHE_LINES.done);
-    startBreathCheck(); // ends with the existing breath check: do the shoulders stay down?
+    runBreathCheck(); // hand-off, no grace: ends with the existing breath check (do the shoulders stay down?)
+    hideCard();
     return;
   }
   setCardFill(g.fill);
@@ -1152,30 +1191,55 @@ function breathIntroDue() {
   );
 }
 
-/** Runs every tracked frame (real `now` in seconds). */
-function promptStep(state, now) {
-  if (test || practice || paused) {
-    plast = null;
-    return;
+/** The eye break countdown. The activity ends when the 20 s are up, not after the "well done" text. */
+function eyeCardStep(now) {
+  setCardFill(card.t / BREAKS.eye_look_s);
+  if (!card.finished && card.t >= BREAKS.eye_look_s) {
+    card.finished = true;
+    activity.stop(ACTIVITY.EYE_BREAK, now, "completed");
+    card.text = BREAK_LINES.eyeDone;
+    breaks.taken("eye");
+    renderCard();
+    sayPrompt(BREAK_LINES.eyeDone);
   }
-  const dt = plast === null ? 0 : Math.min(1, Math.max(0, now - plast));
-  plast = now;
-  preal += dt;
-  pclock += dt * CLOCK_SCALE;
-  const present = state !== State.NO_PERSON;
-  if (breaks.update(present, pclock)) countBreak();
-  pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0;
-  if (!present && card && card.id !== "guide") endCard("done"); // no prompt while away
-  if (!present && sponsorCard) {
+  if (card.finished && card.t >= BREAKS.eye_look_s + 3) endCard("done");
+}
+
+/** Advance the card on screen by one frame: countdowns, demo steps and timeouts. */
+function promptCardStep(dt, now) {
+  card.t += dt;
+  if (card.id === "eye") eyeCardStep(now);
+  else if (card.id === "demo" && !card.static) {
+    demoStep();
+    if (card.finished && card.t >= demoLength(card.kind) + 8) endCard("done");
+  } else if (card.id === "demo") {
+    if (card.t >= 120) {
+      activity.stop(ACTIVITY.DEMO, now, "timeout");
+      endCard("done");
+    }
+  } else if (card.t >= 60) {
+    endCard("notnow"); // ignoring a prompt counts as "Not now"
+  }
+}
+
+/** Walking away is not an answer: it ends an offer card and takes back a sponsor card. */
+function promptAbsence(present) {
+  if (present) return;
+  if (card && !CARD_ACTIVITY[card.id]) endCard("done"); // no prompt while away (breaks and the guide end through the machine)
+  if (sponsorCard) {
     refundSponsorShown(store);
     save();
     hideSponsor();
-  } // walking away is not an answer
+  }
+}
+
+/** Queue whatever is due; the scheduler decides when it may show. */
+function promptEnqueueDue(present) {
   if (
     shouldOfferSponsor(store, {
       nowMs: Date.now(),
       good: pstreak >= SPONSOR.good_streak_s,
-      silent: !!test || !!practice || paused,
+      silent: !rules().prompts,
     })
   ) {
     prompts.enqueue("share", pclock);
@@ -1183,36 +1247,30 @@ function promptStep(state, now) {
   if (breathIntroDue()) prompts.enqueue("breath_intro", pclock);
   for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
   if (settings.breathingMoments && moments.due(pstreak, pclock)) prompts.enqueue("breathing", pclock);
+}
+
+/** Runs every tracked frame (real `now` in seconds). present: someone is in view. */
+function promptStep(state, now, present) {
+  if (inMode()) {
+    plast = null;
+    return;
+  }
+  const dt = plast === null ? 0 : Math.min(1, Math.max(0, now - plast));
+  plast = now;
+  preal += dt;
+  pclock += dt * CLOCK_SCALE;
+  const allow = rules();
+  if (breaks.update(present, pclock)) countBreak();
+  if (allow.engine === "track") pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0; // a held state says nothing about posture
+  promptAbsence(present);
+  promptEnqueueDue(present);
   if (sponsorCard) {
     sponsorCard.t += dt;
     if (sponsorCard.t >= 120) answerSponsorCard("later"); // ignoring it counts as "Maybe later"
   } else if (guide.active) guideStep();
-  else if (card) {
-    card.t += dt;
-    if (card.id === "eye") {
-      setCardFill(card.t / BREAKS.eye_look_s);
-      if (!card.finished && card.t >= BREAKS.eye_look_s) {
-        card.finished = true;
-        card.text = BREAK_LINES.eyeDone;
-        breaks.taken("eye");
-        renderCard();
-        sayPrompt(BREAK_LINES.eyeDone);
-      }
-      if (card.finished && card.t >= BREAKS.eye_look_s + 3) endCard("done");
-    } else if (card.id === "demo" && !card.static) {
-      demoStep();
-      if (card.finished && card.t >= demoLength(card.kind) + 8) endCard("done");
-    } else if (card.id === "demo") {
-      if (card.t >= 120) endCard("done");
-    } else if (card.t >= 60) {
-      endCard("notnow"); // ignoring a prompt counts as "Not now"
-    }
-  } else {
-    const item = prompts.poll(pclock, {
-      paused,
-      test: !!test || !!practice,
-      breathCheck: breath.active || guide.active,
-    });
+  else if (card) promptCardStep(dt, now);
+  else {
+    const item = prompts.poll(pclock, { suppressed: !allow.prompts });
     if (item) showPrompt(item);
   }
 }
@@ -1258,6 +1316,7 @@ function showFigure(pose) {
 
 function startDemo(kind) {
   if (card) endCard("done");
+  if (!activity.start(ACTIVITY.DEMO, clockS())) return;
   const still = reducedMotion.matches;
   const finalAct = kind === "water" ? "drink" : "";
   card = { id: "demo", kind, text: "", t: 0, finished: false, act: finalAct, ui: { bar: !still, stop: true } };
@@ -1285,6 +1344,7 @@ function demoStep(first = false) {
   if (d.done) {
     if (!card.finished) {
       card.finished = true;
+      activity.stop(ACTIVITY.DEMO, clockS(), "completed");
       if (card.kind !== "water") breaks.taken(card.kind);
       if (DEMO_DONE[card.kind]) {
         card.text = DEMO_DONE[card.kind];
@@ -1305,9 +1365,10 @@ function demoStep(first = false) {
 }
 
 function openBreak(kind) {
-  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (!loopsStarted || !canBegin(true)) return;
   if (kind === "eye") {
     if (card) endCard("done");
+    if (!activity.start(ACTIVITY.EYE_BREAK, clockS())) return;
     card = { id: "eye", text: BREAK_LINES.eye, t: 0, finished: false };
     setCardFill(0);
     renderCard();
@@ -1341,7 +1402,7 @@ function showSponsor() {
   const still = shouldOfferSponsor(store, {
     nowMs: Date.now(),
     good: pstreak >= SPONSOR.good_streak_s,
-    silent: !!test || !!practice || paused,
+    silent: !rules().prompts,
   });
   if (!still) {
     prompts.dismiss(pclock, "done");
@@ -1478,6 +1539,10 @@ let test = null; // { minutes, elapsed, good, bad } while a test runs
 function startTest() {
   if (test) return finishTest(true);
   if (practice) stopPractice();
+  if (!activity.start(ACTIVITY.SILENT_TEST, clockS())) {
+    $("test-status").textContent = "Resume tracking first.";
+    return;
+  }
   test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
   breath.cancel();
   cancelPrompts();
@@ -1492,6 +1557,7 @@ function startTest() {
 function finishTest(stoppedEarly) {
   const t = test;
   test = null;
+  activity.stop(ACTIVITY.SILENT_TEST, clockS(), stoppedEarly ? "cancelled" : "completed");
   document.body.classList.remove("testing");
   $("test-start").textContent = "Start silent test";
   $("test-progress-wrap").style.display = "none";
@@ -1556,7 +1622,7 @@ let lastDaySave = 0;
 /** Effort-based praise at 5, 15, 30 and 60 continuous good minutes (banner and chime;
  *  spoken only when spoken praise is on, using the existing praise clips). */
 function fireMilestone(minute) {
-  if (test || practice || paused || breath.active || !policy.onPraise("milestone")) return;
+  if (!rules().praise || !policy.onPraise("milestone")) return;
   const banner = $("banner");
   banner.textContent = MILESTONE_TEXT[minute];
   banner.classList.remove("relax");
@@ -1571,42 +1637,52 @@ function fireMilestone(minute) {
   }
 }
 
+/** Silent test time: counted to the test only, never to the daily totals. */
+function accountTest(state, dt) {
+  test.elapsed += dt;
+  if (state === State.GOOD) test.good += dt;
+  else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
+}
+
+/** Coached time: session, daily totals and the coaching policy. */
+function accountDay(state, now, dt) {
+  const dayKey = todayKey();
+  store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0 };
+  const day = store.days[dayKey];
+  if (state === State.GOOD) {
+    session.good += dt;
+    session.streak += dt;
+    session.best = Math.max(session.best, session.streak);
+    // relaxed seconds need the shoulder consent (the monitor only runs with it)
+    tallyDay(day, "good", dt, { relaxed: hasConsent(store) ? bracing.relaxed : null, streak: session.streak });
+    const milestone = policy.onGood(now, dt);
+    if (milestone !== null) fireMilestone(milestone);
+  } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
+    session.bad += dt;
+    tallyDay(day, "bad", dt);
+    session.streak = 0;
+    policy.onBad();
+  }
+  if (now - lastDaySave >= DAY_SAVE_S) {
+    lastDaySave = now;
+    save();
+  } // keep daily totals across reloads
+}
+
+/** Route the frame's time by the activity: "day" tallies, "test" feeds the silent test,
+ *  "none" (practice, the eye break, demos, the breathing guide) records nothing and
+ *  leaves the streak where it is. */
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
-    if (test) {
-      test.elapsed += dt;
-      if (state === State.GOOD) test.good += dt;
-      else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
+    const route = rules().score;
+    if (route === "test") {
+      accountTest(state, dt);
       session.lastT = now;
       if (test.elapsed >= test.minutes * 60) finishTest(false);
       return;
     }
-    if (practice) {
-      session.lastT = now;
-      return;
-    } // practice records nothing
-    const dayKey = todayKey();
-    store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0 };
-    const day = store.days[dayKey];
-    if (state === State.GOOD) {
-      session.good += dt;
-      session.streak += dt;
-      session.best = Math.max(session.best, session.streak);
-      // relaxed seconds need the shoulder consent (the monitor only runs with it)
-      tallyDay(day, "good", dt, { relaxed: hasConsent(store) ? bracing.relaxed : null, streak: session.streak });
-      const milestone = policy.onGood(now, dt);
-      if (milestone !== null) fireMilestone(milestone);
-    } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
-      session.bad += dt;
-      tallyDay(day, "bad", dt);
-      session.streak = 0;
-      policy.onBad();
-    }
-    if (now - lastDaySave >= DAY_SAVE_S) {
-      lastDaySave = now;
-      save();
-    } // keep daily totals across reloads
+    if (route === "day") accountDay(state, now, dt);
   }
   session.lastT = now;
 }
@@ -1715,14 +1791,16 @@ function causeFor(result, landmarks) {
 
 /** The "what to fix" box: shown while a reminder is active or a metric is past
  *  its threshold; quiet (and green) when posture is good. */
-function renderFix(state, result, cue, hold) {
+function renderFix(state, result, cue, hold, heldLabel = "") {
   const box = $("fix-box");
   const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
   const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
   let title,
     how = "",
     cls = "";
-  if ((bad || drifting) && cue) {
+  if (heldLabel) {
+    title = heldLabel; // an activity owns the moment: no cue, no verdict on posture
+  } else if ((bad || drifting) && cue) {
     title = cue.title;
     how = cue.fix;
     cls = "active";
@@ -1798,14 +1876,8 @@ function markLoad(name) {
   if (loadMarks.click !== undefined && loadMarks[name] === undefined) loadMarks[name] = Math.round(performance.now());
 }
 
-function render(out, landmarks) {
-  const { result, transition, needle, cue, hold } = out;
-  if (result.kind === "scored") {
-    markLoad("firstScored");
-    if (transition.state !== State.NO_PERSON) markLoad("settled");
-  }
-  renderFix(transition.state, result, cue, hold);
-  if (practice) renderPractice(result);
+/** The badge: the state, or the activity while one holds posture feedback. */
+function renderBadge(transition, result, held, label) {
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
@@ -1815,9 +1887,13 @@ function render(out, landmarks) {
       ? "settling in"
       : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
-  const settling = !test && !practice && badge.textContent === "settling in";
+  const settling = !test && !practice && !held && badge.textContent === "settling in";
   $("settling-note").hidden = !settling;
   badge.title = settling ? $("settling-note").textContent : "";
+  if (held) {
+    badge.textContent = label;
+    badge.className = "badge activity";
+  }
   if (test) {
     badge.textContent = "silent test";
     badge.className = "badge testing";
@@ -1826,7 +1902,9 @@ function render(out, landmarks) {
     badge.textContent = "practice";
     badge.className = "badge practice";
   }
-  $("warnings").textContent = causeFor(result, landmarks);
+}
+
+function renderMetrics(result) {
   const cfg = DEFAULTS.scoring;
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
     const el = $(`m-${key}`);
@@ -1835,20 +1913,45 @@ function render(out, landmarks) {
     el.textContent = v === null ? "-" : `${Math.round(v)}\u00b0`;
     el.classList.toggle("over", v !== null && Math.abs(v) > cfg[key]);
   }
-  if (needle !== null) {
-    $("needle-rotor").setAttribute("transform", needleTransform(needle));
-    // The threshold needle averages all metrics, so a single-metric slouch
-    // sits mid-dial: the label follows the state machine, the needle shows how far.
-    const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
-    const label = bad
-      ? "slouching"
-      : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
-        ? "drifting"
-        : "upright";
-    $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
+}
+
+function renderNeedle(needle, transition, result, held) {
+  if (needle === null) return;
+  $("needle-rotor").setAttribute("transform", needleTransform(needle));
+  if (held) {
+    $("needle-text").textContent = "posture paused";
+    return;
   }
-  drawSkeleton(landmarks, test ? WIRE.slate : wireColor(transition.state, result));
-  renderMiniViews(landmarks, test ? WIRE.slate : wireColor(transition.state, result), test ? null : needle);
+  // The threshold needle averages all metrics, so a single-metric slouch
+  // sits mid-dial: the label follows the state machine, the needle shows how far.
+  const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
+  const label = bad
+    ? "slouching"
+    : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
+      ? "drifting"
+      : "upright";
+  $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
+}
+
+function render(out, landmarks) {
+  const { result, transition, needle, cue, hold } = out;
+  const held = out.held === true;
+  const label = rules().label;
+  // No cue or hold bar while an activity holds posture feedback or just ended (its grace).
+  const quiet = held || activity.inGrace(clockS());
+  if (result.kind === "scored") {
+    markLoad("firstScored");
+    if (transition.state !== State.NO_PERSON) markLoad("settled");
+  }
+  renderFix(transition.state, result, quiet ? null : cue, quiet ? null : hold, held ? label : "");
+  if (practice) renderPractice(result);
+  renderBadge(transition, result, held, label);
+  $("warnings").textContent = causeFor(result, landmarks);
+  renderMetrics(result);
+  renderNeedle(needle, transition, result, held);
+  const wire = test || held ? WIRE.slate : wireColor(transition.state, result);
+  drawSkeleton(landmarks, wire);
+  renderMiniViews(landmarks, wire, test ? null : needle);
   renderTest();
   renderCalibration();
   updateFirstRunLive(result, landmarks);
@@ -1885,11 +1988,12 @@ function demoPose(t) {
 // track is disabled (the picture goes black; most browsers turn the camera
 // light off). Resuming starts fresh so paused time can never fire a reminder.
 
-let paused = false;
-
 function setPaused(on) {
-  if (!loopsStarted || on === paused) return;
-  paused = on;
+  if (!loopsStarted || on === isPaused()) return;
+  if (on) {
+    if (practice) stopPractice();
+    activity.start(ACTIVITY.PAUSED, clockS());
+  } else activity.stop(ACTIVITY.PAUSED, clockS());
   save(); // flush daily totals when pausing
   const stream = video.srcObject;
   if (stream)
@@ -1897,7 +2001,6 @@ function setPaused(on) {
       t.enabled = !on;
     });
   if (on) {
-    if (practice) stopPractice();
     breath.cancel();
     cancelPrompts();
     stopSpeech();
@@ -1921,7 +2024,7 @@ function setPaused(on) {
   $("pause").setAttribute("aria-pressed", String(on));
 }
 
-$("pause").addEventListener("click", () => setPaused(!paused));
+$("pause").addEventListener("click", () => setPaused(!isPaused()));
 // WCAG 2.1.4: the single-key shortcut can be turned off.
 const PAUSE_TITLE = "Pause tracking and all sounds";
 function renderPauseShortcut() {
@@ -1938,7 +2041,7 @@ $("pause-shortcut").addEventListener("change", (e) => {
   renderPauseShortcut();
 });
 document.addEventListener("keydown", (e) => {
-  if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
+  if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!isPaused());
 });
 
 // -- staged reveal ----------------------------------------------------------------
@@ -2001,9 +2104,9 @@ function revealStep(out) {
     {
       scored,
       present: scored && out.transition.state !== State.NO_PERSON,
-      paused,
-      silentTest: !!test,
-      practice: !!practice,
+      paused: isPaused(),
+      silentTest: activity.isActive(ACTIVITY.SILENT_TEST),
+      practice: activity.isActive(ACTIVITY.PRACTICE),
     },
     pclock,
   );
@@ -2028,8 +2131,16 @@ if (store.revealAll) setRevealAll(true);
 applyReveal();
 $("reveal-note").textContent = "";
 
+let wasHeld = false; // the previous frame was scored by hold()
+
+/** Someone is in view. While held the machine state is frozen, so read the frame itself. */
+function framePresent(out, held) {
+  if (!held) return out.transition.state !== State.NO_PERSON;
+  return !(out.result.kind === "unreliable" && out.result.reason === Reason.NO_POSE);
+}
+
 function step() {
-  if (paused) return;
+  if (!rules().frames) return;
   const nowMs = performance.now();
   const now = nowMs / 1000;
   let landmarks = null;
@@ -2051,14 +2162,19 @@ function step() {
     // Some tasks-vision builds omit visibility; absent means "detected".
     landmarks = first ? first.map((p) => ({ x: p.x, y: p.y, visibility: p.visibility ?? 1 })) : null;
   }
-  const out = engine.process(landmarks, now);
+  const held = activity.policy(now).engine === "hold";
+  if (wasHeld && !held) engine.restart(); // the activity ended: start fresh (calibration kept), nothing carries over
+  wasHeld = held;
+  const out = held ? engine.hold(landmarks, now) : engine.process(landmarks, now);
+  const present = framePresent(out, held);
+  if (activity.observePresence(present, now) && card) endCard("done"); // left the frame during a break
   const slouching = out.transition.state === State.BAD_CHIME || out.transition.state === State.BAD_VOICE;
   if (slouching && !lastBad) episode += 1; // a new slouch episode
   lastBad = slouching;
   for (const nudge of out.nudges) fire(nudge, out.cue);
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
-  promptStep(out.transition.state, now);
+  promptStep(out.transition.state, now, present);
   revealStep(out);
   setupStep(out.transition.state);
   if (lastFrameT !== null) {
@@ -2306,7 +2422,7 @@ function bugReportUrl() {
     `- Browser: ${navigator.userAgent}`,
     `- Language: ${navigator.language} | Screen: ${screen.width}x${screen.height} @${devicePixelRatio}x`,
     `- WebGL: ${webglInfo()}`,
-    `- Source: ${$("source").textContent} | State: ${$("state-badge").textContent} | fps: ${$("fps").textContent} | paused: ${paused}`,
+    `- Source: ${$("source").textContent} | State: ${$("state-badge").textContent} | fps: ${$("fps").textContent} | paused: ${isPaused()}`,
     `- Mode: ${settings.mode} | specific cues: ${settings.specificCues} | spoken praise: ${settings.spokenPraise}`,
     `- Voice: ${selectedVoice() || "none"}${v ? ` | system fallback ${v.name} (${v.lang})` : ""} | ${voices.length} system voices | clips ${clipManifest ? "loaded" : "missing"}`,
     `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
@@ -2756,15 +2872,7 @@ function focusFirstRunHeading() {
 
 /** True while something else owns the screen: the sequence hides and waits. */
 function setupBlocked(state) {
-  return (
-    paused ||
-    !!test ||
-    !!practice ||
-    breath.active ||
-    guide.active ||
-    state === State.BAD_CHIME ||
-    state === State.BAD_VOICE
-  );
+  return !rules().setupCards || state === State.BAD_CHIME || state === State.BAD_VOICE;
 }
 
 /** Runs every tracked frame: opens the next due card on its own (no focus move), hides it while blocked. */
@@ -2963,9 +3071,10 @@ function renderPracticeStep() {
 
 function startPractice() {
   if (!loopsStarted) return "Start the webcam or the demo first, then you can practise the cues.";
-  if (paused) return "Resume tracking first.";
+  if (isPaused()) return "Resume tracking first.";
   if (test) return "Stop the silent test first.";
   if (practice) return "";
+  if (!activity.start(ACTIVITY.PRACTICE, clockS())) return "Finish the current activity first.";
   $("practice-breath").hidden = true;
   breath.cancel();
   stopSpeech();
@@ -2979,6 +3088,7 @@ function startPractice() {
 
 function stopPractice() {
   practice = null;
+  activity.stop(ACTIVITY.PRACTICE, clockS());
   document.body.classList.remove("practicing");
   for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"])
     $(`t-${metric}`).classList.remove("focus");
