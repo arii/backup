@@ -81,3 +81,20 @@
   `feedback.js`) stay pure: no DOM, injected time, with a matching test in `tests/js/`.
 - Label each new feature as implemented or spec only in the docs. Cite a source as
   verified only if its abstract or page text was read.
+
+## Activity states
+- `docs/app/activity.js` owns "what is the user doing" (`ActivityMachine`: tracking,
+  paused, silent test, practice, breath check, breathe guide, eye break, demo). It is pure
+  and takes `now` like every other state module. Tests: `tests/js/activity.test.mjs`.
+- Its policy table is the single place that says what is allowed in each state
+  (reminders, praise, speech, scoring, prompts, setup cards, engine mode). A feature that
+  should silence coaching adds a state or a policy row. Never add a new `paused`-style
+  flag or a compound `a || b || c` guard in `app.js`; read `rules()` instead.
+- `engine: "hold"` makes `app.js` call `PostureEngine.hold`, which scores presence only and
+  freezes the posture state machine, needle and calibration. Leaving a hold calls
+  `engine.restart()`, so nothing from before the activity carries over.
+- When an eye break, demo or breathing guide ends for any reason (completed, cancelled,
+  timeout, left frame, mode change), a 10 s grace window keeps reminders, cues and praise
+  off. The normal `bad_sustain_s` dwell applies after it.
+- Spec: `.kiro/specs/activity-states/`. e2e coverage is in `tests/e2e/live-site.mjs`
+  (section 4a2).

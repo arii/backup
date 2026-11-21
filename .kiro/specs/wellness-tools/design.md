@@ -26,7 +26,7 @@ export const WELLNESS = Object.freeze({ max_prompts_per_hour: 6, min_gap_s: 120 
 class PromptBudget { request(kind, now) -> boolean; record(kind, now); snooze(kind, until) }
 ```
 `request` returns false when the hourly cap or minimum gap would be violated, when the
-app is paused, in test or practice mode, or when the Coaching level is Light and the tool
+app is paused, in test or practice mode, in a guided break (see `activity-states`), or when the Coaching level is Light and the tool
 is not marked essential. Posture reminders are not subject to this budget but are counted
 toward the combined alarm-fatigue cap in `feedback-design`.
 
