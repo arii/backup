@@ -76,13 +76,13 @@ export class PromptScheduler {
     return true;
   }
 
-  /** ctx: { paused, test, breathCheck }, any truthy value suppresses.
+  /** ctx: { suppressed }, true while an activity (pause, test, breath check, a break) owns the screen.
    *  Returns the prompt to show now (and marks it active), or null. */
   poll(now, ctx = {}) {
     if (this.sessionStart === null) this.sessionStart = now;
     this.queue = this.queue.filter((q) => now - q.queuedAt <= this.cfg.queue_ttl_s && this.isEnabled(q.id));
     if (this.active) return null; // never two at once
-    if (ctx.paused || ctx.test || ctx.breathCheck) return null;
+    if (ctx.suppressed) return null;
     if (now < this.postureUntil) return null;
     const quiet = now - this.sessionStart < this.cfg.first_quiet_s;
     if (this.lastNonPosture !== null && now - this.lastNonPosture < this.cfg.global_gap_s) return null;

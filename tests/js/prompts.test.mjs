@@ -70,13 +70,11 @@ test("a posture reminder holds every other prompt back", () => {
   assert.equal(ask(s, "eye", 400 + PROMPTS.posture_hold_s)?.id, "eye");
 });
 
-test("suppressed while paused, in a silent test, or during a breath check", () => {
-  for (const ctx of [{ paused: true }, { test: true }, { breathCheck: true }]) {
-    const s = make();
-    assert.equal(ask(s, "eye", 1000, ctx), null, JSON.stringify(ctx));
-    assert.equal(s.active, null);
-    assert.equal(ask(s, "eye", 1001)?.id, "eye"); // shows once the suppression ends
-  }
+test("suppressed while an activity owns the screen", () => {
+  const s = make();
+  assert.equal(ask(s, "eye", 1000, { suppressed: true }), null);
+  assert.equal(s.active, null);
+  assert.equal(ask(s, "eye", 1001)?.id, "eye"); // shows once the suppression ends
 });
 
 test("a disabled or dismissed prompt is never queued", () => {
@@ -166,11 +164,9 @@ test("a posture reminder still wins over breath_intro", () => {
   assert.equal(ask(s, "breath_intro", 70 + PROMPTS.posture_hold_s)?.id, "breath_intro");
 });
 
-test("pause, silent test and a breath check block breath_intro", () => {
+test("a suppressing activity blocks breath_intro", () => {
   const s = make();
-  assert.equal(ask(s, "breath_intro", 70, { paused: true }), null);
-  assert.equal(ask(s, "breath_intro", 71, { test: true }), null);
-  assert.equal(ask(s, "breath_intro", 72, { breathCheck: true }), null);
+  assert.equal(ask(s, "breath_intro", 70, { suppressed: true }), null);
   assert.equal(ask(s, "breath_intro", 73)?.id, "breath_intro");
 });
 
@@ -196,8 +192,7 @@ test("stretch and water are break prompts that wait for the quiet start", () => 
 test("the jaw prompt waits for the quiet start, the global gap and silent rules", () => {
   const s = make();
   assert.equal(ask(s, "jaw", 10), null);
-  assert.equal(ask(s, "jaw", 400, { paused: true }), null);
-  assert.equal(ask(s, "jaw", 400, { test: true }), null);
+  assert.equal(ask(s, "jaw", 400, { suppressed: true }), null);
   assert.equal(ask(s, "jaw", 400)?.id, "jaw");
   s.dismiss(410, "done");
   assert.equal(ask(s, "eye", 420), null, "the 10 minute gap applies after the jaw prompt");
