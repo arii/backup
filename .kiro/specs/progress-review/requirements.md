@@ -15,7 +15,7 @@ Design stance and evidence: `docs/research/feedback-and-habit-formation.md`.
 - Upright "perfect" posture is not proven to prevent pain (Slater et al. 2019), so no
   ranking may push people to hold still.
 
-Scope markers: Untagged items are built. **(spec only)** designed, not built.
+Scope markers: Untagged items are built. **(spec only)** designed, not built. Requirements 4, 5 and the no-server parts of 6 and 7 are built (peer share link). The server, ranking and age policy (6.5, 6.8 to 6.10, 7.1, 7.2, 7.4) are owner-only and not built.
 
 ## Requirements
 
@@ -42,19 +42,19 @@ am improving.
 2. A day with fewer than `PROGRESS.min_tracked_s` (default 60) tracked seconds SHALL be shown as "too little to score" and excluded from trend lines.
 3. Silent tests below 30 tracked seconds are already not stored; the panel SHALL NOT display any test that is missing `good` and `bad`.
 
-### Requirement 4: Schema versioning and import (spec only)
+### Requirement 4: Schema versioning and import
 1. THE stored progress SHALL carry `store.schema` (integer). The reader SHALL accept missing as 1 and SHALL ignore unknown fields.
 2. THE App SHALL offer "Import JSON" that validates shape and ranges, previews counts, and merges by day (sum seconds) or replaces, on user choice.
 3. Import SHALL reject files above 1 MB and any value that is not a finite non-negative number.
 
-### Requirement 5: Richer trends (spec only)
+### Requirement 5: Richer trends
 1. THE panel MAY show a weekly view (ISO weeks) in addition to days.
 2. THE panel MAY show the best continuous good streak per day (needs `day.best` recorded).
 3. THE panel MAY show a relaxed-shoulders trend. This needs a new daily counter from the bracing monitor (`day.relaxed_s`, `day.brace_events`), with the same privacy rule.
 4. THE panel MAY show a coached versus silent comparison chart across weeks.
 5. THE panel SHOULD use local dates for day keys. The shipped `todayKey()` uses UTC, so a migration plan is needed before weekly charts.
 
-### Requirement 6: Social leaderboard (spec only, opt-in)
+### Requirement 6: Social leaderboard (opt-in; peer link built, server ranking owner-only)
 **User Story:** As a user who enjoys friendly comparison, I want to opt in to share an
 aggregate score with a small group, without giving up privacy.
 
@@ -70,7 +70,7 @@ aggregate score with a small group, without giving up privacy.
 9. THE leaderboard SHALL show the user's own trend by default and other people only as a small group (for example a friends list) with no global public ranking in the first release.
 10. Users under the age set by the owner's legal review SHALL NOT be offered sharing (age policy: verify with counsel).
 
-### Requirement 7: Privacy and safety of sharing (spec only)
+### Requirement 7: Privacy and safety of sharing (peer link built, server parts owner-only)
 1. THE sharing channel SHALL use HTTPS, with no third-party trackers, and no cookies.
 2. THE submit payload SHALL be signed on the client with a per-install key or a server-issued token to limit trivial forgery. Anti-cheat SHALL NOT require sending raw data.
 3. THE privacy notice SHALL state retention (default: delete records older than 12 weeks) and how to delete.

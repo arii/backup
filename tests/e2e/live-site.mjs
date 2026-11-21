@@ -401,7 +401,11 @@ try {
       const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
       if (!sessionStorage.getItem("pg-e2e-seeded")) {
         sessionStorage.setItem("pg-e2e-seeded", "1");
-        const day = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+        const day = (n) => {
+          const d = new Date();
+          d.setDate(d.getDate() - n);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        };
         s.days = { [day(1)]: { good: 1200, bad: 400 }, [day(2)]: { good: 900, bad: 900 } };
         s.tests = [{ at: new Date().toISOString(), minutes: 10, good: 480, bad: 120 }];
         localStorage.setItem("posture-guard:v1", JSON.stringify(s));
@@ -497,8 +501,89 @@ try {
     const exported = JSON.parse(await (await import("node:fs")).promises.readFile(await download.path(), "utf8"));
     check(
       "progress: export is whitelisted JSON",
-      exported.schema === 1 && !!exported.days && !("calibration" in exported),
+      exported.schema === 2 && !!exported.days && !("calibration" in exported),
       Object.keys(exported),
+    );
+    // Weekly view, import (progress-review tasks 4, 7).
+    const weeks = await page.evaluate(() => ({
+      rows: document.querySelectorAll("#progress-weeks .day-row").length,
+      hidden: document.getElementById("progress-weeks").hidden,
+      text: document.getElementById("progress-weeks").textContent,
+    }));
+    check(
+      "progress: weekly view lists 8 weeks with coached and silent numbers",
+      weeks.rows === 8 && !weeks.hidden && /coached/.test(weeks.text) && /silent/.test(weeks.text),
+      weeks,
+    );
+    await page.setInputFiles("#progress-import-file", {
+      name: "bad.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: -5, bad: 0 } } })),
+    });
+    await page.waitForFunction(() => /Not imported/.test(document.getElementById("progress-msg").textContent), null, {
+      timeout: 5000,
+    });
+    check(
+      "import: a file with a negative value is rejected and nothing changes",
+      !(await page.evaluate(() => localStorage.getItem("posture-guard:v1").includes("2020-01-06"))),
+    );
+    await page.setInputFiles("#progress-import-file", {
+      name: "good.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: 600, bad: 60 } } })),
+    });
+    await page.waitForSelector("#import-dialog[open]");
+    check(
+      "import: preview shows the counts",
+      /1 day/.test(await page.textContent("#import-preview")),
+      await page.textContent("#import-preview"),
+    );
+    await page.click("#import-merge");
+    const imported = await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).days["2020-01-06"]);
+    check("import: merge adds the day", imported && imported.good === 600, imported);
+    // Share my weekly score (tasks 9, 10): hidden until consent, link carries only the six fields.
+    check(
+      "share weekly: off by default and the section is hidden",
+      !(await page.isChecked("#share-weekly")) && !(await page.isVisible("#peer-section")),
+    );
+    await page.evaluate(() => document.getElementById("share-weekly").click());
+    await page.waitForSelector("#share-consent-dialog[open]");
+    check(
+      "share weekly: the dialog lists the exact record",
+      /"consistency_score"/.test(await page.textContent("#share-consent-preview")) ||
+        /Choose a nickname/.test(await page.textContent("#share-consent-preview")),
+    );
+    await page.fill("#share-consent-nick", "Ari");
+    check(
+      "share weekly: preview has exactly the documented keys",
+      await page.evaluate(
+        () =>
+          Object.keys(JSON.parse(document.getElementById("share-consent-preview").textContent)).join() ===
+          "schema,week,nickname,tracked_minutes,consistency_score,breaks_taken",
+      ),
+    );
+    check("share weekly: Share stays disabled until the box is ticked", await page.isDisabled("#share-consent-agree"));
+    await page.check("#share-consent-check");
+    await page.click("#share-consent-agree");
+    check("share weekly: after consent the section shows", await page.isVisible("#peer-section"));
+    await page.click("#peer-create");
+    const link = await page.inputValue("#peer-link");
+    check(
+      "share weekly: the link keeps the record in the fragment",
+      /#peer=[A-Za-z0-9_-]+$/.test(link) && !link.includes("?"),
+      link,
+    );
+    await page.fill("#peer-paste", link);
+    await page.click("#peer-view");
+    check(
+      "share weekly: pasting the link shows the friend's week",
+      /Ari/.test(await page.textContent("#peer-view-body")),
+    );
+    await page.click("#peer-view-close");
+    await page.evaluate(() => document.getElementById("share-weekly").click());
+    check(
+      "share weekly: switching off removes consent",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).shareConsent),
     );
     page.once("dialog", (d) => d.accept());
     await page.click("#progress-delete");

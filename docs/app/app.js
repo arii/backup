@@ -39,7 +39,19 @@ import {
   SetupCheck,
   shouldShowOnboarding,
 } from "./onboarding.js";
-import { exportJson, summarize } from "./progress.js";
+import { consistencyScore } from "./consistency.js";
+import {
+  applyImport,
+  dayKeyFor,
+  exportJson,
+  IMPORT_MAX_BYTES,
+  migrateStore,
+  parseImport,
+  previewImport,
+  summarize,
+  summarizeWeeks,
+  tallyDay,
+} from "./progress.js";
 import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText } from "./wellness.js";
 import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
@@ -58,12 +70,22 @@ import {
   CONSENT_TITLE,
   consentStatus,
   hasConsent,
+  hasShareConsent,
   recordConsent,
+  recordShareConsent,
+  SHARE_CONSENT_CHECKBOX,
+  SHARE_CONSENT_POINTS,
+  SHARE_CONSENT_TITLE,
   withdrawConsent,
+  withdrawShareConsent,
 } from "./consent.js";
 import {
   SHARE_TEXT,
   cardAltText,
+  cleanNickname,
+  peerLink,
+  peerRecord,
+  readPeerLink,
   drawScoreCard,
   nativeSharePayload,
   scoreCardData,
@@ -120,6 +142,7 @@ function loadStore() {
   }
 }
 const store = loadStore();
+migrateStore(store); // schema 2: day keys are local dates from now on (old UTC keys stay as they are)
 if (store.firstRunDone) store.setupDone = true; // set up before the sequence existed: nothing to show again
 let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
@@ -130,7 +153,12 @@ function save() {
     /* quota: keep in memory */
   }
 }
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => dayKeyFor(store, Date.now());
+function todayRecord() {
+  store.days = store.days || {};
+  store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 };
+  return store.days[todayKey()];
+}
 
 // -- settings -----------------------------------------------------------------
 
@@ -697,6 +725,10 @@ function relaxStep(landmarks, state, now) {
   const ratio = neckRatio(landmarks);
   const good = state === State.GOOD;
   const flagged = bracing.update(ratio, now, good && !breath.active);
+  if (flagged && !breath.active) {
+    const day = todayRecord();
+    day.brace_events = (day.brace_events || 0) + 1;
+  }
   if (flagged && settings.relaxReminders && !breath.active) {
     showRelaxBanner(RELAX_LINES.bracing);
     sayRelax(RELAX_LINES.bracing);
@@ -886,6 +918,8 @@ function breaksTakenToday() {
 }
 function countBreak() {
   store.breaksToday = { day: todayKey(), n: breaksTakenToday() + 1 };
+  const day = todayRecord();
+  day.breaks = store.breaksToday.n;
   save();
 }
 
@@ -1497,14 +1531,15 @@ function account(state, now) {
     const day = store.days[dayKey];
     if (state === State.GOOD) {
       session.good += dt;
-      day.good += dt;
       session.streak += dt;
       session.best = Math.max(session.best, session.streak);
+      // relaxed seconds need the shoulder consent (the monitor only runs with it)
+      tallyDay(day, "good", dt, { relaxed: hasConsent(store) ? bracing.relaxed : null, streak: session.streak });
       const milestone = policy.onGood(now, dt);
       if (milestone !== null) fireMilestone(milestone);
     } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
       session.bad += dt;
-      day.bad += dt;
+      tallyDay(day, "bad", dt);
       session.streak = 0;
       policy.onBad();
     }
@@ -2938,12 +2973,19 @@ function renderProgress() {
       bar.append(fill);
       const text = document.createElement("span");
       text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
+      if (d.pct !== null && d.best_s >= 60) text.textContent += ` \u00b7 best run ${mmss(d.best_s)}`;
       if (d.pct === null) text.className = "nodata";
       row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
       row.append(label, bar, text);
       return row;
     }),
   );
+  const relaxedDays = s.days.filter((d) => d.relaxed_pct !== null);
+  const braces = s.days.reduce((a, d) => a + d.brace_events, 0);
+  $("progress-best").textContent = relaxedDays.length
+    ? `Shoulders relaxed over the last 7 days: ${Math.round(relaxedDays.reduce((a, d) => a + d.relaxed_pct, 0) / relaxedDays.length)}% of tracked time, ${braces} bracing reminder${braces === 1 ? "" : "s"}.`
+    : "";
+  renderWeeks();
   $("progress-total").textContent = s.empty
     ? ""
     : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
@@ -2962,6 +3004,209 @@ function renderProgress() {
     : "";
   $("progress-light").hidden = !suggest;
 }
+
+function weekRow(w) {
+  const row = document.createElement("div");
+  row.className = "day-row";
+  row.setAttribute("role", "listitem");
+  const label = document.createElement("span");
+  label.textContent = `W${w.week.slice(-2)}`;
+  const bars = document.createElement("div");
+  for (const [pct, color] of [
+    [w.coached_pct, "#4cc36a"],
+    [w.silent_pct, "#6b8fd6"],
+  ]) {
+    const bar = document.createElement("div");
+    bar.className = "score-bar";
+    const fill = document.createElement("div");
+    fill.style.width = `${pct ?? 0}%`;
+    fill.style.background = color;
+    bar.append(fill);
+    bars.append(bar);
+  }
+  const fmt = (v) => (v === null ? "no data" : `${v}%`);
+  const text = document.createElement("span");
+  text.textContent = `coached ${fmt(w.coached_pct)} \u00b7 silent ${fmt(w.silent_pct)}`;
+  if (w.relaxed_pct !== null) text.textContent += ` \u00b7 relaxed ${w.relaxed_pct}%`;
+  row.setAttribute("aria-label", `Week ${w.week}, starting ${w.start}: ${text.textContent}`);
+  row.append(label, bars, text);
+  return row;
+}
+
+function renderWeeks() {
+  const weeks = summarizeWeeks(store, Date.now());
+  const any = weeks.some((w) => w.coached_pct !== null || w.silent_pct !== null);
+  $("progress-weeks").hidden = !any;
+  $("progress-weeks-note").textContent = any
+    ? "Weeks start on Monday. Green bar: coached good %. Blue bar: silent-test good %. Silent is what stays when coaching is off."
+    : "";
+  $("progress-weeks").replaceChildren(...weeks.map(weekRow));
+  renderPeer(weeks[weeks.length - 1]);
+}
+
+// -- import ------------------------------------------------------------------------------
+let pendingImport = null;
+$("progress-import").addEventListener("click", () => $("progress-import-file").click());
+$("progress-import-file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > IMPORT_MAX_BYTES) {
+    $("progress-msg").textContent = "Not imported: the file is larger than 1 MB.";
+    return;
+  }
+  let parsed;
+  try {
+    parsed = parseImport(await file.text());
+  } catch {
+    parsed = { ok: false, error: "The file could not be read." };
+  }
+  if (!parsed.ok) {
+    $("progress-msg").textContent = `Not imported: ${parsed.error}`;
+    return;
+  }
+  pendingImport = parsed;
+  const p = previewImport(parsed);
+  $("import-preview").textContent =
+    p.days || p.tests
+      ? `${p.days} day${p.days === 1 ? "" : "s"}${p.first ? ` (${p.first} to ${p.last})` : ""}, ${minutesText(p.good_s)} of good posture, ${p.tests} silent test${p.tests === 1 ? "" : "s"}.`
+      : "The file has no days or tests.";
+  $("import-dialog").showModal();
+});
+function finishImport(mode) {
+  if (pendingImport) {
+    applyImport(store, pendingImport, mode);
+    save();
+    $("progress-msg").textContent =
+      mode === "replace" ? "Replaced your progress with the file." : "Merged the file into your progress.";
+    renderProgress();
+  }
+  pendingImport = null;
+  $("import-dialog").close();
+}
+$("import-merge").addEventListener("click", () => finishImport("merge"));
+$("import-replace").addEventListener("click", () => finishImport("replace"));
+$("import-cancel").addEventListener("click", () => {
+  pendingImport = null;
+  $("import-dialog").close();
+});
+
+// -- share my weekly score (peer link, no server, opt-in) ---------------------------------
+// Nothing is sent. The record is packed into a link the user copies. See consent.js, share.js.
+const appBaseUrl = () => {
+  const u = new URL(location.href);
+  u.search = "";
+  u.hash = "";
+  return u.href;
+};
+function currentPeerRecord(week, nickname) {
+  if (!week) return null;
+  return peerRecord({
+    nickname,
+    week: week.week,
+    tracked_s: week.tracked_s,
+    score: consistencyScore(week),
+    breaks: week.breaks,
+  });
+}
+function renderPeer(week) {
+  const on = hasShareConsent(store);
+  $("peer-section").hidden = !on;
+  $("share-weekly").checked = on;
+  $("share-weekly-status").textContent = on
+    ? `On since ${store.shareConsent.at.slice(0, 10)}. Find it under Your progress. Untick to switch off.`
+    : "Off. Nothing is shared and the share section stays hidden.";
+  if (!on) return;
+  if (document.activeElement !== $("peer-nickname")) $("peer-nickname").value = store.shareNickname || "";
+  const rec = currentPeerRecord(week, $("peer-nickname").value);
+  $("peer-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+$("peer-nickname").addEventListener("input", () => renderPeer(summarizeWeeks(store, Date.now()).at(-1)));
+$("peer-create").addEventListener("click", () => {
+  const week = summarizeWeeks(store, Date.now()).at(-1);
+  const nick = cleanNickname($("peer-nickname").value);
+  const rec = currentPeerRecord(week, nick);
+  if (!rec) {
+    $("peer-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  store.shareNickname = nick;
+  save();
+  $("peer-link").value = peerLink(rec, appBaseUrl());
+  $("peer-link").hidden = false;
+  $("peer-copy").hidden = false;
+  $("peer-msg").textContent = "Link created. It holds only the record above. Copy it and send it yourself.";
+});
+$("peer-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("peer-link").value);
+    $("peer-msg").textContent = "Copied.";
+  } catch {
+    $("peer-link").select();
+    $("peer-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
+  }
+});
+function showPeer(rec) {
+  $("peer-view-body").textContent =
+    `${rec.nickname}, ${rec.week}: ${rec.tracked_minutes} tracked minutes, consistency score ${rec.consistency_score} out of 100, ${rec.breaks_taken} breaks taken.`;
+  $("peer-view-dialog").showModal();
+}
+$("peer-view").addEventListener("click", () => {
+  const rec = readPeerLink($("peer-paste").value);
+  if (!rec) {
+    $("peer-msg").textContent = "That is not a BackUp share link.";
+    return;
+  }
+  $("peer-msg").textContent = "";
+  showPeer(rec);
+});
+$("peer-view-close").addEventListener("click", () => $("peer-view-dialog").close());
+
+$("share-weekly").addEventListener("change", (e) => {
+  if (!e.target.checked) {
+    withdrawShareConsent(store);
+    save();
+    renderProgress();
+    return;
+  }
+  e.target.checked = false; // stays off until the dialog is agreed
+  $("share-consent-nick").value = store.shareNickname || "";
+  $("share-consent-check").checked = false;
+  $("share-consent-agree").disabled = true;
+  $("share-consent-msg").textContent = "";
+  renderShareConsentPreview();
+  $("share-consent-dialog").showModal();
+});
+function renderShareConsentPreview() {
+  const rec = currentPeerRecord(summarizeWeeks(store, Date.now()).at(-1), $("share-consent-nick").value);
+  $("share-consent-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+$("share-consent-title").textContent = SHARE_CONSENT_TITLE;
+$("share-consent-label").append(SHARE_CONSENT_CHECKBOX);
+$("share-consent-list").replaceChildren(
+  ...SHARE_CONSENT_POINTS.map((t) => {
+    const li = document.createElement("li");
+    li.textContent = t;
+    return li;
+  }),
+);
+$("share-consent-nick").addEventListener("input", renderShareConsentPreview);
+$("share-consent-check").addEventListener("change", (e) => {
+  $("share-consent-agree").disabled = !e.target.checked;
+});
+$("share-consent-agree").addEventListener("click", () => {
+  const nick = cleanNickname($("share-consent-nick").value);
+  if (!nick) {
+    $("share-consent-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  recordShareConsent(store);
+  store.shareNickname = nick;
+  save();
+  $("share-consent-dialog").close();
+  renderProgress();
+});
+$("share-consent-cancel").addEventListener("click", () => $("share-consent-dialog").close());
 
 $("progress-light").addEventListener("click", () => {
   $("coaching-level").value = "light";
@@ -3134,6 +3379,12 @@ renderCalibration();
 renderStats();
 renderTest();
 renderProgress();
+if (location.hash.startsWith("#peer=")) {
+  // A friend's share link: show it once, keep nothing.
+  const rec = readPeerLink(location.hash);
+  history.replaceState(null, "", location.pathname + location.search);
+  if (rec) showPeer(rec);
+}
 window.addEventListener("pagehide", save);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) save();

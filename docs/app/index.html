@@ -369,6 +369,9 @@
       <h2 id="progress-title">Your progress</h2>
       <div id="progress-empty" class="note" style="margin-top:0"></div>
       <div id="progress-days" role="list" aria-label="Good posture by day, last 7 days"></div>
+      <div class="note" id="progress-best"></div>
+      <div id="progress-weeks" role="list" aria-label="Weekly view, last 8 weeks. Coached and silent-test good posture per week" hidden></div>
+      <div class="note" id="progress-weeks-note"></div>
       <div class="note" id="progress-total"></div>
       <div class="note" id="progress-tests"></div>
       <div class="note" id="progress-water"></div>
@@ -376,9 +379,23 @@
       <div class="btn-row">
         <button class="secondary" id="progress-light" hidden>Switch to light coaching</button>
         <button class="secondary" id="progress-export">Export JSON</button>
+        <button class="secondary" id="progress-import">Import JSON</button>
+        <input type="file" id="progress-import-file" accept="application/json,.json" hidden aria-label="Choose a BackUp progress JSON file to import">
         <button class="secondary" id="progress-delete">Delete my data</button>
       </div>
-      <div class="note">Stored only in this browser. Days are counted in UTC. A missed day is just a day with no data.</div>
+      <div id="peer-section" hidden>
+        <h2 style="margin-top:14px">Share my weekly score</h2>
+        <div class="note" style="margin-top:0">This is the exact record a link will hold. It is built from this week's data in this browser and goes nowhere until you copy the link yourself.</div>
+        <label class="note" for="peer-nickname" style="display:block">Nickname (1 to 20 letters or digits, not your real name or email)</label>
+        <input type="text" id="peer-nickname" maxlength="20" autocomplete="off" spellcheck="false">
+        <pre class="note" id="peer-preview" aria-label="Record that the link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+        <div class="btn-row"><button class="secondary" id="peer-create">Create link</button><button class="secondary" id="peer-copy" hidden>Copy link</button></div>
+        <input type="text" id="peer-link" readonly hidden aria-label="Your share link">
+        <label class="note" for="peer-paste" style="display:block">See a friend's link</label>
+        <div class="share-links"><input type="text" id="peer-paste" autocomplete="off" spellcheck="false" style="flex:1 1 200px;width:auto"><button class="secondary" id="peer-view">Show</button></div>
+        <div class="note" id="peer-msg" aria-live="polite"></div>
+      </div>
+      <div class="note">Stored only in this browser. Days are counted in your local time (older days used UTC). A missed day is just a day with no data.</div>
       <div class="note" id="progress-msg" aria-live="polite"></div>
     </div>
     <div class="panel" id="offline-panel" aria-labelledby="offline-title" data-stage="5" hidden>
@@ -519,6 +536,11 @@
         <button id="consent-withdraw" class="secondary" hidden>Withdraw my OK</button>
       </div>
     </div>
+    <div class="panel" data-stage="5" hidden>
+      <h2>Share my weekly score</h2>
+      <label class="note" style="display:flex;gap:8px;margin-top:0"><input type="checkbox" id="share-weekly"> Let me create a link with my weekly score (off by default)</label>
+      <div class="note" id="share-weekly-status" role="status"></div>
+    </div>
     <div class="panel" data-stage="3" hidden>
       <h2>Calibrate to your desk</h2>
       <div class="btn-row">
@@ -578,6 +600,29 @@
   <label class="note" id="consent-label" style="display:block;margin-top:8px"><input type="checkbox" id="consent-check"> </label>
   <div class="btn-row"><button id="consent-agree" disabled>Turn on</button><button id="consent-cancel" class="secondary">Not now</button></div>
   <div class="note"><a href="../privacy.html#biometric">Biometric retention</a> &middot; <a href="../privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a></div>
+</dialog>
+<dialog id="share-consent-dialog" aria-labelledby="share-consent-title">
+  <h2 id="share-consent-title" style="margin-top:0"></h2>
+  <ul id="share-consent-list"></ul>
+  <label class="note" for="share-consent-nick" style="display:block">Nickname</label>
+  <input type="text" id="share-consent-nick" maxlength="20" autocomplete="off" spellcheck="false">
+  <pre class="note" id="share-consent-preview" aria-label="Exact record that a link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+  <label class="note" id="share-consent-label" style="display:block;margin-top:8px"><input type="checkbox" id="share-consent-check"> </label>
+  <div class="note" id="share-consent-msg" aria-live="polite"></div>
+  <div class="btn-row"><button id="share-consent-agree" disabled>Share</button><button id="share-consent-cancel" class="secondary">Not now</button></div>
+  <div class="note"><a href="../privacy.html#share-links">Share links in the privacy notice</a></div>
+</dialog>
+<dialog id="import-dialog" aria-labelledby="import-title">
+  <h2 id="import-title" style="margin-top:0">Import progress</h2>
+  <div class="note" id="import-preview" style="margin-top:0"></div>
+  <div class="note">Merge adds the file's seconds to the days you already have and skips tests you already have. Replace swaps your days, tests and water for the file's. Settings are not changed.</div>
+  <div class="btn-row"><button id="import-merge">Merge</button><button id="import-replace" class="secondary">Replace</button><button id="import-cancel" class="secondary">Cancel</button></div>
+</dialog>
+<dialog id="peer-view-dialog" aria-labelledby="peer-view-title">
+  <h2 id="peer-view-title" style="margin-top:0">A friend's week</h2>
+  <div class="note" id="peer-view-body" style="margin-top:0"></div>
+  <div class="note">Read from the link in your browser. Nothing was sent or saved. Links can be edited, so treat the numbers as a friendly note.</div>
+  <div class="btn-row"><button id="peer-view-close">Close</button></div>
 </dialog>
 <dialog id="share-dialog" aria-labelledby="share-title">
   <h2 id="share-title" style="margin-top:0">Share BackUp</h2>

@@ -1,11 +1,11 @@
 {
-  "version": "f7853c9f804779e7",
-  "totalBytes": 33310325,
+  "version": "9a655ca3299ab4a9",
+  "totalBytes": 33342456,
   "files": [
     {
       "url": "app.js",
-      "size": 112858,
-      "sha256": "e14a9120ca0b797a6378006d5f77e89547ff6b1bd1a6a3125d824e299c7e1866"
+      "size": 122471,
+      "sha256": "12926ee32a0f34452f3adf8174483160023309b32b520ea7cd0d32a0a212d833"
     },
     {
       "url": "breaks.js",
@@ -19,8 +19,13 @@
     },
     {
       "url": "consent.js",
-      "size": 2320,
-      "sha256": "5de5f0063c83cbef4ee0be22ea4a9c203c436bdf5d55d34b2284bc49a8b5275c"
+      "size": 4036,
+      "sha256": "d730489d14b48c03683352095ec3fd4b3a0c785fab0cbc3e3669d8f73cb014c9"
+    },
+    {
+      "url": "consistency.js",
+      "size": 2178,
+      "sha256": "9371ec6a857ed34c455ef59742d14040741e291062ad0dd651ec81d70ac80102"
     },
     {
       "url": "feedback.js",
@@ -29,8 +34,8 @@
     },
     {
       "url": "index.html",
-      "size": 50114,
-      "sha256": "7123bf9e2b5d582f7f94b67bd51ff63438a0d484d2c7cb0c450978615fd0ad55"
+      "size": 54297,
+      "sha256": "98d8286de78609459f77c654574e6b2cc5e9d3a7cc948c14bbde592f1cfd1234"
     },
     {
       "url": "loading.js",
@@ -69,8 +74,8 @@
     },
     {
       "url": "progress.js",
-      "size": 4186,
-      "sha256": "6a1725bb4a365d6c8ce7b2ed160b75cd99335d8ba68700f22f5b564c49adaa6b"
+      "size": 14784,
+      "sha256": "c56152f4dcd03ccff5c00d69cedd02007ca10dc15878c7c2aee56bed14c5ef6b"
     },
     {
       "url": "prompts.js",
@@ -79,8 +84,8 @@
     },
     {
       "url": "relax.js",
-      "size": 7271,
-      "sha256": "f0a2d01a04cd51d1657dceadc33c72c8b6c01deeafbefad44b12414669a1a75b"
+      "size": 7718,
+      "sha256": "0a38a799d7386bf8851c13ac39df26e1febedb39eb6b332f4c2e3990eb1280b4"
     },
     {
       "url": "reveal.js",
@@ -94,8 +99,8 @@
     },
     {
       "url": "share.js",
-      "size": 4068,
-      "sha256": "3a2f5596fa1a2647357ec036b94b19a4d454a9a4274eb5fdfe7aff333094eb00"
+      "size": 7464,
+      "sha256": "83f8be210c7302da5b59509dd40292e509daae8564d2b48dfabd2bdf7247d689"
     },
     {
       "url": "sound-packs.js",

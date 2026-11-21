@@ -103,3 +103,95 @@ export function drawScoreCard(ctx, d, { width = CARD.width, height = CARD.height
   font(28, "400");
   ctx.fillText("Free, runs in your browser, nothing uploaded", 80, 585);
 }
+
+// -- Peer share link (no server). The record is packed into the link's #fragment, which
+// browsers never send to the host, so the link needs no account or network call to create
+// or read. It is not signed: anyone can edit a link, so it is a friendly note, not a proof.
+// Exactly these keys leave the device, and only after the user's consent (see consent.js). --
+
+const PEER_SCHEMA = 1;
+export const PEER_KEYS = Object.freeze([
+  "schema",
+  "week",
+  "nickname",
+  "tracked_minutes",
+  "consistency_score",
+  "breaks_taken",
+]);
+const PEER_MAX_CHARS = 2000;
+const NICKNAME = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,19}$/u;
+
+/** A pseudonym of 1 to 20 letters, digits, spaces, dots, dashes or underscores, or null.
+ *  "@" is not allowed, so an email address or handle cannot go in by accident. */
+export function cleanNickname(input) {
+  const v = String(input ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  return NICKNAME.test(v) ? v : null;
+}
+
+const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
+
+/** The record for one week, or null when the nickname is invalid or any number is out of range. */
+export function peerRecord({ nickname, week, tracked_s, score, breaks }) {
+  const rec = {
+    schema: PEER_SCHEMA,
+    week,
+    nickname: cleanNickname(nickname),
+    tracked_minutes: Math.round((Number.isFinite(tracked_s) ? tracked_s : 0) / 60),
+    consistency_score: score,
+    breaks_taken: breaks,
+  };
+  return isPeerRecord(rec) ? rec : null;
+}
+
+/** True only for an object with exactly PEER_KEYS and in-range values. */
+export function isPeerRecord(r) {
+  if (!r || typeof r !== "object" || Array.isArray(r)) return false;
+  const keys = Object.keys(r);
+  if (keys.length !== PEER_KEYS.length || !PEER_KEYS.every((k) => keys.includes(k))) return false;
+  return (
+    r.schema === PEER_SCHEMA &&
+    typeof r.week === "string" &&
+    /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(r.week) &&
+    typeof r.nickname === "string" &&
+    cleanNickname(r.nickname) === r.nickname &&
+    int(r.tracked_minutes, 7 * 24 * 60) &&
+    int(r.consistency_score, 100) &&
+    int(r.breaks_taken, 1000)
+  );
+}
+
+const toB64Url = (text) => {
+  let bin = "";
+  for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const fromB64Url = (code) => {
+  const bin = atob(code.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+};
+
+/** `baseUrl#peer=<code>`. Throws on an invalid record. */
+export function peerLink(record, baseUrl) {
+  if (!isPeerRecord(record)) throw new Error("Invalid share record");
+  const u = new URL(baseUrl);
+  u.search = "";
+  u.hash = `peer=${toB64Url(JSON.stringify(PEER_KEYS.reduce((o, k) => Object.assign(o, { [k]: record[k] }), {})))}`;
+  return u.href;
+}
+
+/** Read a pasted link, a "#peer=..." fragment or a bare code. Returns the record or null. */
+export function readPeerLink(text) {
+  const raw = String(text ?? "").trim();
+  if (!raw || raw.length > PEER_MAX_CHARS) return null;
+  const m = /(?:^|[#&?])peer=([A-Za-z0-9_-]+)/.exec(raw);
+  const code = m ? m[1] : /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
+  if (!code) return null;
+  try {
+    const rec = JSON.parse(fromB64Url(code));
+    return isPeerRecord(rec) ? rec : null;
+  } catch {
+    return null;
+  }
+}
