@@ -7,7 +7,7 @@
 // chimes, recorded Kokoro clips (speechSynthesis fallback) for speech, localStorage for settings,
 // calibration and daily totals. No frame or landmark leaves the browser.
 
-import { ACTIVITY, ActivityMachine } from "./activity.js";
+import { ACTIVITY, ActivityMachine, OwedReminder } from "./activity.js";
 import { DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED } from "./posture-core.js";
 import {
   BREAK_LINES,
@@ -448,7 +448,10 @@ function loadClip(url) {
   return clipCache.get(url);
 }
 
+let postureSpeech = false; // the line playing now is a posture reminder, not a break instruction
+
 function stopSpeech() {
+  postureSpeech = false;
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   if (clipSource) {
     try {
@@ -471,8 +474,9 @@ function speakSystem(text) {
   window.speechSynthesis.speak(u);
 }
 
-function speak(text) {
-  if (!rules().speak) return; // a line queued just before a pause, silent test or practice must not play
+function speak(text, posture = false) {
+  if (!rules().speak) return;
+  postureSpeech = posture; // a line queued just before a pause, silent test or practice must not play
   stopSpeech();
   const sel = selectedVoice();
   const file = sel.startsWith(KOKORO) ? clipManifest?.voices[sel.slice(KOKORO.length)]?.[text] : null;
@@ -609,7 +613,7 @@ function fire(nudge, cue) {
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => banner.classList.remove("show"), cue ? 5000 : 2500);
   if (!allowed(nudge)) return; // silent / chime-only: still a visible event
-  if (nudge === Nudge.VOICE) speak(settings.specificCues && cue ? cue.say : settings.voiceText);
+  if (nudge === Nudge.VOICE) speak(settings.specificCues && cue ? cue.say : settings.voiceText, true);
   else if (nudge === Nudge.CHIME) playBad();
   else {
     playGood();
@@ -1997,6 +2001,7 @@ function demoPose(t) {
 
 function setPaused(on) {
   if (!loopsStarted || on === isPaused()) return;
+  owed.clear(); // step() returns early while paused, so a reminder owed from grace would otherwise outlive the pause
   if (on) {
     if (practice) stopPractice();
     activity.start(ACTIVITY.PAUSED, clockS());
@@ -2154,7 +2159,7 @@ function framePresent(out, held) {
   return !(out.result.kind === "unreliable" && out.result.reason === Reason.NO_POSE);
 }
 
-let owedNudge = null; // a reminder the engine emitted during grace, delivered when grace ends
+const owed = new OwedReminder(); // a reminder the engine emitted during grace, delivered when grace ends
 
 function step() {
   if (!rules().frames) return;
@@ -2182,7 +2187,8 @@ function step() {
   const held = activity.policy(now).engine === "hold";
   if (!wasHeld && held) {
     clearCoaching(); // a reminder banner or queued praise from just before the break
-    owedNudge = null;
+    owed.clear();
+    if (postureSpeech) stopSpeech(); // a reminder that began just before the break must not talk over it
   }
   if (wasHeld && !held) {
     engine.restart(); // the activity ended: start fresh (calibration kept), nothing carries over
@@ -2198,16 +2204,14 @@ function step() {
   const slouching = out.transition.state === State.BAD_CHIME || out.transition.state === State.BAD_VOICE;
   if (slouching && !lastBad) episode += 1; // a new slouch episode
   lastBad = slouching;
-  if (inMode()) owedNudge = null;
+  if (inMode()) owed.clear();
   for (const nudge of out.nudges) {
-    if (activity.inGrace(now) && (nudge === Nudge.CHIME || nudge === Nudge.VOICE)) owedNudge ??= nudge;
+    if (activity.inGrace(now) && (nudge === Nudge.CHIME || nudge === Nudge.VOICE)) owed.defer(nudge);
     else fire(nudge, out.cue);
   }
-  if (owedNudge && !activity.inGrace(now)) {
-    // The engine advanced its reminder clock while grace kept the cue quiet: deliver the first one now if still slouching.
-    if (slouching) fire(owedNudge, out.cue);
-    owedNudge = null;
-  }
+  // The engine advanced its reminder clock while grace kept the cue quiet: deliver the first one now if still slouching.
+  const due = owed.take(activity.inGrace(now), slouching);
+  if (due) fire(due, out.cue);
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now, present);

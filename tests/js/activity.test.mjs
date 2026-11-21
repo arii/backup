@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ACTIVITY, ActivityMachine } from "../../docs/app/activity.js";
+import { ACTIVITY, ActivityMachine, OwedReminder } from "../../docs/app/activity.js";
 
 const A = ACTIVITY;
 const FIELDS = [
@@ -368,4 +368,23 @@ test("property: reminders are only ever true when TRACKING outside grace", () =>
       }
     }
   }
+});
+
+test("OwedReminder: delivers after grace only while still slouching, then forgets", () => {
+  const o = new OwedReminder();
+  o.defer("chime");
+  o.defer("voice");
+  assert.equal(o.take(true, true), null, "held back during grace");
+  assert.equal(o.take(false, true), "chime", "first deferred reminder wins");
+  assert.equal(o.take(false, true), null, "delivered once");
+  o.defer("voice");
+  assert.equal(o.take(false, false), null, "no longer slouching");
+  assert.equal(o.take(false, true), null, "and forgotten");
+});
+
+test("OwedReminder: clear (pause, break, resume) drops a stale reminder", () => {
+  const o = new OwedReminder();
+  o.defer("voice");
+  o.clear();
+  assert.equal(o.take(false, true), null);
 });

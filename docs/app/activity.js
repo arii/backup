@@ -197,3 +197,31 @@ export class ActivityMachine {
     if (withGrace && g > 0) this.graceUntil = now + g;
   }
 }
+
+/**
+ * A reminder the engine emitted during grace, owed once grace ends. Pure bookkeeping:
+ * it must be cleared whenever the engine is held, restarted or paused, because the
+ * slouch it remembers belongs to an engine run that no longer exists.
+ */
+export class OwedReminder {
+  constructor() {
+    this.nudge = null;
+  }
+
+  /** Remember the first reminder emitted during grace. */
+  defer(nudge) {
+    this.nudge ??= nudge;
+  }
+
+  clear() {
+    this.nudge = null;
+  }
+
+  /** Once grace is over, return the reminder to deliver (only if still slouching) and forget it. */
+  take(inGrace, slouching) {
+    if (!this.nudge || inGrace) return null;
+    const n = slouching ? this.nudge : null;
+    this.nudge = null;
+    return n;
+  }
+}
