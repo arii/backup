@@ -128,3 +128,58 @@ test("within a priority level the prompt shown longest ago goes first", () => {
   s.enqueue("eye", 900);
   assert.equal(ask(s, "move", 900)?.id, "move");
 });
+
+test("breath_intro skips the quiet start once, other prompts still wait", () => {
+  const s = make();
+  s.enqueue("eye", 70);
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(80, "snooze");
+  assert.equal(ask(s, "eye", 90), null, "the quiet start still holds back everything else");
+});
+
+test("breath_intro bypasses the quiet start only once", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(80, "notnow");
+  // Not now snoozes it for 10 min from 80; the quiet start is over by then, so no bypass is involved
+  assert.equal(ask(s, "breath_intro", 80 + 599), null);
+  assert.equal(ask(s, "breath_intro", 80 + 601)?.id, "breath_intro");
+  const t = make();
+  assert.equal(ask(t, "breath_intro", 70)?.id, "breath_intro");
+  t.dismiss(75, "done");
+  t.startSession(1000);
+  assert.equal(ask(t, "breath_intro", 1010), null, "a second bypass in a new session is not granted");
+});
+
+test("the global gap applies after breath_intro", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(100, "done");
+  assert.equal(ask(s, "eye", 300), null);
+  assert.equal(ask(s, "eye", 70 + PROMPTS.global_gap_s)?.id, "eye");
+});
+
+test("a posture reminder still wins over breath_intro", () => {
+  const s = make();
+  s.notePosture(70);
+  assert.equal(ask(s, "breath_intro", 75), null);
+  assert.equal(ask(s, "breath_intro", 70 + PROMPTS.posture_hold_s)?.id, "breath_intro");
+});
+
+test("pause, silent test and a breath check block breath_intro", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70, { paused: true }), null);
+  assert.equal(ask(s, "breath_intro", 71, { test: true }), null);
+  assert.equal(ask(s, "breath_intro", 72, { breathCheck: true }), null);
+  assert.equal(ask(s, "breath_intro", 73)?.id, "breath_intro");
+});
+
+test("breath_intro ranks as a breath check and a disabled one is never queued", () => {
+  const s = make();
+  s.enqueue("share", 80);
+  s.enqueue("eye", 80);
+  assert.equal(ask(s, "breath_intro", 80)?.id, "breath_intro");
+  const off = make((id) => id !== "breath_intro");
+  assert.equal(off.enqueue("breath_intro", 80), false);
+  assert.equal(off.poll(80), null);
+});

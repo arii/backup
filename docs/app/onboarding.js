@@ -67,13 +67,123 @@ export const ONBOARDING_STEPS = Object.freeze([
   { title: "Before you start", points: SAFETY_POINTS },
 ]);
 
-/** First-run "Choose your coach" and "You're set" steps (rendered in app.js). */
-export const COACH_INTRO =
-  "Pick how BackUp talks to you. Every choice can be changed later under Reminders & sounds and Breaks & prompts.";
-export const DONE_INTRO =
+/** Closing sentence of the setup sequence (rendered in app.js). */
+const DONE_INTRO =
   "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
   "Pause any time with the Pause button. A silent test now gives you a baseline to compare with later. " +
   "If a friend might like it, you can share the page.";
+
+/** The "Set up as you go" sequence. `stage` is the reveal stage (reveal.js) from which the card may
+ *  appear on its own. Every choice can be changed later in the matching settings panel. */
+export const SETUP_STEPS = Object.freeze([
+  {
+    key: "framing",
+    stage: 2,
+    title: "Check your framing",
+    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
+  },
+  {
+    key: "calibrate",
+    stage: 2,
+    title: "Calibrate to your posture",
+    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
+  },
+  {
+    key: "style",
+    stage: 3,
+    title: "Reminder style",
+    intro: "Choose how BackUp tells you. You can change this under Reminders & sounds.",
+  },
+  {
+    key: "voice",
+    stage: 3,
+    title: "Voice and sounds",
+    intro: "Pick a voice and a sound pack, and listen to them. You can change this under Reminders & sounds.",
+  },
+  {
+    key: "breaks",
+    stage: 4,
+    title: "Breaks",
+    intro: "Short breaks are part of good posture. You can change this under Breaks & prompts.",
+  },
+  {
+    key: "shoulders",
+    stage: 4,
+    title: "Shoulders and breathing",
+    intro:
+      "BackUp can notice shoulders creeping up and offer a breath check. These features stay off until you agree " +
+      "to what they look at, and you can withdraw that any time under Breaks & prompts.",
+  },
+  { key: "done", stage: 4, title: "You're set", intro: DONE_INTRO },
+]);
+
+const stepKeys = SETUP_STEPS.map((s) => s.key);
+const keyList = (v) => (Array.isArray(v) ? v.filter((k) => stepKeys.includes(k)) : []);
+
+/** store.setup = { step, skipped: [key], done: [key] }, normalized. Unknown keys are dropped. */
+export function setupProgress(store) {
+  const s = (store && store.setup) || {};
+  const done = keyList(s.done);
+  return {
+    step: stepKeys.includes(s.step) ? s.step : null,
+    done,
+    skipped: keyList(s.skipped).filter((k) => !done.includes(k)),
+  };
+}
+
+function writeProgress(store, p) {
+  store.setup = { step: p.step, skipped: p.skipped, done: p.done };
+  if (stepKeys.every((k) => p.done.includes(k) || p.skipped.includes(k))) {
+    store.setupDone = true;
+    store.firstRunDone = true;
+  }
+  return store;
+}
+
+/** The next card to show on its own: the first step not done or skipped whose stage has been reached.
+ *  Null once the sequence is finished (or skipped altogether). */
+export function nextSetupStep(store, stage) {
+  if (store && store.setupDone) return null;
+  const p = setupProgress(store);
+  const s = SETUP_STEPS.find((x) => x.stage <= stage && !p.done.includes(x.key) && !p.skipped.includes(x.key));
+  return s ? s.key : null;
+}
+
+/** The step the header "Set up" button opens: the first skipped step, else the first one not done. Stage ignored. */
+export function reopenSetupStep(store) {
+  const p = setupProgress(store);
+  return p.skipped[0] || stepKeys.find((k) => !p.done.includes(k)) || null;
+}
+
+/** Remember which card is showing. */
+export function viewSetupStep(store, key) {
+  const p = setupProgress(store);
+  return writeProgress(store, { ...p, step: key });
+}
+
+export function completeStep(store, key) {
+  const p = setupProgress(store);
+  const done = p.done.includes(key) ? p.done : [...p.done, key];
+  return writeProgress(store, { step: key, done, skipped: p.skipped.filter((k) => k !== key) });
+}
+
+export function skipStep(store, key) {
+  const p = setupProgress(store);
+  if (p.done.includes(key)) return store;
+  const skipped = p.skipped.includes(key) ? p.skipped : [...p.skipped, key];
+  return writeProgress(store, { step: key, done: p.done, skipped });
+}
+
+/** "Skip all, use defaults": ends the sequence. Records no consent and changes no setting, so nothing
+ *  that is off by default turns on. Steps not done stay listed as skipped for the "Set up" button. */
+export function skipAll(store) {
+  const p = setupProgress(store);
+  const skipped = stepKeys.filter((k) => !p.done.includes(k));
+  writeProgress(store, { step: p.step, done: p.done, skipped });
+  store.setupDone = true;
+  store.firstRunDone = true;
+  return store;
+}
 
 /** "Learn the cues" practice: each step names the tile (metric) that should light up. */
 export const PRACTICE_STEPS = Object.freeze([

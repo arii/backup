@@ -10,6 +10,8 @@
 // Priority: posture reminder > breath check > break > breathing message > share/sponsor.
 // Global rule: none in the first 5 minutes of a session, then at most one
 // non-posture prompt every 10 minutes. Each prompt also has its own cooldown.
+// One exception: `breath_intro` (the first breath check offer) may skip the
+// 5 minute quiet start once per scheduler. The 10 minute gap still applies after it.
 
 const PRIORITY = Object.freeze(["posture", "breath", "break", "breathing", "share"]);
 
@@ -24,6 +26,7 @@ export const PROMPTS = Object.freeze({
 /** id -> { type, cooldown_s }. The id is also the key for enabled/dismissed flags. */
 const PROMPT_DEFS = Object.freeze({
   breath: { type: "breath", cooldown_s: 1200 },
+  breath_intro: { type: "breath", cooldown_s: 600 }, // the first offer; may skip the quiet start once
   eye: { type: "break", cooldown_s: 600 },
   move: { type: "break", cooldown_s: 600 },
   breathing: { type: "breathing", cooldown_s: 1800 }, // breathing moments: at most every 30 min
@@ -44,6 +47,7 @@ export class PromptScheduler {
     this.postureUntil = -Infinity;
     this.lastShown = {}; // id -> time
     this.snoozedUntil = {}; // id -> time
+    this.introUsed = false; // breath_intro skipped the quiet start already
   }
 
   startSession(now) {
@@ -77,7 +81,7 @@ export class PromptScheduler {
     if (this.active) return null; // never two at once
     if (ctx.paused || ctx.test || ctx.breathCheck) return null;
     if (now < this.postureUntil) return null;
-    if (now - this.sessionStart < this.cfg.first_quiet_s) return null;
+    const quiet = now - this.sessionStart < this.cfg.first_quiet_s;
     if (this.lastNonPosture !== null && now - this.lastNonPosture < this.cfg.global_gap_s) return null;
     // Priority first; within a type the prompt shown longest ago goes first, so one cannot starve another.
     const shownAt = (q) => this.lastShown[q.id] ?? -Infinity;
@@ -85,12 +89,14 @@ export class PromptScheduler {
       .slice()
       .sort((a, b) => PRIORITY.indexOf(a.type) - PRIORITY.indexOf(b.type) || shownAt(a) - shownAt(b));
     for (const item of ordered) {
+      if (quiet && !(item.id === "breath_intro" && !this.introUsed)) continue;
       const last = this.lastShown[item.id];
       if (last !== undefined && now - last < PROMPT_DEFS[item.id].cooldown_s) continue;
       if ((this.snoozedUntil[item.id] ?? -Infinity) > now) continue;
       this.queue = this.queue.filter((q) => q !== item);
       this.lastShown[item.id] = now;
       this.lastNonPosture = now;
+      if (item.id === "breath_intro") this.introUsed = true;
       this.active = { id: item.id, type: item.type, payload: item.payload, at: now };
       return this.active;
     }

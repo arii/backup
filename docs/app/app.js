@@ -80,7 +80,17 @@ import {
   shouldOfferSponsor,
   sponsorText,
 } from "./sponsor.js";
-import { COACH_INTRO, DONE_INTRO, ONBOARDING_VERSION } from "./onboarding.js";
+import {
+  completeStep,
+  nextSetupStep,
+  ONBOARDING_VERSION,
+  reopenSetupStep,
+  SETUP_STEPS,
+  setupProgress,
+  skipAll,
+  skipStep,
+  viewSetupStep,
+} from "./onboarding.js";
 import { RevealStages, STAGES } from "./reveal.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
@@ -109,6 +119,7 @@ function loadStore() {
   }
 }
 const store = loadStore();
+if (store.firstRunDone) store.setupDone = true; // set up before the sequence existed: nothing to show again
 let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
   if (deleted) return;
@@ -634,6 +645,7 @@ $("consent-withdraw").addEventListener("click", () => {
 const bracing = new BracingMonitor();
 const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
+const BREATH_INTRO_GOOD_S = 60; // good posture needed before the first breath check is offered
 let goodSinceBreath = 0;
 let relaxLastT = null;
 Object.assign(settings, resolveSettings(store)); // relaxReminders and pauseShortcut: on for new users, stored choices kept
@@ -769,6 +781,7 @@ function promptEnabled(id) {
   if (id === "move") return settings.moveBreakMinutes > 0;
   if (id === "breathing") return settings.breathingMoments && hasConsent(store);
   if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
+  if (id === "breath_intro") return settings.relaxReminders && !store.breathIntroShown; // asks for consent itself
   return true;
 }
 
@@ -851,6 +864,7 @@ const CARD_UI = {
   move: { action: true, done: true, snooze: true, never: true },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
+  breath_intro: { action: true, actionLabel: "Try it" },
   guide: { bar: true, stop: true },
 };
 
@@ -865,6 +879,7 @@ function renderCard() {
   $("prompt-text").textContent = card.text;
   $("prompt-bar").hidden = !ui.bar;
   $("prompt-action").hidden = !ui.action;
+  $("prompt-action").textContent = ui.actionLabel || "Breathe with me";
   $("prompt-done").hidden = !ui.done || card.finished;
   $("prompt-snooze").hidden = !ui.snooze || card.finished;
   $("prompt-never").hidden = !ui.never || card.finished;
@@ -919,6 +934,10 @@ function showPrompt(item) {
     startBreathCheck();
     return;
   }
+  if (item.id === "breath_intro") {
+    showBreathIntro();
+    return;
+  }
   const text =
     item.id === "eye"
       ? BREAK_LINES.eye
@@ -931,6 +950,33 @@ function showPrompt(item) {
   setCardFill(0);
   renderCard();
   if (item.id !== "offer") sayPrompt(text);
+}
+
+/** The first breath check offer. Asked at most 3 times; it never starts a check without consent. */
+function showBreathIntro() {
+  if (lowAccuracy) {
+    prompts.dismiss(pclock, "done"); // the fallback model has no reliable shoulder signal
+    return;
+  }
+  store.breathIntroOffers = (store.breathIntroOffers || 0) + 1;
+  if (store.breathIntroOffers >= 3) store.breathIntroShown = true; // the last time it asks
+  save();
+  const note = hasConsent(store) ? "" : " You will be asked to agree before anything is measured.";
+  card = { id: "breath_intro", text: RELAX_LINES.introOffer + note, t: 0, finished: false };
+  setCardFill(0);
+  renderCard();
+  sayPrompt(RELAX_LINES.introOffer);
+}
+
+function acceptBreathIntro() {
+  endCard("snooze"); // if the consent dialog is declined, the offer rests for 10 minutes
+  const go = () => {
+    store.breathIntroShown = true;
+    save();
+    startBreathCheck();
+  };
+  if (hasConsent(store)) go();
+  else requireConsent(go);
 }
 
 function startGuide() {
@@ -964,6 +1010,20 @@ function guideStep() {
   }
 }
 
+/** The first breath check offer: tracking has settled, posture was good for a minute, no setup card is open. */
+function breathIntroDue() {
+  return (
+    pstreak >= BREATH_INTRO_GOOD_S &&
+    currentStage() >= STAGES.settled &&
+    !firstRun.open &&
+    !lowAccuracy &&
+    !card &&
+    !breath.active &&
+    !guide.active &&
+    !store.breathIntroShown
+  );
+}
+
 /** Runs every tracked frame (real `now` in seconds). */
 function promptStep(state, now) {
   if (test || practice || paused) {
@@ -992,6 +1052,7 @@ function promptStep(state, now) {
   ) {
     prompts.enqueue("share", pclock);
   }
+  if (breathIntroDue()) prompts.enqueue("breath_intro", pclock);
   for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
   if (settings.breathingMoments && moments.due(pstreak, pclock)) prompts.enqueue("breathing", pclock);
   if (sponsorCard) {
@@ -1023,7 +1084,10 @@ function promptStep(state, now) {
   }
 }
 
-$("prompt-action").addEventListener("click", () => startGuide());
+$("prompt-action").addEventListener("click", () => {
+  if (card && card.id === "breath_intro") acceptBreathIntro();
+  else startGuide();
+});
 $("prompt-done").addEventListener("click", () => {
   if (card && card.id === "move") breaks.taken("move");
   endCard("done");
@@ -1603,6 +1667,7 @@ function setPaused(on) {
     breath.cancel();
     cancelPrompts();
     stopSpeech();
+    if (firstRun.open) $("first-run").hidden = true; // the setup card waits; the next frame after Resume shows it again
     $("banner").classList.remove("show");
     const badge = $("state-badge");
     badge.textContent = "paused";
@@ -1674,8 +1739,12 @@ function revealNote(text) {
   }, 6000);
 }
 
+function currentStage() {
+  return store.revealAll ? STAGES.returning : reveal.stage;
+}
+
 function applyReveal() {
-  const stage = store.revealAll ? STAGES.returning : reveal.stage;
+  const stage = currentStage();
   for (const el of document.querySelectorAll("[data-stage]")) {
     el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el);
   }
@@ -1757,6 +1826,7 @@ function step() {
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now);
   revealStep(out);
+  setupStep(out.transition.state);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -2033,12 +2103,13 @@ function begin(source) {
   $("test-start").disabled = false;
   setTrackingControls(true);
   $("state-badge").focus(); // the Start button is gone: move focus to the status badge
-  maybeStartFirstRun();
+  renderSetupButton();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   recordSession(store, Date.now());
   save();
   resetPromptSession();
+  renderSetupButton();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
 }
@@ -2168,26 +2239,17 @@ $("start-demo").addEventListener("click", () => {
   begin("demo");
 });
 
-// -- first-run guide ------------------------------------------------------------
-// Shown once, on the first Start (store.firstRunDone): check framing, record
-// good and slouch posture, then hear what the sounds mean. "Show the intro
-// again" in the Not working? panel brings it back.
+// -- setup sequence ("Set up as you go") -----------------------------------------
+// One small card at a time in #first-run: framing, calibrate, reminder style,
+// voice, breaks, shoulders and breathing, then "You're set". The steps and the
+// reveal stage that unlocks each one are in onboarding.js (SETUP_STEPS); progress
+// is in store.setup. Every card has Skip this step and Skip all, use defaults.
+// Skip all records no consent and turns nothing on. The sequence waits while a
+// posture reminder, a pause, a silent test, practice or a breath check is on
+// (it does not queue behind the prompt scheduler). The header Set up button and
+// "Show the intro again" open it by hand. Focus moves only after a button press.
 
-const FIRST_RUN = [
-  {
-    key: "framing",
-    title: "Check your framing",
-    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
-  },
-  {
-    key: "calibrate",
-    title: "Calibrate to your posture",
-    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
-  },
-  { key: "coach", title: "Choose your coach", intro: COACH_INTRO },
-  { key: "done", title: "You're set", intro: DONE_INTRO },
-];
-const firstRun = { step: 0, open: false };
+const firstRun = { step: 0, open: false, manual: false };
 let firstRunLive = null; // the element updated every frame on the current step
 
 function firstRunButton(label, onClick, secondary = true) {
@@ -2198,102 +2260,123 @@ function firstRunButton(label, onClick, secondary = true) {
   return b;
 }
 
-/** The "Choose your coach" controls. Each one drives the real setting (same
- *  element, same change handler), so nothing is stored twice. */
-function coachControls() {
-  const row = (text, control) => {
-    const l = document.createElement("label");
-    l.className = "note";
-    l.style.display = "block";
-    l.append(control, ` ${text}`);
-    return l;
-  };
-  const select = (src, extra = []) => {
-    const el = document.createElement("select");
-    for (const o of [...src.options, ...extra]) el.add(new Option(o.text, o.value));
-    return el;
-  };
-  const check = (src) => {
-    const el = document.createElement("input");
-    el.type = "checkbox";
-    el.checked = src.checked;
-    el.addEventListener("change", () => {
-      src.checked = el.checked;
-      src.dispatchEvent(new Event("change"));
-      $("consent-dialog").addEventListener(
-        "close",
-        () => {
-          el.checked = src.checked;
-        },
-        { once: true },
-      );
-    });
-    return el;
-  };
-  const voice = select($("voice-pick"), [new Option("Off (chime only, no voice)", "__off")]);
-  voice.id = "coach-voice";
-  voice.setAttribute("aria-label", "Voice");
-  voice.value = settings.mode === "chime_and_voice" ? $("voice-pick").value : "__off";
-  voice.addEventListener("change", () => {
-    const radio = document.querySelector(
-      `input[name=mode][value=${voice.value === "__off" ? "chime_only" : "chime_and_voice"}]`,
+/** A labelled control for a setup card. */
+function setupRow(text, control) {
+  const l = document.createElement("label");
+  l.className = "note";
+  l.style.display = "block";
+  l.append(control, ` ${text}`);
+  return l;
+}
+
+/** A select that copies the options of a real settings control and drives it (same element, same change
+ *  handler), so each setting has one write path and nothing is stored twice. */
+function mirrorSelect(src, id, label) {
+  const el = document.createElement("select");
+  for (const o of src.options) el.add(new Option(o.text, o.value));
+  el.id = id;
+  el.setAttribute("aria-label", label);
+  el.value = src.value;
+  el.addEventListener("change", () => {
+    src.value = el.value;
+    src.dispatchEvent(new Event("change"));
+  });
+  return el;
+}
+
+/** A checkbox that drives a real settings checkbox. A box that asks for consent is put back if the user declines. */
+function mirrorCheck(src, id) {
+  const el = document.createElement("input");
+  el.type = "checkbox";
+  el.id = id;
+  el.checked = src.checked;
+  el.addEventListener("change", () => {
+    src.checked = el.checked;
+    src.dispatchEvent(new Event("change"));
+    $("consent-dialog").addEventListener(
+      "close",
+      () => {
+        el.checked = src.checked;
+      },
+      { once: true },
     );
-    radio.checked = true;
-    radio.dispatchEvent(new Event("change"));
-    if (voice.value !== "__off") {
-      $("voice-pick").value = voice.value;
-      $("voice-pick").dispatchEvent(new Event("change"));
-    }
   });
-  const level = select($("coaching-level"));
-  level.id = "coach-level";
-  level.setAttribute("aria-label", "Reminder style");
-  level.value = $("coaching-level").value;
-  level.addEventListener("change", () => {
-    $("coaching-level").value = level.value;
-    $("coaching-level").dispatchEvent(new Event("change"));
-  });
-  const eye = check($("eye-breaks"));
-  eye.id = "coach-eye";
-  const move = select($("move-minutes"));
-  move.id = "coach-move";
-  move.setAttribute("aria-label", "Stand up and move");
-  move.value = $("move-minutes").value;
-  move.addEventListener("change", () => {
-    $("move-minutes").value = move.value;
-    $("move-minutes").dispatchEvent(new Event("change"));
-  });
-  const moments = check($("breathing-moments"));
-  moments.id = "coach-moments";
-  const samples = document.createElement("div");
-  samples.className = "btn-row";
-  samples.append(
-    firstRunButton("Play the reminder", () => {
+  return el;
+}
+
+function sampleButtons(...which) {
+  const all = {
+    reminder: () => {
       ensureAudio();
       playBad();
-    }),
-    firstRunButton("Play the praise chime", () => {
+    },
+    praise: () => {
       ensureAudio();
       playGood();
-    }),
-    firstRunButton("Play a voice sample", () => {
+    },
+    voice: () => {
       ensureAudio();
       speak(TEST_LINE);
-    }),
-  );
-  return [
-    row("Voice", voice),
-    row("Reminder style", level),
-    row("Eye break every 20 minutes", eye),
-    row("Stand up and move", move),
-    row("Occasional breathing moments (asks for your OK first)", moments),
-    samples,
-  ];
+    },
+  };
+  const labels = { reminder: "Play the reminder", praise: "Play the praise chime", voice: "Play a voice sample" };
+  const row = document.createElement("div");
+  row.className = "btn-row";
+  row.append(...which.map((k) => firstRunButton(labels[k], all[k])));
+  return row;
+}
+
+function setupControls(key) {
+  if (key === "style") {
+    const mode = document.createElement("select");
+    mode.id = "coach-style";
+    mode.setAttribute("aria-label", "Reminder style");
+    mode.add(new Option("Chime + voice", "chime_and_voice"));
+    mode.add(new Option("Chime only", "chime_only"));
+    mode.add(new Option("Silent", "silent"));
+    mode.value = settings.mode;
+    mode.addEventListener("change", () => {
+      const radio = document.querySelector(`input[name=mode][value=${mode.value}]`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event("change"));
+    });
+    const level = mirrorSelect($("coaching-level"), "coach-level", "Coaching level");
+    return [
+      setupRow("Reminder style", mode),
+      setupRow("Coaching level", level),
+      setupRow("Say what to fix", mirrorCheck($("specific-cues"), "coach-cues")),
+      sampleButtons("reminder", "praise"),
+    ];
+  }
+  if (key === "voice") {
+    const voice = mirrorSelect($("voice-pick"), "coach-voice", "Voice");
+    const pack = mirrorSelect($("sound-pack"), "coach-pack", "Sound pack");
+    return [setupRow("Voice", voice), setupRow("Sound pack", pack), sampleButtons("reminder", "praise", "voice")];
+  }
+  if (key === "breaks") {
+    return [
+      setupRow("Eye break every 20 minutes", mirrorCheck($("eye-breaks"), "coach-eye")),
+      setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
+    ];
+  }
+  if (key === "shoulders") {
+    return [
+      setupRow(
+        "Shoulder-creep reminders and a breath check (asks for your OK first)",
+        mirrorCheck($("relax-reminders"), "coach-relax"),
+      ),
+      setupRow(
+        "Occasional breathing moments (asks for your OK first)",
+        mirrorCheck($("breathing-moments"), "coach-moments"),
+      ),
+    ];
+  }
+  return [];
 }
 
 function renderFirstRun() {
-  const step = FIRST_RUN[firstRun.step];
-  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${FIRST_RUN.length}`;
+  const step = SETUP_STEPS[firstRun.step];
+  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${SETUP_STEPS.length}: ${step.title}`;
   $("first-run-heading").textContent = step.title;
   const body = $("first-run-body");
   const intro = document.createElement("div");
@@ -2318,9 +2401,7 @@ function renderFirstRun() {
       firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
     );
     parts.push(row, firstRunLive);
-  } else if (step.key === "coach") {
-    parts.push(...coachControls());
-  } else {
+  } else if (step.key === "done") {
     const row = document.createElement("div");
     row.className = "btn-row";
     row.append(
@@ -2333,18 +2414,29 @@ function renderFirstRun() {
       }),
     );
     parts.push(row);
+  } else {
+    parts.push(...setupControls(step.key));
   }
   body.replaceChildren(...parts);
+  const last = firstRun.step === SETUP_STEPS.length - 1;
   $("first-run-back").hidden = firstRun.step === 0;
-  $("first-run-next").textContent = firstRun.step === FIRST_RUN.length - 1 ? "Done" : "Next";
-  $("first-run-skip").hidden = firstRun.step === FIRST_RUN.length - 1;
+  $("first-run-next").textContent = last ? "Done" : "Next";
+  $("first-run-skip").hidden = last;
 }
 
-function openFirstRun(step = 0) {
+function renderSetupButton() {
+  $("setup-btn").hidden = !loopsStarted || firstRun.open || !reopenSetupStep(store);
+}
+
+function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
   firstRun.open = true;
-  firstRun.step = step;
+  firstRun.manual = manual;
+  firstRun.step = SETUP_STEPS.findIndex((s) => s.key === key);
+  viewSetupStep(store, key);
+  save();
   $("first-run").hidden = false;
   renderFirstRun();
+  renderSetupButton();
 }
 
 function closeFirstRun() {
@@ -2355,56 +2447,104 @@ function closeFirstRun() {
     store.firstRunDone = true;
     save();
   }
+  renderSetupButton();
 }
 
-function maybeStartFirstRun() {
-  if (!store.firstRunDone && !firstRun.open) openFirstRun();
+/** After a card is done or skipped: the next one, or close. Returns true when a card is showing. */
+function advanceSetup() {
+  const key = firstRun.manual
+    ? SETUP_STEPS.slice(firstRun.step + 1).find((s) => !setupProgress(store).done.includes(s.key))?.key
+    : nextSetupStep(store, currentStage());
+  if (!key) {
+    closeFirstRun();
+    return false;
+  }
+  openFirstRun(key, firstRun.manual);
+  return true;
+}
+
+function focusFirstRunHeading() {
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
+}
+
+/** True while something else owns the screen: the sequence hides and waits. */
+function setupBlocked(state) {
+  return (
+    paused ||
+    !!test ||
+    !!practice ||
+    breath.active ||
+    guide.active ||
+    state === State.BAD_CHIME ||
+    state === State.BAD_VOICE
+  );
+}
+
+/** Runs every tracked frame: opens the next due card on its own (no focus move), hides it while blocked. */
+function setupStep(state) {
+  const blocked = setupBlocked(state);
+  if (firstRun.open) {
+    $("first-run").hidden = blocked;
+    return;
+  }
+  if (blocked || !loopsStarted) return;
+  const key = nextSetupStep(store, currentStage());
+  if (key) openFirstRun(key);
 }
 
 /** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
 function updateFirstRunLive(result, landmarks) {
   if (!firstRun.open || !firstRunLive) return;
-  if (FIRST_RUN[firstRun.step].key === "framing") {
+  const key = SETUP_STEPS[firstRun.step].key;
+  if (key === "framing") {
     const ok = result.kind === "scored";
     firstRunLive.className = ok ? "framing ok" : "framing";
     firstRunLive.textContent = ok
       ? "Head and shoulders in view \u2713"
       : causeFor(result, landmarks) || "Looking for you...";
-  } else if (FIRST_RUN[firstRun.step].key === "calibrate") {
+  } else if (key === "calibrate") {
     firstRunLive.textContent = $("calib-status").textContent;
   }
 }
 
 $("first-run-next").addEventListener("click", () => {
-  if (firstRun.step >= FIRST_RUN.length - 1) {
-    closeFirstRun();
-    $("state-badge").focus();
-    return;
-  }
-  firstRun.step += 1;
-  renderFirstRun();
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  completeStep(store, SETUP_STEPS[firstRun.step].key);
+  save();
+  if (advanceSetup()) focusFirstRunHeading();
+  else $("state-badge").focus();
 });
 $("first-run-back").addEventListener("click", () => {
-  firstRun.step = Math.max(0, firstRun.step - 1);
-  renderFirstRun();
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  const key = SETUP_STEPS[Math.max(0, firstRun.step - 1)].key;
+  openFirstRun(key, firstRun.manual);
+  focusFirstRunHeading();
 });
 $("first-run-skip").addEventListener("click", () => {
+  skipStep(store, SETUP_STEPS[firstRun.step].key);
+  save();
+  if (advanceSetup()) focusFirstRunHeading();
+  else $("state-badge").focus();
+});
+$("first-run-skip-all").addEventListener("click", () => {
+  skipAll(store);
+  save();
   closeFirstRun();
   $("state-badge").focus();
+  revealNote("Setup skipped, defaults kept. Use Set up to come back.");
+});
+$("setup-btn").addEventListener("click", () => {
+  openFirstRun(reopenSetupStep(store), true);
+  $("first-run").scrollIntoView({ block: "nearest" });
+  focusFirstRunHeading();
 });
 $("intro-again").addEventListener("click", () => {
   if (!loopsStarted) {
     $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing.";
     return;
   }
-  openFirstRun();
+  openFirstRun(SETUP_STEPS[0].key, true);
   $("first-run").scrollIntoView({ block: "nearest" });
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  focusFirstRunHeading();
 });
 
 // -- onboarding, safety notice and help -----------------------------------------

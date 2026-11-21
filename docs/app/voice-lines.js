@@ -28,6 +28,7 @@ export const RECOVERY_PRAISE = ["That's better.", "There you go.", "Much better.
 
 // Anti-bracing (relax.js): good posture is a relaxed stack, not a squeeze.
 export const RELAX_LINES = {
+  introOffer: "Want to try a 30 second breath check? It looks at your shoulders.",
   bracing: "Shoulders creeping up? Breathe out and let them drop.",
   inhale: "Breath check. Take a slow, deep breath in.",
   exhale: "And breathe out. Let your shoulders drop.",

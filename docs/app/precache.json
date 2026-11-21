@@ -1,11 +1,11 @@
 {
-  "version": "b54ec0447fae189e",
-  "totalBytes": 32872718,
+  "version": "988b1ce907b74b91",
+  "totalBytes": 32882217,
   "files": [
     {
       "url": "app.js",
-      "size": 102784,
-      "sha256": "30775b2dc7c6215a78f63519f0d55926c9c4344c6562e68538c26d6abebffd2f"
+      "size": 107426,
+      "sha256": "daa2f0e1ec6fdf4c79a8a73c675b421d7531cc0b89c51e19daf5f0e5ef41b701"
     },
     {
       "url": "breaks.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 45818,
-      "sha256": "66f494d05c8acabab9c5fe4d42798f01a368a1371c897ec836ff07d98ead9a21"
+      "size": 46158,
+      "sha256": "a59edeec26dcf28295bb0c16354954c2c71f89fc8b8e75195d8b25916a395042"
     },
     {
       "url": "loading.js",
@@ -54,8 +54,8 @@
     },
     {
       "url": "onboarding.js",
-      "size": 8844,
-      "sha256": "c05e6fcd46551b7fb5d6ad74e58d83eed10393882e26ad8fb29a87ffd4ad3a76"
+      "size": 12799,
+      "sha256": "b6bacb250805e93d6d118e479595951e4679ede2e76b3d937184158756fb795c"
     },
     {
       "url": "posture-core.js",
@@ -74,8 +74,8 @@
     },
     {
       "url": "prompts.js",
-      "size": 5019,
-      "sha256": "b49198638695c490b980955f9b16a55dcbc37b903bc92f60460119ccc19f5c11"
+      "size": 5498,
+      "sha256": "58ec2ae1dcd5b69dccd461e77460982f6f46c08207de49f988a3c4038f455325"
     },
     {
       "url": "relax.js",
@@ -539,8 +539,8 @@
     },
     {
       "url": "voice-lines.js",
-      "size": 3252,
-      "sha256": "55fd3d9ffe90f4bbe7b0cd96fc91a292e2ff6a3efe0493beef3016a8167f0628"
+      "size": 3335,
+      "sha256": "62045930d42b95ac3e56f69da454c75b5da40b78bc905ab4b443ae46ef06f3ae"
     }
   ]
 }

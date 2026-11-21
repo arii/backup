@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BreatheGuide, BreathingMoments, GUIDE, GUIDE_SAFETY, MOMENTS } from "../../docs/app/breathing.js";
-import { ALL_LINES, BREATHE_LINES, BREATHING_MOMENTS, BREAK_LINES } from "../../docs/app/voice-lines.js";
+import { ALL_LINES, BREATHE_LINES, BREATHING_MOMENTS, BREAK_LINES, RELAX_LINES } from "../../docs/app/voice-lines.js";
 
 test("a moment needs a long good streak", () => {
   const m = new BreathingMoments();
@@ -67,7 +67,12 @@ test("the guide can be cancelled", () => {
 });
 
 test("new spoken lines are in ALL_LINES and use wellness wording only", () => {
-  const lines = [...Object.values(BREAK_LINES), ...BREATHING_MOMENTS, ...Object.values(BREATHE_LINES)];
+  const lines = [
+    ...Object.values(BREAK_LINES),
+    ...BREATHING_MOMENTS,
+    ...Object.values(BREATHE_LINES),
+    RELAX_LINES.introOffer,
+  ];
   for (const l of lines) {
     assert.ok(ALL_LINES.includes(l), l);
     assert.doesNotMatch(l, /stress|blood pressure|anxiety|cure|treat|prevent|pain|heal/i, l);

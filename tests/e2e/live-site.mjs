@@ -94,6 +94,7 @@ async function newPage(
     guide = false,
     consent = true,
     staged = false,
+    intro = false,
     extra = null,
     viewport = { width: 1280, height: 900 },
   } = {},
@@ -102,7 +103,7 @@ async function newPage(
   await context.grantPermissions(["camera"]);
   if (!fresh) {
     await context.addInitScript(
-      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, staged]) => {
+      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, staged, intro]) => {
         try {
           if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
           sessionStorage.setItem("pg-e2e-acked", "1");
@@ -111,7 +112,8 @@ async function newPage(
           s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
           if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
           if (consentRecord) s.consent = consentRecord;
-          s.setupDone = true; // the setup sequence (spec task 4) is not what these checks are about
+          if (firstRunDone) s.setupDone = true; // the setup sequence has its own checks (guide: true)
+          if (!intro) s.breathIntroShown = true; // the first breath check offer has its own checks (intro: true)
           s.revealAll = !staged; // every panel exists unless a check is about the staged reveal
           if (extraStore) Object.assign(s, extraStore);
           localStorage.setItem("posture-guard:v1", JSON.stringify(s));
@@ -119,7 +121,7 @@ async function newPage(
           /* storage unavailable */
         }
       },
-      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, staged],
+      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, staged, intro],
     );
   }
   const page = await context.newPage();
@@ -580,10 +582,28 @@ try {
     );
     await page.click("#first-run-next");
     check(
-      "first run: step 3 is Choose your coach, with voice, breaks and sample buttons",
-      (await page.textContent("#first-run-heading")) === "Choose your coach" &&
-        (await page.locator("#coach-voice, #coach-level, #coach-eye, #coach-move, #coach-moments").count()) === 5 &&
+      "first run: step 3 is Reminder style (stage 5 here, so it follows at once)",
+      (await page.textContent("#first-run-heading")) === "Reminder style" &&
+        (await page.locator("#coach-style, #coach-level, #coach-cues").count()) === 3 &&
+        /Step 3 of 7: Reminder style/.test(await page.textContent("#first-run-count")),
+    );
+    await page.selectOption("#coach-style", "chime_only");
+    check(
+      "first run: the style choice drives the real radio and the stored mode",
+      (await page.evaluate(() => document.querySelector("input[name=mode]:checked").value)) === "chime_only",
+    );
+    await page.click("#first-run-next");
+    check(
+      "first run: step 4 is Voice and sounds with sample buttons",
+      (await page.textContent("#first-run-heading")) === "Voice and sounds" &&
+        (await page.locator("#coach-voice, #coach-pack").count()) === 2 &&
         (await page.locator("#first-run-body button").count()) === 3,
+    );
+    await page.click("#first-run-next");
+    check(
+      "first run: step 5 is Breaks",
+      (await page.textContent("#first-run-heading")) === "Breaks" &&
+        (await page.locator("#coach-eye, #coach-move").count()) === 2,
     );
     await page.selectOption("#coach-move", "45");
     await page.uncheck("#coach-eye");
@@ -591,7 +611,14 @@ try {
       const s = JSON.parse(localStorage.getItem("posture-guard:v1"));
       return { move: s.moveBreakMinutes, eye: s.eyeBreaks };
     });
-    check("first run: coach choices change the real settings", coach.move === 45 && coach.eye === false, coach);
+    check("first run: break choices change the real settings", coach.move === 45 && coach.eye === false, coach);
+    await page.click("#first-run-next");
+    check(
+      "first run: step 6 is Shoulders and breathing, breathing moments off by default",
+      (await page.textContent("#first-run-heading")) === "Shoulders and breathing" &&
+        (await page.locator("#coach-relax, #coach-moments").count()) === 2 &&
+        !(await page.isChecked("#coach-moments")),
+    );
     await page.click("#first-run-next");
     check(
       "first run: last step says to leave the tab open and has Share and a silent test",
@@ -1710,6 +1737,194 @@ try {
       await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
       check("staged reveal: no horizontal scroll at 320 px, stage 4", await fits());
       await page.screenshot({ path: path.join(outDir, "reveal-320-stage4.png"), fullPage: true });
+      await page.close();
+    }
+  }
+
+  // 4g. Progressive setup and the breath check intro (.kiro/specs/progressive-loading, tasks 4 and 5).
+  {
+    const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}"));
+    const visible = (page, sel) => page.locator(sel).isVisible();
+
+    // Skip all keeps the defaults, records no consent and turns nothing on.
+    {
+      const { page, errors } = await newPage(browser, { guide: true, consent: false });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      check(
+        "setup: the card opens by itself, without taking focus",
+        (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
+      );
+      check(
+        "setup: every card has Skip this step and Skip all, use defaults",
+        (await visible(page, "#first-run-skip")) &&
+          (await page.textContent("#first-run-skip-all")).trim() === "Skip all, use defaults",
+      );
+      const before = await stored(page);
+      await page.click("#first-run-skip-all");
+      const after = await stored(page);
+      check(
+        "setup: Skip all closes the card and stores setupDone",
+        !(await visible(page, "#first-run")) && after.setupDone === true,
+        after,
+      );
+      check(
+        "setup: Skip all records no consent and enables nothing that is off by default",
+        after.consent === undefined &&
+          !after.breathingMoments &&
+          !after.spokenPraise &&
+          !(await page.isChecked("#breathing-moments")) &&
+          !(await page.isChecked("#relax-reminders")) &&
+          !(await page.isChecked("#spoken-praise")) &&
+          before.eyeBreaks === after.eyeBreaks &&
+          before.moveBreakMinutes === after.moveBreakMinutes,
+        after,
+      );
+      check(
+        "setup: focus goes to the status badge after the user pressed Skip all",
+        (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
+      );
+      check(
+        "setup: skipped steps are listed and the header Set up button reopens the first one",
+        after.setup.skipped.includes("framing") && (await visible(page, "#setup-btn")),
+        after.setup,
+      );
+      await page.click("#setup-btn");
+      check(
+        "setup: Set up reopens the first skipped step and moves focus to its heading",
+        (await page.textContent("#first-run-heading")) === "Check your framing" &&
+          (await page.evaluate(() => document.activeElement?.id)) === "first-run-heading",
+      );
+      await page.click("#first-run-skip-all");
+      await page.reload();
+      await page.click("#start-demo");
+      await page.waitForTimeout(1500);
+      check("setup: after Skip all the card does not return on reload", !(await visible(page, "#first-run")));
+      page.once("dialog", (d) => d.accept());
+      await page.click("#progress-delete");
+      await page.waitForLoadState("load");
+      await page.waitForTimeout(500);
+      const gone = await stored(page);
+      check(
+        "setup: Delete my data removes setup progress, water and the breath intro flags",
+        gone.setup === undefined &&
+          gone.setupDone === undefined &&
+          gone.water === undefined &&
+          gone.breathIntroShown === undefined,
+        gone,
+      );
+      check("setup: skip all has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Setup waits while paused or in a silent test, then comes back.
+    {
+      const { page, errors } = await newPage(browser, { guide: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      await page.keyboard.press("p");
+      await page.waitForTimeout(300);
+      check("setup: waits while paused", !(await visible(page, "#first-run")));
+      await page.keyboard.press("p");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 5000 });
+      check("setup: comes back after the pause", true);
+      await page.click("#test-start");
+      await page.waitForTimeout(500);
+      check("setup: waits during a silent test", !(await visible(page, "#first-run")));
+      check("setup: waiting has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // The first breath check is offered after tracking has settled and a minute of good posture.
+    const introPage = async (opts = {}) => {
+      const made = await newPage(browser, { consent: false, intro: true, ...opts });
+      await made.page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
+      await made.page.click("#start-demo");
+      await made.page.waitForFunction(
+        () => document.getElementById("prompt-card").dataset.prompt === "breath_intro",
+        null,
+        { timeout: 40000 },
+      );
+      return made;
+    };
+    {
+      const { page, errors } = await introPage();
+      const text = await page.textContent("#prompt-text");
+      check(
+        "breath intro: offered well inside the 5 minute quiet start, naming what it looks at and that consent comes first",
+        /30 second breath check/.test(text) && /shoulders/.test(text) && /agree/.test(text),
+        text,
+      );
+      check(
+        "breath intro: nothing starts and no consent dialog opens by itself",
+        !(await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
+          !/Breathe in/.test(await page.textContent("#relax-status")),
+      );
+      check(
+        "breath intro: the card is a polite status region",
+        (await page.getAttribute("#prompt-text", "role")) === "status",
+      );
+      await page.click("#prompt-notnow");
+      const st = await stored(page);
+      check(
+        "breath intro: Not now stores no consent and leaves the breath features off",
+        st.consent === undefined &&
+          !(await visible(page, "#prompt-card")) &&
+          !st.breathIntroShown &&
+          !st.breathingMoments,
+        st,
+      );
+      check("breath intro: Not now has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      const { page, errors } = await introPage();
+      await page.click("#prompt-action");
+      check(
+        "breath intro: Try it opens the consent dialog and does not start the check",
+        (await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
+          !/Breathe in/.test(await page.textContent("#relax-status")),
+      );
+      await page.click("#consent-cancel");
+      const st = await stored(page);
+      check(
+        "breath intro: declining stores nothing and does not run the check",
+        st.consent === undefined && !st.breathIntroShown && !/Breathe in/.test(await page.textContent("#relax-status")),
+        st,
+      );
+      check("breath intro: declining has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      const { page, errors } = await introPage();
+      await page.click("#prompt-action");
+      await page.check("#consent-check");
+      await page.click("#consent-agree");
+      const st = await stored(page);
+      check(
+        "breath intro: accepting records consent and runs the breath check once",
+        st.consent?.version === 1 &&
+          st.breathIntroShown === true &&
+          /Breathe in slowly/.test(await page.textContent("#relax-status")),
+        st,
+      );
+      check("breath intro: accepting has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      // With consent already given the offer still comes through the scheduler and starts only after Try it.
+      const { page } = await introPage({ consent: true });
+      check(
+        "breath intro: with consent the offer carries no agree note",
+        !/agree/.test(await page.textContent("#prompt-text")),
+      );
+      await page.click("#prompt-action");
+      check(
+        "breath intro: Try it runs the check when consent exists",
+        /Breathe in slowly/.test(await page.textContent("#relax-status")) && !(await visible(page, "#consent-dialog")),
+      );
       await page.close();
     }
   }

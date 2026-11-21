@@ -38,19 +38,26 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     Show all settings opens them. e2e seeds `revealAll` and `setupDone` (task 8 seeds done for
     `live-site.mjs`; `capture.mjs` still open).
   - _Requirements: 3.1, 4, 11_
-- [ ] 4. Progressive setup with "Skip all"
+- [x] 4. Progressive setup with "Skip all"
   - Extend `FIRST_RUN` with style, voice, breaks and shoulders steps; delay to stage 2;
     Skip this step, Skip all, header "Set up" button; `store.setup`, `store.setupDone`.
   - Pure helpers and tests in `onboarding.js` and `tests/js/onboarding.test.mjs`
     (skip all grants no consent, enables nothing off by default).
   - Update "Delete my data" to clear `store.setup`, `store.water`, `store.breathIntroShown`.
+  - Built in FEAT-004. Steps: framing, calibrate (stage 2), style, voice (stage 3), breaks,
+    shoulders, done (stage 4). Cards drive the real controls (one write path). `skipAll`
+    marks the open steps skipped so the header "Set up" button can reopen them. The privacy
+    page lists setup progress and the water count (water arrives in task 7).
   - _Requirements: 5, 9.3_
-- [ ] 5. Automatic breath check intro after tracking has settled
+- [x] 5. Automatic breath check intro after tracking has settled
   - `prompts.js`: `breath_intro` id with one-time quiet exemption; tests in
     `tests/js/prompts.test.mjs`.
   - `app.js`: enqueue after stage 2 plus 60 s good posture; consent via `requireConsent`;
     reset `goodSinceBreath`; skip when `lowAccuracy`.
   - e2e: intro asks for consent, declining stores nothing, accepting runs the check.
+  - Built in FEAT-004. Offered up to 3 times (`store.breathIntroOffers`), then
+    `store.breathIntroShown`. e2e seeds `breathIntroShown` unless a check opts in with
+    `intro: true`, because the offer holds back the first eye break by the 10 min gap.
   - _Requirements: 6_
 - [ ] 6. Intent prefetch on the landing page (decision needed)
   - `docs/prefetch.js`, linked from `docs/index.html`; skips on Save-Data and 2g.
