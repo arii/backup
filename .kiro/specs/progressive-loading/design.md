@@ -226,7 +226,7 @@ Demos play inside the prompt card (`#prompt-card`), so no new overlay.
 | D. Camera on load | Video instantly | Contradicts "camera starts when you choose" | Do not |
 | E. Service worker precache by default | Offline | Contradicts opt-in offline | Do not |
 
-For B, size is known from `precache.json` (model plus WASM, about 15 MB of the 31 MB
+For B, size is known from `precache.json` (model plus WASM, about 15 MB of the 32 MB
 total). Implementation: a 15-line inline-free script file `docs/prefetch.js` loaded from
 `docs/index.html` (CSP-safe, `script-src 'self'`), which on intent adds
 `<link rel="prefetch" href="app/vendor/pose_landmarker_lite.task">` and the WASM files. Hash

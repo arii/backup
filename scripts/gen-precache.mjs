@@ -12,6 +12,8 @@
 //   node scripts/gen-precache.mjs           write precache.json and update sw.js
 //   node scripts/gen-precache.mjs --check   exit 1 if either is out of date
 //
+// It also rewrites the "about N MB" download size quoted in docs/privacy.html
+// and README.md (tests/js/offline.test.mjs checks they match).
 // The voice-clips workflow runs this after rendering new clips.
 
 import { createHash } from "node:crypto";
@@ -50,6 +52,13 @@ export function buildPrecache(appDir = APP) {
   return { version, totalBytes: files.reduce((n, f) => n + f.size, 0), files };
 }
 
+const SIZE_DOCS = ["docs/privacy.html", "README.md"];
+
+/** Replace the first "about N MB" in text with the rounded size of totalBytes. */
+export function withQuotedSize(text, totalBytes) {
+  return text.replace(/about \d+ MB/, `about ${Math.round(totalBytes / 1048576)} MB`);
+}
+
 export function withVersion(swSource, version) {
   if (!VERSION_LINE.test(swSource)) throw new Error("sw.js has no PRECACHE_VERSION line");
   return swSource.replace(VERSION_LINE, `const PRECACHE_VERSION = "${version}";`);
@@ -85,6 +94,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     writeFileSync(path.join(APP, "precache.json"), JSON.stringify(pre, null, 2) + "\n");
     const swPath = path.join(APP, "sw.js");
     writeFileSync(swPath, withVersion(readFileSync(swPath, "utf8"), pre.version));
+    for (const f of SIZE_DOCS) {
+      const p = path.join(ROOT, f);
+      writeFileSync(p, withQuotedSize(readFileSync(p, "utf8"), pre.totalBytes));
+    }
     console.log(`precache ${pre.version}: ${pre.files.length} files, ${(pre.totalBytes / 1048576).toFixed(1)} MB`);
   }
 }

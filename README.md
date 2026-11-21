@@ -174,7 +174,7 @@ GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
 ### Offline mode (opt-in)
 
 Select **Make available offline** in the app's Offline mode section. The browser
-downloads about 31 MB (app code, the MediaPipe runtime and pose model, the no-WebGL fallback model, voice clips)
+downloads about 32 MB (app code, the MediaPipe runtime and pose model, the no-WebGL fallback model, voice clips)
 and the app then says "Offline mode is ready. You can disconnect Wi-Fi now."
 Nothing is downloaded for offline use until you select the button. Like any website, your browser
 may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video.
