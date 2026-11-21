@@ -126,6 +126,11 @@
   dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
   details.panel summary { cursor: pointer; font-weight: 600; }
   details.panel[open] summary { margin-bottom: 8px; }
+  details.group { margin-top: 10px; }
+  details.group summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  #reveal-all { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px 8px; }
+  #reveal-note { color: var(--muted); font-size: 13px; }
+  #reveal-note:empty { display: none; }
   #setup-status { font-weight: 600; }
   #setup-status.fault { color: var(--warn); }
   #setup-status.ok { color: var(--good); }
@@ -212,7 +217,9 @@
   <span class="stat">source <b id="source">-</b></span>
   <button class="secondary" id="pause" disabled title="Pause tracking and all sounds (shortcut: P, can be turned off under Reminders &amp; sounds)">Pause</button>
   <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
-  <button class="secondary" id="share-btn" title="Share BackUp with a friend">Share</button>
+  <button class="secondary" id="share-btn" data-stage="5" hidden title="Share BackUp with a friend">Share</button>
+  <button class="link" id="reveal-all" aria-pressed="false" title="Show every panel and setting now, instead of adding them as you go">Show all settings</button>
+  <span id="reveal-note" role="status" aria-live="polite"></span>
   <span class="stat" style="margin-left:auto"><a href="../">About</a> &middot; <a href="https://github.com/arii/posture-guard">GitHub</a> &middot; <a href="https://github.com/arii/posture-guard/issues/new" id="report-bug" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue with browser and app details (no video or images)">Report a bug</a> &middot; <a href="https://github.com/sponsors/arii" class="quiet-link" id="sponsor-header" target="_blank" rel="noopener">&hearts; Sponsor</a></span>
 </header>
 <main>
@@ -287,7 +294,7 @@
         <button class="secondary" id="first-run-skip">Skip intro</button>
       </div>
     </div>
-    <div class="panel coaching" style="margin-top:16px">
+    <div class="panel coaching" style="margin-top:16px" data-stage="1" hidden>
       <h2>This session</h2>
       <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b> &middot; breaks taken today <b id="breaks-count">0</b></div>
       <div class="note">A break is 2 minutes or more away from the camera. Breaks are not part of the posture score.</div>
@@ -324,7 +331,7 @@
         <button class="secondary" id="practice-stop">Stop practice</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="4" hidden>
       <h2>Is it working? Test me</h2>
       <div class="note" style="margin-top:0">A silent check: no sounds, banners, needle or hints, so it measures your habit, not the coaching.
         Sit and work as usual. If the coaching is sticking, your silent score climbs over the days.</div>
@@ -336,7 +343,7 @@
       <div class="score-bar" id="test-progress-wrap" style="display:none"><div id="test-progress" style="background:#6b8fd6"></div></div>
       <div id="test-compare" class="note"></div>
     </div>
-    <div class="panel" id="progress-panel" aria-labelledby="progress-title">
+    <div class="panel" id="progress-panel" aria-labelledby="progress-title" data-stage="5" hidden>
       <h2 id="progress-title">Your progress</h2>
       <div id="progress-empty" class="note" style="margin-top:0"></div>
       <div id="progress-days" role="list" aria-label="Good posture by day, last 7 days"></div>
@@ -351,7 +358,7 @@
       <div class="note">Stored only in this browser. Days are counted in UTC. A missed day is just a day with no data.</div>
       <div class="note" id="progress-msg" aria-live="polite"></div>
     </div>
-    <div class="panel" id="offline-panel" aria-labelledby="offline-title">
+    <div class="panel" id="offline-panel" aria-labelledby="offline-title" data-stage="5" hidden>
       <h2 id="offline-title">Offline mode</h2>
       <div class="note" id="offline-status" role="status" style="margin-top:0">Checking offline support...</div>
       <div class="hold" id="offline-bar" hidden style="display:block"><div class="hold-fill" id="offline-fill"></div></div>
@@ -396,7 +403,7 @@
       <h2>Silent test running</h2>
       Posture feedback is hidden until the test ends, so the score shows your own habit.
     </div>
-    <div class="panel coaching">
+    <div class="panel coaching" data-stage="2" hidden>
       <h2>Posture needle</h2>
       <svg viewBox="0 0 200 128" style="width:100%;max-width:300px;display:block;margin:0 auto" role="img" aria-label="Posture needle: left is upright, right is slouched">
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
@@ -422,7 +429,7 @@
         <div class="tile" id="t-trunk_lean"><div class="label">Trunk lean</div><div class="value" id="m-trunk_lean_deg">-</div></div>
       </div>
     </div>
-    <div class="panel coaching">
+    <div class="panel coaching" data-stage="4" hidden>
       <h2>Relax, don&rsquo;t brace</h2>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
         to look upright is tiring for your upper back. Lift your chest a little and let your shoulders hang.
@@ -434,9 +441,11 @@
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (asks for your OK first)</label>
     </div>
-    <div class="panel coaching" id="breaks-panel">
+    <div class="panel coaching" id="breaks-panel" data-stage="4" hidden>
       <h2>Breaks &amp; prompts</h2>
       <div class="note" style="margin-top:0">Gentle prompts, one at a time. None in the first 5 minutes, at most one every 10 minutes, and never during a pause or a silent test.</div>
+      <details class="group" data-group>
+      <summary>Break and breathing options</summary>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="eye-breaks" checked> Eye break every 20 minutes at the desk: look at something 20 feet away for 20 seconds</label>
       <label class="note" for="move-minutes" style="display:block;margin-top:6px">Stand up and move</label>
       <div class="modes"><select id="move-minutes">
@@ -448,6 +457,7 @@
       </select></div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathing-moments"> Occasional breathing moment during a long good-posture streak (at most every 30 minutes)</label>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathe-cues"> Soft voice cues in &ldquo;Breathe with me&rdquo;</label>
+      </details>
       <div class="btn-row">
         <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
         <button id="prompts-reset" class="secondary" hidden>Show dismissed prompts again</button>
@@ -461,7 +471,7 @@
         <button id="consent-withdraw" class="secondary" hidden>Withdraw my OK</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="3" hidden>
       <h2>Calibrate to your desk</h2>
       <div class="btn-row">
         <button id="calib-good" disabled title="Start the webcam or demo first">Record good posture</button>
@@ -471,7 +481,7 @@
       <div class="note" id="calib-status">Sit well, press "Record good posture", hold still 3 s. Then slouch your usual way and record that.</div>
       <div class="error" id="calib-error"></div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="3" hidden>
       <h2>Reminders &amp; sounds</h2>
       <div class="modes">
         <label><input type="radio" name="mode" value="chime_and_voice" checked> Chime + voice</label>
@@ -486,6 +496,8 @@
       </select></div>
       <div class="note" id="coaching-note">Light coaching gives your own habit room to take over. Check with &ldquo;Test me&rdquo; whether it sticks.</div>
       <div class="note" id="reminder-note" role="status">Taking a break from reminders: that is a lot in an hour. Tracking continues.</div>
+      <details class="group" data-group>
+      <summary>Voice, sounds and shortcuts</summary>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="specific-cues" checked> Say what to fix (&ldquo;Head forward. Tuck your chin&hellip;&rdquo;)</label>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="pause-shortcut" checked> Pause with the P key (turn off if speech input or typing triggers it by accident)</label>
       <label class="note" for="voice-text">Spoken prompt when there is nothing specific to say</label>
@@ -497,6 +509,7 @@
       <div class="sound-row"><label for="bad-file">Bad sound</label><input type="file" id="bad-file" accept="audio/*"><button class="secondary" id="test-bad">Play</button></div>
       <div class="sound-row"><label for="good-file">Good sound</label><input type="file" id="good-file" accept="audio/*"><button class="secondary" id="test-good">Play</button></div>
       <div class="btn-row"><button class="secondary" id="clear-sounds">Use built-in chimes</button><button class="secondary" id="notify">Notify when tab is hidden</button></div>
+      </details>
       <div class="note">Reminder after 2 s of sustained slouch, voice 10 s later. Praise when you recover, 15 s into good posture, then less often (up to every 1&ndash;2 min) the longer you hold it.</div>
     </div>
   </div>

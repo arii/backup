@@ -57,8 +57,20 @@ const snap = (page) =>
       if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || !vis(p)) continue;
       words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
     }
+    // Words in <main> outside the stage, the first-run guide card and the "Not working?"
+    // help panel (it opens itself when a setup fault is found and is manual help, not a
+    // staged panel). Requirement 4.9 budget: at most 150.
+    let belowStageWords = 0;
+    const w2 = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+    for (let t = w2.nextNode(); t; t = w2.nextNode()) {
+      const p = t.parentElement;
+      if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || p.closest(".stage, #first-run, #setup-panel") || !vis(p))
+        continue;
+      belowStageWords += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+    }
     return {
       words,
+      belowStageWords,
       controls: ctrls.length,
       checkboxesRadios: checks.length,
       controlsInFirstViewport: ctrls.filter(inView).length,
@@ -160,6 +172,9 @@ async function run(label, viewport, { throttle = false } = {}) {
     await poll("firstScored", firstScored);
     await poll("settled", settled, 30000);
     out.settledSnapshot = await snap(page);
+    // Stage 2 (the needle panel appears after 10 s of settled tracking).
+    await poll("stage2", () => !document.getElementById("needle-text").closest("[data-stage]")?.hidden, 40000);
+    out.stage2Snapshot = await snap(page);
     out.loadMarks = await page.evaluate(() => window.__loadMarks ?? null);
     await page.screenshot({ path: path.join(outDir, `${label}-3-settled.png`), fullPage: true });
     return out;

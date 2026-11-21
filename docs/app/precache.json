@@ -1,11 +1,11 @@
 {
-  "version": "c899bc860f844598",
-  "totalBytes": 32864418,
+  "version": "b54ec0447fae189e",
+  "totalBytes": 32872718,
   "files": [
     {
       "url": "app.js",
-      "size": 99806,
-      "sha256": "e550a1f1cdf6f1d539847bee9eb0dae17e47633d379a17ccfafe4feacf8f6074"
+      "size": 102784,
+      "sha256": "30775b2dc7c6215a78f63519f0d55926c9c4344c6562e68538c26d6abebffd2f"
     },
     {
       "url": "breaks.js",
@@ -29,8 +29,8 @@
     },
     {
       "url": "index.html",
-      "size": 44816,
-      "sha256": "69acfa851c86cb281e0eca7523a0e9761008ee0eb62535ec5403cf563171244e"
+      "size": 45818,
+      "sha256": "66f494d05c8acabab9c5fe4d42798f01a368a1371c897ec836ff07d98ead9a21"
     },
     {
       "url": "loading.js",
@@ -81,6 +81,11 @@
       "url": "relax.js",
       "size": 7271,
       "sha256": "f0a2d01a04cd51d1657dceadc33c72c8b6c01deeafbefad44b12414669a1a75b"
+    },
+    {
+      "url": "reveal.js",
+      "size": 4320,
+      "sha256": "a6602dcd83f249c6f8e054a7f7a72d0714e58daabbefac3e3790860c9921404c"
     },
     {
       "url": "settings.js",

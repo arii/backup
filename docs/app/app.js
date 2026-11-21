@@ -80,7 +80,8 @@ import {
   shouldOfferSponsor,
   sponsorText,
 } from "./sponsor.js";
-import { COACH_INTRO, DONE_INTRO } from "./onboarding.js";
+import { COACH_INTRO, DONE_INTRO, ONBOARDING_VERSION } from "./onboarding.js";
+import { RevealStages, STAGES } from "./reveal.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
@@ -1641,6 +1642,89 @@ document.addEventListener("keydown", (e) => {
   if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
 });
 
+// -- staged reveal ----------------------------------------------------------------
+// Panels carry data-stage="N" in index.html and start hidden (the hidden attribute, so
+// they leave the tab order). RevealStages (reveal.js) decides the stage from tracking
+// time on the prompt clock, so ?clockScale speeds it up too. A stage never goes back
+// down; "Simplify the page" only hides what is not yet due. Every element stays in the
+// DOM, so settings renderers and tests keep working on hidden panels.
+
+const REVEAL_ADDED = {
+  1: "this session",
+  2: "posture needle",
+  3: "reminders and sounds, calibration",
+  4: "breaks, breathing, silent test",
+  5: "progress, offline mode, share",
+};
+const reveal = (() => {
+  const returning = Number(store.onboarded) >= ONBOARDING_VERSION && !!store.firstRunDone;
+  const sessions = Number(store.usage?.sessions) || 0;
+  return new RevealStages({ returning, seasoned: returning && sessions >= 2 });
+})();
+const pinned = new Set(); // panels opened by hand (e.g. the first-run guide points at the test): never hidden again
+let shownStage = 0;
+let revealNoteTimer = null;
+
+function revealNote(text) {
+  const el = $("reveal-note");
+  el.textContent = text;
+  clearTimeout(revealNoteTimer);
+  revealNoteTimer = setTimeout(() => {
+    el.textContent = "";
+  }, 6000);
+}
+
+function applyReveal() {
+  const stage = store.revealAll ? STAGES.returning : reveal.stage;
+  for (const el of document.querySelectorAll("[data-stage]")) {
+    el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el);
+  }
+  const all = !!store.revealAll;
+  const btn = $("reveal-all");
+  btn.textContent = all ? "Simplify the page" : "Show all settings";
+  btn.setAttribute("aria-pressed", String(all));
+  return stage;
+}
+
+/** Show one staged panel and keep it shown (the user asked for it). */
+function pinPanel(id) {
+  pinned.add($(id).closest("[data-stage]"));
+  applyReveal();
+}
+
+function revealStep(out) {
+  const scored = out.result.kind === "scored";
+  const { stage, changed } = reveal.update(
+    {
+      scored,
+      present: scored && out.transition.state !== State.NO_PERSON,
+      paused,
+      silentTest: !!test,
+      practice: !!practice,
+    },
+    pclock,
+  );
+  if (!changed) return;
+  applyReveal();
+  if (store.revealAll) return;
+  const added = [];
+  for (let s = shownStage + 1; s <= stage; s++) added.push(REVEAL_ADDED[s]);
+  shownStage = stage;
+  if (added.length) revealNote(`Added: ${added.join(", ")}`);
+}
+
+function setRevealAll(on) {
+  store.revealAll = on;
+  save();
+  applyReveal();
+  for (const d of document.querySelectorAll("details[data-group]")) d.open = on;
+  revealNote(on ? "Showing all settings" : "Page simplified");
+}
+$("reveal-all").addEventListener("click", () => setRevealAll(!store.revealAll));
+if (store.revealAll) setRevealAll(true);
+applyReveal();
+$("reveal-note").textContent = "";
+
 function step() {
   if (paused) return;
   const nowMs = performance.now();
@@ -1672,6 +1756,7 @@ function step() {
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now);
+  revealStep(out);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -2242,6 +2327,7 @@ function renderFirstRun() {
       firstRunButton("Share BackUp", () => openShare(), false),
       firstRunButton("Start a silent test", () => {
         closeFirstRun();
+        pinPanel("test-start");
         $("test-start").scrollIntoView({ block: "center" });
         $("test-start").focus();
       }),

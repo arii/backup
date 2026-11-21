@@ -89,13 +89,20 @@ const CONSENT = { version: 1, at: "2026-01-01T00:00:00.000Z" };
 
 async function newPage(
   browser,
-  { fresh = false, guide = false, consent = true, extra = null, viewport = { width: 1280, height: 900 } } = {},
+  {
+    fresh = false,
+    guide = false,
+    consent = true,
+    staged = false,
+    extra = null,
+    viewport = { width: 1280, height: 900 },
+  } = {},
 ) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
     await context.addInitScript(
-      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore]) => {
+      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, staged]) => {
         try {
           if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
           sessionStorage.setItem("pg-e2e-acked", "1");
@@ -104,13 +111,15 @@ async function newPage(
           s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
           if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
           if (consentRecord) s.consent = consentRecord;
+          s.setupDone = true; // the setup sequence (spec task 4) is not what these checks are about
+          s.revealAll = !staged; // every panel exists unless a check is about the staged reveal
           if (extraStore) Object.assign(s, extraStore);
           localStorage.setItem("posture-guard:v1", JSON.stringify(s));
         } catch {
           /* storage unavailable */
         }
       },
-      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra],
+      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, staged],
     );
   }
   const page = await context.newPage();
@@ -370,6 +379,7 @@ try {
       ),
     );
     await page.keyboard.press("Escape");
+    await page.click("#reveal-all"); // a fresh profile starts staged; this is the "I want it all" path
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
     check("first run: no page errors", errors.length === 0, errors);
@@ -1523,6 +1533,185 @@ try {
     );
     check("landing and privacy pages have no errors", errors.length === 0, errors);
     await page.close();
+  }
+
+  // 4g. Staged reveal (spec progressive-loading, requirement 4): panels appear as tracking settles.
+  {
+    // Visible checkboxes and radios, and visible words in <main> below the stage (the guide card and the manual "Not working?" help excluded).
+    const density = (page) =>
+      page.evaluate(() => {
+        const vis = (e) => {
+          const r = e.getBoundingClientRect();
+          const st = getComputedStyle(e);
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            st.visibility !== "hidden" &&
+            st.display !== "none" &&
+            !e.closest("[hidden]") &&
+            !e.closest("details:not([open]) > :not(summary)")
+          );
+        };
+        const checks = [...document.querySelectorAll("input[type=checkbox],input[type=radio]")].filter(vis).length;
+        let words = 0;
+        const walker = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+          const p = t.parentElement;
+          if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || p.closest(".stage, #first-run, #setup-panel") || !vis(p))
+            continue;
+          words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+        }
+        return { checks, words };
+      });
+    const shown = (page, sel) => page.locator(sel).isVisible();
+    const STAGED_IDS = [
+      "good-pct",
+      "needle-text",
+      "calib-good",
+      "mode",
+      "eye-breaks",
+      "move-minutes",
+      "breathing-moments",
+      "relax-reminders",
+      "specific-cues",
+      "pause-shortcut",
+      "spoken-praise",
+      "voice-pick",
+      "sound-pack",
+      "test-start",
+      "progress-panel",
+      "offline-panel",
+      "breaks-panel",
+      "share-btn",
+      "consent-open",
+    ];
+
+    // Stage 0: before tracking, at most 2 checkboxes and the staged panels are out of the tab order.
+    {
+      const { page, errors } = await newPage(browser, { staged: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.waitForSelector("#start-camera:visible");
+      const d0 = await density(page);
+      check("staged reveal: stage 0 shows at most 2 checkboxes", d0.checks <= 2, d0);
+      check(
+        "staged reveal: stage 0 hides the dashboard panels with the hidden attribute",
+        await page.evaluate(() => [...document.querySelectorAll("[data-stage]")].every((e) => e.hidden)),
+      );
+      const missing = await page.evaluate(
+        (ids) => ids.filter((id) => !document.getElementById(id) && !document.getElementsByName(id).length),
+        STAGED_IDS,
+      );
+      check("staged reveal: hidden controls stay in the DOM", missing.length === 0, missing);
+      check(
+        "staged reveal: 'Show all settings' is offered before tracking",
+        (await page.locator("#reveal-all").textContent()).trim() === "Show all settings",
+      );
+      await page.screenshot({ path: path.join(outDir, "reveal-stage0.png") });
+      check("staged reveal: stage 0 has no errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Stage 1 to 2 on a clock 10x faster (settle after about 1 s), first-run guide skipped.
+    {
+      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      await page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.querySelector("#good-pct").closest("[data-stage]").hidden, null, {
+        timeout: 5000,
+      });
+      check("staged reveal: 'This session' appears with the first scored frame", true);
+      await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
+        timeout: 8000,
+      });
+      const note = await page.locator("#reveal-note").textContent();
+      check("staged reveal: stage 2 is announced once in #reveal-note", /Added: .*posture needle/.test(note), note);
+      check(
+        "staged reveal: stage 2 does not show reminders yet",
+        !(await shown(page, "#breaks-panel")) && !(await shown(page, "#progress-panel")),
+      );
+      // The guide card is its own thing (spec task 4 moves it); measure what stage 2 adds.
+      const skip = page.locator("#first-run-skip");
+      if (await skip.isVisible()) await skip.click();
+      const d2 = await density(page);
+      check("staged reveal: at most 2 checkboxes at stage 2", d2.checks <= 2, d2);
+      check("staged reveal: at most 150 visible words below the stage at stage 2", d2.words <= 150, d2);
+      await page.screenshot({ path: path.join(outDir, "reveal-stage2.png") });
+      check("staged reveal: no errors through stage 2", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // clockScale=600: every stage within seconds; the stage never goes back; focus stays put.
+    {
+      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
+      check(
+        "staged reveal: with ?clockScale=600 the settings panels reveal in the demo",
+        (await shown(page, "#breaks-panel")) && (await shown(page, "#test-start")),
+      );
+      check(
+        "staged reveal: the settings groups stay closed",
+        await page.evaluate(() => [...document.querySelectorAll("details[data-group]")].every((d) => !d.open)),
+      );
+      check(
+        "staged reveal: a reveal does not move focus",
+        await page.evaluate(() => !document.getElementById("reveal-note").contains(document.activeElement)),
+      );
+      // Stage 3 and 4 panels are checked first; stage 5 (progress, offline) waits for a later session.
+      check("staged reveal: progress and offline wait for a later session", !(await shown(page, "#progress-panel")));
+      check("staged reveal: no errors with a fast clock", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Show all settings: everything now, persisted, reversible.
+    {
+      const { page, errors } = await newPage(browser, { staged: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#reveal-all");
+      const all = await page.evaluate(() => ({
+        hiddenLeft: [...document.querySelectorAll("[data-stage]")].filter((e) => e.hidden).length,
+        stored: JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll,
+        label: document.getElementById("reveal-all").textContent.trim(),
+        pressed: document.getElementById("reveal-all").getAttribute("aria-pressed"),
+        groupsOpen: [...document.querySelectorAll("details[data-group]")].every((d) => d.open),
+      }));
+      check(
+        "staged reveal: Show all settings reveals every panel and persists",
+        all.hiddenLeft === 0 && all.stored === true && all.label === "Simplify the page" && all.pressed === "true",
+        all,
+      );
+      check("staged reveal: Show all settings opens the settings groups", all.groupsOpen, all);
+      await page.setViewportSize({ width: 320, height: 640 });
+      check(
+        "staged reveal: no horizontal scroll at 320 px with everything shown",
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      );
+      await page.screenshot({ path: path.join(outDir, "reveal-all-320.png"), fullPage: true });
+      await page.reload();
+      check("staged reveal: Show all settings survives a reload", await shown(page, "#breaks-panel"));
+      await page.click("#reveal-all");
+      check(
+        "staged reveal: Simplify the page hides the panels again",
+        !(await shown(page, "#breaks-panel")) &&
+          (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll)) === false,
+      );
+      check("staged reveal: show all has no errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // 320 px at stage 0 and after the demo has revealed the stages.
+    {
+      const { page } = await newPage(browser, { staged: true, viewport: { width: 320, height: 640 } });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+      check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
+      check("staged reveal: no horizontal scroll at 320 px, stage 4", await fits());
+      await page.screenshot({ path: path.join(outDir, "reveal-320-stage4.png"), fullPage: true });
+      await page.close();
+    }
   }
 
   // 5. Self-hosting: vendored files are served, nothing left the origin.

@@ -25,12 +25,18 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
   - Tests: extend `tests/js/loading.test.mjs`; e2e: video visible within 1.5 s with the
     model route held.
   - _Requirements: 1, 2, 3.4, 9.2, 10.2, 11_
-- [ ] 3. Staged reveal of panels and settings
+- [x] 3. Staged reveal of panels and settings
   - New `docs/app/reveal.js` and `tests/js/reveal.test.mjs` (properties R1 to R5).
   - `index.html`: `data-stage` wrappers (ids unchanged), closed `<details>` for settings
     groups, `#reveal-note`, `#reveal-all` button. `app.js`: call `reveal.update` per frame
     with the scaled clock; persist `store.revealAll`.
   - Check at 320 px, in the demo, on the MoveNet fallback and after `stopCamera`.
+  - Built in FEAT-003. Measured with `tests/e2e/measure-load.mjs`: at stage 2, 0 visible
+    checkboxes and 76 words below the stage (baseline 10 and about 820). The stage 5 "next
+    session" rule: `returning` jumps to stage 4 at settle, `seasoned` (returning with two or
+    more earlier sessions) jumps to stage 5. Settings groups are closed `<details data-group>`;
+    Show all settings opens them. e2e seeds `revealAll` and `setupDone` (task 8 seeds done for
+    `live-site.mjs`; `capture.mjs` still open).
   - _Requirements: 3.1, 4, 11_
 - [ ] 4. Progressive setup with "Skip all"
   - Extend `FIRST_RUN` with style, voice, breaks and shoulders steps; delay to stage 2;
