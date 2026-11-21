@@ -60,6 +60,25 @@
   #banner.relax { background: #6b8fd6; color: #0d1830; }
   /* Breaks and breathing prompts (one at a time, see prompts.js). visibility keeps the hidden buttons out of the tab order. */
   #prompt-card { position: absolute; left: 12px; right: 12px; bottom: 40px; padding: 10px 12px; border-radius: 8px; background: rgba(20, 23, 28, 0.94); border: 1px solid #6b8fd6; visibility: hidden; opacity: 0; transition: opacity 0.25s; }
+  #prompt-text { white-space: pre-line; }
+  #prompt-figure { float: left; margin: 0 8px 4px 0; }
+  #prompt-figure * { fill: none; stroke: #6b8fd6; stroke-width: 2; transform-box: fill-box; transform-origin: center; }
+  #prompt-figure #fig-cup { visibility: hidden; }
+  #prompt-figure[data-pose="cup"] #fig-cup, #prompt-figure[data-pose="sip"] #fig-cup { visibility: visible; }
+  #prompt-figure[data-pose="neck"] #fig-head { animation: fig-tilt 3s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="roll"] #fig-body { animation: fig-lift 1.5s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="chest"] #fig-body { animation: fig-open 2s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="stand"] #fig-all, #prompt-figure[data-pose="reach"] #fig-all { animation: fig-up 1.5s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="walk"] #fig-all { animation: fig-sway 1s ease-in-out infinite alternate; }
+  #prompt-figure[data-pose="sip"] #fig-cup { animation: fig-sip 1.5s ease-in-out infinite alternate; }
+  @keyframes fig-tilt { from { transform: translateX(-4px) rotate(-18deg); } to { transform: translateX(4px) rotate(18deg); } }
+  @keyframes fig-lift { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+  @keyframes fig-open { from { transform: scaleX(1); } to { transform: scaleX(1.2); } }
+  @keyframes fig-up { from { transform: translateY(2px); } to { transform: translateY(-3px); } }
+  @keyframes fig-sway { from { transform: translateX(-3px); } to { transform: translateX(3px); } }
+  @keyframes fig-sip { from { transform: rotate(0); } to { transform: rotate(-35deg); } }
+  .break-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+  .break-menu button { width: 100%; }
   #prompt-card.show { visibility: visible; opacity: 1; }
   #prompt-text { font-weight: 600; font-size: 14px; }
   #prompt-card .hold { margin-top: 6px; height: 16px; }
@@ -126,6 +145,11 @@
   dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
   details.panel summary { cursor: pointer; font-weight: 600; }
   details.panel[open] summary { margin-bottom: 8px; }
+  details.group { margin-top: 10px; }
+  details.group summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  #reveal-all, #first-run-skip-all { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px 8px; }
+  #reveal-note { color: var(--muted); font-size: 13px; }
+  #reveal-note:empty { display: none; }
   #setup-status { font-weight: 600; }
   #setup-status.fault { color: var(--warn); }
   #setup-status.ok { color: var(--good); }
@@ -146,6 +170,11 @@
   @media (max-width: 600px) {
     .stage { aspect-ratio: auto; min-height: 560px; }
     .stage:has(#onboarding:not([hidden])) { min-height: 860px; }
+    /* Narrow screens: the card sits below the video, so it never covers the face. */
+    .stage:has(.overlay-msg.compact) { min-height: 0; aspect-ratio: auto; display: flex; flex-direction: column; }
+    .stage:has(.overlay-msg.compact) video { position: relative; inset: auto; height: auto; aspect-ratio: 4 / 3; flex: none; }
+    .stage:has(.overlay-msg.compact) canvas { height: auto; aspect-ratio: 4 / 3; bottom: auto; }
+    .stage:has(.overlay-msg.compact) .overlay-msg.compact { position: static; max-height: none; }
     header { padding: 10px 12px; gap: 8px; }
     .stage .overlay-msg { padding: 12px; }
     .overlay-msg h2 { font-size: 20px; }
@@ -166,13 +195,20 @@
   .load-steps li.done::before { border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2.5 7.5l3 3 6-7' fill='none' stroke='%234cc36a' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
   .load-steps li.failed { color: var(--bad); }
   .load-steps li.failed::before { border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 3l8 8M11 3l-8 8' fill='none' stroke='%23ff5c5c' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+  .load-steps li { flex-wrap: wrap; }
+  .load-steps .load-why { flex: 0 0 calc(100% - 24px); margin-left: 24px; font-size: 12px; font-weight: 400; color: var(--muted); }
   .load-steps .load-detail { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
   .load-bar { width: min(340px, 100%); height: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
   .load-bar div { height: 100%; width: 0; background: var(--good); transition: width 0.2s linear; }
+  /* Live preview: once frames play, the card shrinks to a solid strip under the video. */
+  .stage .overlay-msg.compact { inset: auto 0 0 0; max-height: 40%; padding: 10px 14px; gap: 8px; background: var(--panel); border-top: 1px solid var(--line); }
+  .overlay-msg.compact > :not(#load-steps, #load-bar, #load-hint, #start-status, #start-error) { display: none; }
+  .overlay-msg.compact .load-why { display: none; }
   #load-hint:empty { display: none; }
   @keyframes load-spin { to { transform: translateY(2px) rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
-    .load-steps li.active::before { border-right-color: var(--good); border-style: dotted; }
+    .load-steps li.active::before { border-right-color: var(--good); border-style: dotted; animation: none; }
+    .load-bar div { transition: none; }
 
     * { transition: none !important; animation: none !important; }
   }
@@ -200,7 +236,10 @@
   <span class="stat">source <b id="source">-</b></span>
   <button class="secondary" id="pause" disabled title="Pause tracking and all sounds (shortcut: P, can be turned off under Reminders &amp; sounds)">Pause</button>
   <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
-  <button class="secondary" id="share-btn" title="Share BackUp with a friend">Share</button>
+  <button class="secondary" id="setup-btn" hidden title="Set up BackUp one small step at a time">Set up</button>
+  <button class="secondary" id="share-btn" data-stage="5" hidden title="Share BackUp with a friend">Share</button>
+  <button class="link" id="reveal-all" aria-pressed="false" title="Show every panel and setting now, instead of adding them as you go">Show all settings</button>
+  <span id="reveal-note" role="status" aria-live="polite"></span>
   <span class="stat" style="margin-left:auto"><a href="../">About</a> &middot; <a href="https://github.com/arii/posture-guard">GitHub</a> &middot; <a href="https://github.com/arii/posture-guard/issues/new" id="report-bug" target="_blank" rel="noopener" title="Opens a pre-filled GitHub issue with browser and app details (no video or images)">Report a bug</a> &middot; <a href="https://github.com/sponsors/arii" class="quiet-link" id="sponsor-header" target="_blank" rel="noopener">&hearts; Sponsor</a></span>
 </header>
 <main>
@@ -210,6 +249,7 @@
       <canvas id="overlay"></canvas>
       <div id="banner" role="status" aria-live="polite">Reminder</div>
       <div id="prompt-card" data-prompt="">
+        <svg id="prompt-figure" viewBox="0 0 40 32" width="40" height="32" aria-hidden="true" hidden><g id="fig-all"><circle id="fig-head" cx="20" cy="9" r="5"/><path id="fig-body" d="M8 30 Q8 17 20 17 Q32 17 32 30"/><rect id="fig-cup" x="30" y="4" width="6" height="8" rx="1"/></g></svg>
         <div id="prompt-text" role="status" aria-live="polite"></div>
         <div class="hold" id="prompt-bar" hidden role="progressbar" aria-label="Countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="hold-fill" id="prompt-fill"></div></div>
         <div class="btn-row">
@@ -227,6 +267,7 @@
         <p id="start-tagline" style="color:var(--warn);font-weight:600">Leave this tab open. Slouch, and it will haunt you.</p>
         <p id="start-intro">Your webcam, the pose model and the posture logic all run in this tab. No video or
           landmarks leave your computer. Sit facing the camera with your head and shoulders in view.</p>
+        <noscript><p class="error">BackUp needs JavaScript to run. Turn it on for this site, then reload the page.</p></noscript>
         <section id="onboarding" aria-labelledby="ob-title" hidden>
           <div class="step-count" id="ob-count"></div>
           <h3 id="ob-title" tabindex="-1"></h3>
@@ -243,14 +284,14 @@
         </div>
         <p id="start-device-note" class="note">Works best on a laptop or desktop with a webcam.</p>
         <p id="start-status" class="note"></p>
-        <ol id="load-steps" class="load-steps" hidden aria-live="polite" aria-label="Starting the webcam">
-          <li data-step="camera"><span class="load-label">Allow the camera</span> <span class="load-detail"></span></li>
-          <li data-step="download"><span class="load-label">Download the pose model</span> <span class="load-detail"></span></li>
-          <li data-step="start"><span class="load-label">Start the model on your computer</span> <span class="load-detail"></span></li>
-        </ol>
-        <div id="load-bar" class="load-bar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
-        <p id="load-hint" class="note" aria-live="polite"></p>
         <p id="start-error" class="error"></p>
+        <ol id="load-steps" class="load-steps" hidden aria-live="polite" aria-label="Starting the webcam">
+          <li data-step="camera"><span class="load-label">Allow the camera</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">Your browser asks first. The video stays on this computer.</span></li>
+          <li data-step="download"><span class="load-label">Download the pose model</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">A 15 MB file from this site, one time. It runs in this tab.</span></li>
+          <li data-step="start"><span class="load-label">Start the model on your computer</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">Getting ready for your graphics chip. The page may pause for a few seconds.</span></li>
+        </ol>
+        <div id="load-bar" class="load-bar" role="progressbar" aria-label="Start-up progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
+        <p id="load-hint" class="note" role="status"></p>
         <div id="webgl-help" role="alert">
           <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:
           <ul>
@@ -265,16 +306,17 @@
     </div>
     <div class="panel" id="first-run" role="region" aria-labelledby="first-run-title" style="margin-top:16px" hidden>
       <h2 id="first-run-title">Getting started</h2>
-      <div class="step-count" id="first-run-count"></div>
+      <div class="step-count" id="first-run-count" role="status" aria-live="polite"></div>
       <h3 id="first-run-heading" style="margin:4px 0"></h3>
       <div id="first-run-body"></div>
       <div class="btn-row">
         <button class="secondary" id="first-run-back">Back</button>
         <button id="first-run-next">Next</button>
-        <button class="secondary" id="first-run-skip">Skip intro</button>
+        <button class="secondary" id="first-run-skip">Skip this step</button>
+        <button class="link" id="first-run-skip-all" title="Keep the default settings. Nothing is turned on and no consent is recorded.">Skip all, use defaults</button>
       </div>
     </div>
-    <div class="panel coaching" style="margin-top:16px">
+    <div class="panel coaching" style="margin-top:16px" data-stage="1" hidden>
       <h2>This session</h2>
       <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b> &middot; breaks taken today <b id="breaks-count">0</b></div>
       <div class="note">A break is 2 minutes or more away from the camera. Breaks are not part of the posture score.</div>
@@ -311,7 +353,7 @@
         <button class="secondary" id="practice-stop">Stop practice</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="4" hidden>
       <h2>Is it working? Test me</h2>
       <div class="note" style="margin-top:0">A silent check: no sounds, banners, needle or hints, so it measures your habit, not the coaching.
         Sit and work as usual. If the coaching is sticking, your silent score climbs over the days.</div>
@@ -323,12 +365,13 @@
       <div class="score-bar" id="test-progress-wrap" style="display:none"><div id="test-progress" style="background:#6b8fd6"></div></div>
       <div id="test-compare" class="note"></div>
     </div>
-    <div class="panel" id="progress-panel" aria-labelledby="progress-title">
+    <div class="panel" id="progress-panel" aria-labelledby="progress-title" data-stage="5" hidden>
       <h2 id="progress-title">Your progress</h2>
       <div id="progress-empty" class="note" style="margin-top:0"></div>
       <div id="progress-days" role="list" aria-label="Good posture by day, last 7 days"></div>
       <div class="note" id="progress-total"></div>
       <div class="note" id="progress-tests"></div>
+      <div class="note" id="progress-water"></div>
       <div class="note" id="progress-suggest" aria-live="polite"></div>
       <div class="btn-row">
         <button class="secondary" id="progress-light" hidden>Switch to light coaching</button>
@@ -338,7 +381,7 @@
       <div class="note">Stored only in this browser. Days are counted in UTC. A missed day is just a day with no data.</div>
       <div class="note" id="progress-msg" aria-live="polite"></div>
     </div>
-    <div class="panel" id="offline-panel" aria-labelledby="offline-title">
+    <div class="panel" id="offline-panel" aria-labelledby="offline-title" data-stage="5" hidden>
       <h2 id="offline-title">Offline mode</h2>
       <div class="note" id="offline-status" role="status" style="margin-top:0">Checking offline support...</div>
       <div class="hold" id="offline-bar" hidden style="display:block"><div class="hold-fill" id="offline-fill"></div></div>
@@ -383,7 +426,7 @@
       <h2>Silent test running</h2>
       Posture feedback is hidden until the test ends, so the score shows your own habit.
     </div>
-    <div class="panel coaching">
+    <div class="panel coaching" data-stage="2" hidden>
       <h2>Posture needle</h2>
       <svg viewBox="0 0 200 128" style="width:100%;max-width:300px;display:block;margin:0 auto" role="img" aria-label="Posture needle: left is upright, right is slouched">
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
@@ -409,21 +452,33 @@
         <div class="tile" id="t-trunk_lean"><div class="label">Trunk lean</div><div class="value" id="m-trunk_lean_deg">-</div></div>
       </div>
     </div>
-    <div class="panel coaching">
+    <div class="panel coaching" id="break-menu" data-stage="4" hidden>
+      <h2 id="break-menu-title">Take a break</h2>
+      <div class="note" style="margin-top:0">Pick one. Each shows a short guided demo on the video. No camera analysis for stretch, move or water, and it never affects your score.</div>
+      <div class="break-menu" role="group" aria-labelledby="break-menu-title">
+        <button id="break-stretch" class="secondary" disabled title="Start the webcam or demo first">Stretch</button>
+        <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
+        <button id="breath-check" class="secondary" disabled title="Start the webcam or demo first">Breath check</button>
+        <button id="break-eye" class="secondary" disabled title="Start the webcam or demo first">Look away</button>
+        <button id="break-move" class="secondary" disabled title="Start the webcam or demo first">Stand and move</button>
+        <button id="break-water" class="secondary" disabled title="Start the webcam or demo first">Drink water</button>
+      </div>
+      <div class="note" id="break-menu-note" role="status"></div>
+    </div>
+    <div class="panel coaching" data-stage="4" hidden>
       <h2>Relax, don&rsquo;t brace</h2>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
         to look upright is tiring for your upper back. Lift your chest a little and let your shoulders hang.
         <span id="relax-safety"></span></div>
       <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
-      <div class="btn-row">
-        <button id="breath-check" class="secondary" disabled title="Start the webcam or demo first">Breath check</button>
-      </div>
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (asks for your OK first)</label>
     </div>
-    <div class="panel coaching" id="breaks-panel">
+    <div class="panel coaching" id="breaks-panel" data-stage="4" hidden>
       <h2>Breaks &amp; prompts</h2>
       <div class="note" style="margin-top:0">Gentle prompts, one at a time. None in the first 5 minutes, at most one every 10 minutes, and never during a pause or a silent test.</div>
+      <details class="group" data-group>
+      <summary>Break and breathing options</summary>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="eye-breaks" checked> Eye break every 20 minutes at the desk: look at something 20 feet away for 20 seconds</label>
       <label class="note" for="move-minutes" style="display:block;margin-top:6px">Stand up and move</label>
       <div class="modes"><select id="move-minutes">
@@ -433,10 +488,26 @@
         <option value="60" selected>Every 60 minutes</option>
         <option value="90">Every 90 minutes</option>
       </select></div>
+      <label class="note" for="stretch-minutes" style="display:block;margin-top:6px">Stretch reminder</label>
+      <div class="modes"><select id="stretch-minutes">
+        <option value="0" selected>Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+        <option value="60">Every 60 minutes</option>
+        <option value="90">Every 90 minutes</option>
+      </select></div>
+      <label class="note" for="water-minutes" style="display:block;margin-top:6px">Water reminder</label>
+      <div class="modes"><select id="water-minutes">
+        <option value="0" selected>Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+        <option value="60">Every 60 minutes</option>
+        <option value="90">Every 90 minutes</option>
+      </select></div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathing-moments"> Occasional breathing moment during a long good-posture streak (at most every 30 minutes)</label>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="breathe-cues"> Soft voice cues in &ldquo;Breathe with me&rdquo;</label>
+      </details>
       <div class="btn-row">
-        <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
         <button id="prompts-reset" class="secondary" hidden>Show dismissed prompts again</button>
       </div>
       <div class="note" id="breathe-note">One minute of easy breathing, about 4 seconds in and 6 seconds out, then a breath check. Stop if you feel dizzy.</div>
@@ -448,7 +519,7 @@
         <button id="consent-withdraw" class="secondary" hidden>Withdraw my OK</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="3" hidden>
       <h2>Calibrate to your desk</h2>
       <div class="btn-row">
         <button id="calib-good" disabled title="Start the webcam or demo first">Record good posture</button>
@@ -458,7 +529,7 @@
       <div class="note" id="calib-status">Sit well, press "Record good posture", hold still 3 s. Then slouch your usual way and record that.</div>
       <div class="error" id="calib-error"></div>
     </div>
-    <div class="panel">
+    <div class="panel" data-stage="3" hidden>
       <h2>Reminders &amp; sounds</h2>
       <div class="modes">
         <label><input type="radio" name="mode" value="chime_and_voice" checked> Chime + voice</label>
@@ -473,6 +544,8 @@
       </select></div>
       <div class="note" id="coaching-note">Light coaching gives your own habit room to take over. Check with &ldquo;Test me&rdquo; whether it sticks.</div>
       <div class="note" id="reminder-note" role="status">Taking a break from reminders: that is a lot in an hour. Tracking continues.</div>
+      <details class="group" data-group>
+      <summary>Voice, sounds and shortcuts</summary>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="specific-cues" checked> Say what to fix (&ldquo;Head forward. Tuck your chin&hellip;&rdquo;)</label>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="pause-shortcut" checked> Pause with the P key (turn off if speech input or typing triggers it by accident)</label>
       <label class="note" for="voice-text">Spoken prompt when there is nothing specific to say</label>
@@ -484,6 +557,7 @@
       <div class="sound-row"><label for="bad-file">Bad sound</label><input type="file" id="bad-file" accept="audio/*"><button class="secondary" id="test-bad">Play</button></div>
       <div class="sound-row"><label for="good-file">Good sound</label><input type="file" id="good-file" accept="audio/*"><button class="secondary" id="test-good">Play</button></div>
       <div class="btn-row"><button class="secondary" id="clear-sounds">Use built-in chimes</button><button class="secondary" id="notify">Notify when tab is hidden</button></div>
+      </details>
       <div class="note">Reminder after 2 s of sustained slouch, voice 10 s later. Praise when you recover, 15 s into good posture, then less often (up to every 1&ndash;2 min) the longer you hold it.</div>
     </div>
   </div>

@@ -43,11 +43,12 @@
     <li>daily good and slouch totals;</li>
     <li>silent test results and the count of shoulder-creep reminders;</li>
     <li>your settings and voice choice;</li>
+    <li>your setup progress (which setup steps you finished or skipped), whether the first breath check offer was shown and how often, and a daily water count once the water reminder exists. The water count comes from your own taps on <b>I drank</b>; the camera does not detect drinking;</li>
     <li>usage counts for the sponsor prompt (number of sessions, the first day you used the app, and how often the prompt was shown or dismissed), triggered by these local counts only and never sent anywhere;</li>
     <li>if you opt in to the shoulder and breathing features, a dated consent record (version and date);</li>
     <li>any custom sound files you upload, stored as base64 data.</li>
   </ul>
-  <p>If you choose <b>Make available offline</b>, the browser also keeps a copy of the app's own files (code, the pose models, voice clips, about 31 MB) in its cache storage, managed by a service worker. It holds no video, images or measurements. Without that button, no service worker is installed and nothing is cached on purpose.</p>
+  <p>If you choose <b>Make available offline</b>, the browser also keeps a copy of the app's own files (code, the pose models, voice clips, about 32 MB) in its cache storage, managed by a service worker. It holds no video, images or measurements. Without that button, no service worker is installed. Like any website, your browser may keep the pose model in its normal HTTP cache after you start the app, and also after you point at, focus or press the "Open the app" link, even if you never start it. This is not the Offline mode and holds no video.</p>
   <p>To remove it all, open the app, then use <b>Delete my data</b> in the progress section (this also removes the offline copy, as does <b>Remove offline copy</b> in the Offline mode section). You can also clear this site's data in your browser settings. Nothing is stored in cookies.</p>
 
   <h2 id="biometric">Biometric retention and destruction</h2>

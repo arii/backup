@@ -42,7 +42,7 @@
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
@@ -89,13 +89,21 @@ const CONSENT = { version: 1, at: "2026-01-01T00:00:00.000Z" };
 
 async function newPage(
   browser,
-  { fresh = false, guide = false, consent = true, extra = null, viewport = { width: 1280, height: 900 } } = {},
+  {
+    fresh = false,
+    guide = false,
+    consent = true,
+    staged = false,
+    intro = false,
+    extra = null,
+    viewport = { width: 1280, height: 900 },
+  } = {},
 ) {
   const context = await browser.newContext({ viewport });
   await context.grantPermissions(["camera"]);
   if (!fresh) {
     await context.addInitScript(
-      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore]) => {
+      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, staged, intro]) => {
         try {
           if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
           sessionStorage.setItem("pg-e2e-acked", "1");
@@ -104,13 +112,16 @@ async function newPage(
           s.ackVersion = Math.max(s.ackVersion || 0, ackVersion);
           if (firstRunDone) s.firstRunDone = true; // the first-run guide card has its own check
           if (consentRecord) s.consent = consentRecord;
+          if (firstRunDone) s.setupDone = true; // the setup sequence has its own checks (guide: true)
+          if (!intro) s.breathIntroShown = true; // the first breath check offer has its own checks (intro: true)
+          s.revealAll = !staged; // every panel exists unless a check is about the staged reveal
           if (extraStore) Object.assign(s, extraStore);
           localStorage.setItem("posture-guard:v1", JSON.stringify(s));
         } catch {
           /* storage unavailable */
         }
       },
-      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra],
+      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, staged, intro],
     );
   }
   const page = await context.newPage();
@@ -370,6 +381,7 @@ try {
       ),
     );
     await page.keyboard.press("Escape");
+    await page.click("#reveal-all"); // a fresh profile starts staged; this is the "I want it all" path
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
     check("first run: no page errors", errors.length === 0, errors);
@@ -570,10 +582,28 @@ try {
     );
     await page.click("#first-run-next");
     check(
-      "first run: step 3 is Choose your coach, with voice, breaks and sample buttons",
-      (await page.textContent("#first-run-heading")) === "Choose your coach" &&
-        (await page.locator("#coach-voice, #coach-level, #coach-eye, #coach-move, #coach-moments").count()) === 5 &&
+      "first run: step 3 is Reminder style (stage 5 here, so it follows at once)",
+      (await page.textContent("#first-run-heading")) === "Reminder style" &&
+        (await page.locator("#coach-style, #coach-level, #coach-cues").count()) === 3 &&
+        /Step 3 of 7: Reminder style/.test(await page.textContent("#first-run-count")),
+    );
+    await page.selectOption("#coach-style", "chime_only");
+    check(
+      "first run: the style choice drives the real radio and the stored mode",
+      (await page.evaluate(() => document.querySelector("input[name=mode]:checked").value)) === "chime_only",
+    );
+    await page.click("#first-run-next");
+    check(
+      "first run: step 4 is Voice and sounds with sample buttons",
+      (await page.textContent("#first-run-heading")) === "Voice and sounds" &&
+        (await page.locator("#coach-voice, #coach-pack").count()) === 2 &&
         (await page.locator("#first-run-body button").count()) === 3,
+    );
+    await page.click("#first-run-next");
+    check(
+      "first run: step 5 is Breaks",
+      (await page.textContent("#first-run-heading")) === "Breaks" &&
+        (await page.locator("#coach-eye, #coach-move").count()) === 2,
     );
     await page.selectOption("#coach-move", "45");
     await page.uncheck("#coach-eye");
@@ -581,7 +611,14 @@ try {
       const s = JSON.parse(localStorage.getItem("posture-guard:v1"));
       return { move: s.moveBreakMinutes, eye: s.eyeBreaks };
     });
-    check("first run: coach choices change the real settings", coach.move === 45 && coach.eye === false, coach);
+    check("first run: break choices change the real settings", coach.move === 45 && coach.eye === false, coach);
+    await page.click("#first-run-next");
+    check(
+      "first run: step 6 is Shoulders and breathing, breathing moments off by default",
+      (await page.textContent("#first-run-heading")) === "Shoulders and breathing" &&
+        (await page.locator("#coach-relax, #coach-moments").count()) === 2 &&
+        !(await page.isChecked("#coach-moments")),
+    );
     await page.click("#first-run-next");
     check(
       "first run: last step says to leave the tab open and has Share and a silent test",
@@ -902,6 +939,95 @@ try {
       check("upright person gets no reminder", seen.reminders === "0", seen);
     }
     check("webcam mode has no errors", errors.length === 0, errors);
+    await page.close();
+  }
+  // 3b. Live preview: the video shows within 1.5 s of the click while the model is still downloading.
+  if (y4m) {
+    const { page, errors } = await newPage(browser);
+    let release = () => {};
+    const held = new Promise((r) => {
+      release = r;
+    });
+    await page.route(/pose_landmarker_lite\.task/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-camera");
+    const t0 = Date.now();
+    const shown = await page
+      .waitForFunction(
+        () => {
+          const v = document.getElementById("video");
+          if (!v || v.readyState < 2 || v.paused) return false;
+          const r = v.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !!top && !top.closest("#start-overlay");
+        },
+        null,
+        { timeout: 1500 },
+      )
+      .then(() => Date.now() - t0)
+      .catch(() => -1);
+    const during = await page.evaluate(() => ({
+      classes: document.getElementById("start-overlay").className,
+      status: document.getElementById("start-status").textContent,
+      steps: [...document.querySelectorAll("#load-steps li")].map((li) => `${li.dataset.step}:${li.className}`),
+      marks: window.__loadMarks,
+    }));
+    check("live preview: video visible within 1.5 s of the click while the model route is held", shown >= 0, {
+      shown,
+      ...during,
+    });
+    check(
+      "live preview: card is compact, camera step done, download still active",
+      /compact/.test(during.classes) &&
+        during.steps.includes("camera:done") &&
+        during.steps.includes("download:active") &&
+        /Camera is on\./.test(during.status),
+      during,
+    );
+    release();
+    await page.waitForFunction(
+      () =>
+        getComputedStyle(document.getElementById("start-overlay")).display === "none" ||
+        document.getElementById("start-error").textContent !== "",
+      null,
+      { timeout: 90000 },
+    );
+    const after = await page.evaluate(() => ({
+      source: document.getElementById("source").textContent,
+      marks: window.__loadMarks,
+    }));
+    check(
+      "live preview: after the route is released tracking starts and every load mark is recorded",
+      after.source === "webcam" &&
+        ["click", "streamPlaying", "downloadDone", "warmUpDone"].every((k) => after.marks?.[k] !== undefined),
+      after,
+    );
+    check("live preview has no errors", errors.length === 0, errors);
+    await page.close();
+  }
+  // 3c. At 320 px the page must not stay scrolled past the video once the card turns compact.
+  if (y4m) {
+    const { page } = await newPage(browser, { viewport: { width: 320, height: 640 } });
+    await page.route(/pose_landmarker_lite\.task/, () => {}); // never answered: the model stays loading
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-camera");
+    const inView = await page
+      .waitForFunction(
+        () => {
+          const r = document.getElementById("video").getBoundingClientRect();
+          return (
+            /compact/.test(document.getElementById("start-overlay").className) && r.top >= 0 && r.top < innerHeight / 2
+          );
+        },
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check("live preview: at 320 px the video is in view while the model loads", inView);
     await page.close();
   }
   // 4. No WebGL: a separate browser, since the flag is per launch.
@@ -1455,6 +1581,564 @@ try {
         (await page.locator('footer a[href="https://github.com/sponsors/arii"]').count()) === 1,
     );
     check("landing and privacy pages have no errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4g. Staged reveal (spec progressive-loading, requirement 4): panels appear as tracking settles.
+  {
+    // Visible checkboxes and radios, and visible words in <main> below the stage (the guide card and the manual "Not working?" help excluded).
+    const density = (page) =>
+      page.evaluate(() => {
+        const vis = (e) => {
+          const r = e.getBoundingClientRect();
+          const st = getComputedStyle(e);
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            st.visibility !== "hidden" &&
+            st.display !== "none" &&
+            !e.closest("[hidden]") &&
+            !e.closest("details:not([open]) > :not(summary)")
+          );
+        };
+        const checks = [...document.querySelectorAll("input[type=checkbox],input[type=radio]")].filter(vis).length;
+        let words = 0;
+        const walker = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+          const p = t.parentElement;
+          if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || p.closest(".stage, #first-run, #setup-panel") || !vis(p))
+            continue;
+          words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+        }
+        return { checks, words };
+      });
+    const shown = (page, sel) => page.locator(sel).isVisible();
+    const STAGED_IDS = [
+      "good-pct",
+      "needle-text",
+      "calib-good",
+      "mode",
+      "eye-breaks",
+      "move-minutes",
+      "breathing-moments",
+      "relax-reminders",
+      "specific-cues",
+      "pause-shortcut",
+      "spoken-praise",
+      "voice-pick",
+      "sound-pack",
+      "test-start",
+      "progress-panel",
+      "offline-panel",
+      "breaks-panel",
+      "share-btn",
+      "consent-open",
+    ];
+
+    // Stage 0: before tracking, at most 2 checkboxes and the staged panels are out of the tab order.
+    {
+      const { page, errors } = await newPage(browser, { staged: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.waitForSelector("#start-camera:visible");
+      const d0 = await density(page);
+      check("staged reveal: stage 0 shows at most 2 checkboxes", d0.checks <= 2, d0);
+      check(
+        "staged reveal: stage 0 hides the dashboard panels with the hidden attribute",
+        await page.evaluate(() => [...document.querySelectorAll("[data-stage]")].every((e) => e.hidden)),
+      );
+      const missing = await page.evaluate(
+        (ids) => ids.filter((id) => !document.getElementById(id) && !document.getElementsByName(id).length),
+        STAGED_IDS,
+      );
+      check("staged reveal: hidden controls stay in the DOM", missing.length === 0, missing);
+      check(
+        "staged reveal: 'Show all settings' is offered before tracking",
+        (await page.locator("#reveal-all").textContent()).trim() === "Show all settings",
+      );
+      await page.screenshot({ path: path.join(outDir, "reveal-stage0.png") });
+      check("staged reveal: stage 0 has no errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Stage 1 to 2 on a clock 10x faster (settle after about 1 s), first-run guide skipped.
+    {
+      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      await page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.querySelector("#good-pct").closest("[data-stage]").hidden, null, {
+        timeout: 5000,
+      });
+      check("staged reveal: 'This session' appears with the first scored frame", true);
+      await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
+        timeout: 8000,
+      });
+      const note = await page.locator("#reveal-note").textContent();
+      check("staged reveal: stage 2 is announced once in #reveal-note", /Added: .*posture needle/.test(note), note);
+      check(
+        "staged reveal: stage 2 does not show reminders yet",
+        !(await shown(page, "#breaks-panel")) && !(await shown(page, "#progress-panel")),
+      );
+      // The guide card is its own thing (spec task 4 moves it); measure what stage 2 adds.
+      const skip = page.locator("#first-run-skip");
+      if (await skip.isVisible()) await skip.click();
+      const d2 = await density(page);
+      check("staged reveal: at most 2 checkboxes at stage 2", d2.checks <= 2, d2);
+      check("staged reveal: at most 150 visible words below the stage at stage 2", d2.words <= 150, d2);
+      await page.screenshot({ path: path.join(outDir, "reveal-stage2.png") });
+      check("staged reveal: no errors through stage 2", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // clockScale=600: every stage within seconds; the stage never goes back; focus stays put.
+    {
+      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
+      check(
+        "staged reveal: with ?clockScale=600 the settings panels reveal in the demo",
+        (await shown(page, "#breaks-panel")) && (await shown(page, "#test-start")),
+      );
+      check(
+        "staged reveal: the settings groups stay closed",
+        await page.evaluate(() => [...document.querySelectorAll("details[data-group]")].every((d) => !d.open)),
+      );
+      check(
+        "staged reveal: a reveal does not move focus",
+        await page.evaluate(() => !document.getElementById("reveal-note").contains(document.activeElement)),
+      );
+      // Stage 3 and 4 panels are checked first; stage 5 (progress, offline) waits for a later session.
+      check("staged reveal: progress and offline wait for a later session", !(await shown(page, "#progress-panel")));
+      check("staged reveal: no errors with a fast clock", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Show all settings: everything now, persisted, reversible.
+    {
+      const { page, errors } = await newPage(browser, { staged: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#reveal-all");
+      const all = await page.evaluate(() => ({
+        hiddenLeft: [...document.querySelectorAll("[data-stage]")].filter((e) => e.hidden).length,
+        stored: JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll,
+        label: document.getElementById("reveal-all").textContent.trim(),
+        pressed: document.getElementById("reveal-all").getAttribute("aria-pressed"),
+        groupsOpen: [...document.querySelectorAll("details[data-group]")].every((d) => d.open),
+      }));
+      check(
+        "staged reveal: Show all settings reveals every panel and persists",
+        all.hiddenLeft === 0 && all.stored === true && all.label === "Simplify the page" && all.pressed === "true",
+        all,
+      );
+      check("staged reveal: Show all settings opens the settings groups", all.groupsOpen, all);
+      await page.setViewportSize({ width: 320, height: 640 });
+      check(
+        "staged reveal: no horizontal scroll at 320 px with everything shown",
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      );
+      await page.screenshot({ path: path.join(outDir, "reveal-all-320.png"), fullPage: true });
+      await page.reload();
+      check("staged reveal: Show all settings survives a reload", await shown(page, "#breaks-panel"));
+      await page.click("#reveal-all");
+      check(
+        "staged reveal: Simplify the page hides the panels again",
+        !(await shown(page, "#breaks-panel")) &&
+          (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll)) === false,
+      );
+      check("staged reveal: show all has no errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // 320 px at stage 0 and after the demo has revealed the stages.
+    {
+      const { page } = await newPage(browser, { staged: true, viewport: { width: 320, height: 640 } });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+      check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
+      check("staged reveal: no horizontal scroll at 320 px, stage 4", await fits());
+      await page.screenshot({ path: path.join(outDir, "reveal-320-stage4.png"), fullPage: true });
+      await page.close();
+    }
+  }
+
+  // 4g. Progressive setup and the breath check intro (.kiro/specs/progressive-loading, tasks 4 and 5).
+  {
+    const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}"));
+    const visible = (page, sel) => page.locator(sel).isVisible();
+
+    // Skip all keeps the defaults, records no consent and turns nothing on.
+    {
+      const { page, errors } = await newPage(browser, { guide: true, consent: false });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      check(
+        "setup: the card opens by itself, without taking focus",
+        (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
+      );
+      check(
+        "setup: every card has Skip this step and Skip all, use defaults",
+        (await visible(page, "#first-run-skip")) &&
+          (await page.textContent("#first-run-skip-all")).trim() === "Skip all, use defaults",
+      );
+      const before = await stored(page);
+      await page.click("#first-run-skip-all");
+      const after = await stored(page);
+      check(
+        "setup: Skip all closes the card and stores setupDone",
+        !(await visible(page, "#first-run")) && after.setupDone === true,
+        after,
+      );
+      check(
+        "setup: Skip all records no consent and enables nothing that is off by default",
+        after.consent === undefined &&
+          !after.breathingMoments &&
+          !after.spokenPraise &&
+          !(await page.isChecked("#breathing-moments")) &&
+          !(await page.isChecked("#relax-reminders")) &&
+          !(await page.isChecked("#spoken-praise")) &&
+          before.eyeBreaks === after.eyeBreaks &&
+          before.moveBreakMinutes === after.moveBreakMinutes,
+        after,
+      );
+      check(
+        "setup: focus goes to the status badge after the user pressed Skip all",
+        (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
+      );
+      check(
+        "setup: skipped steps are listed and the header Set up button reopens the first one",
+        after.setup.skipped.includes("framing") && (await visible(page, "#setup-btn")),
+        after.setup,
+      );
+      await page.click("#setup-btn");
+      check(
+        "setup: Set up reopens the first skipped step and moves focus to its heading",
+        (await page.textContent("#first-run-heading")) === "Check your framing" &&
+          (await page.evaluate(() => document.activeElement?.id)) === "first-run-heading",
+      );
+      await page.click("#first-run-skip-all");
+      await page.reload();
+      await page.click("#start-demo");
+      await page.waitForTimeout(1500);
+      check("setup: after Skip all the card does not return on reload", !(await visible(page, "#first-run")));
+      page.once("dialog", (d) => d.accept());
+      await page.click("#progress-delete");
+      await page.waitForLoadState("load");
+      await page.waitForTimeout(500);
+      const gone = await stored(page);
+      check(
+        "setup: Delete my data removes setup progress, water and the breath intro flags",
+        gone.setup === undefined &&
+          gone.setupDone === undefined &&
+          gone.water === undefined &&
+          gone.breathIntroShown === undefined,
+        gone,
+      );
+      check("setup: skip all has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Setup waits while paused or in a silent test, then comes back.
+    {
+      const { page, errors } = await newPage(browser, { guide: true });
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      await page.keyboard.press("p");
+      await page.waitForTimeout(300);
+      check("setup: waits while paused", !(await visible(page, "#first-run")));
+      await page.keyboard.press("p");
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 5000 });
+      check("setup: comes back after the pause", true);
+      await page.click("#test-start");
+      await page.waitForTimeout(500);
+      check("setup: waits during a silent test", !(await visible(page, "#first-run")));
+      check("setup: waiting has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // The first breath check is offered after tracking has settled and a minute of good posture.
+    const introPage = async (opts = {}) => {
+      const made = await newPage(browser, { consent: false, intro: true, ...opts });
+      await made.page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
+      await made.page.click("#start-demo");
+      await made.page.waitForFunction(
+        () => document.getElementById("prompt-card").dataset.prompt === "breath_intro",
+        null,
+        { timeout: 40000 },
+      );
+      return made;
+    };
+    {
+      const { page, errors } = await introPage();
+      const text = await page.textContent("#prompt-text");
+      check(
+        "breath intro: offered well inside the 5 minute quiet start, naming what it looks at and that consent comes first",
+        /30 second breath check/.test(text) && /shoulders/.test(text) && /agree/.test(text),
+        text,
+      );
+      check(
+        "breath intro: nothing starts and no consent dialog opens by itself",
+        !(await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
+          !/Breathe in/.test(await page.textContent("#relax-status")),
+      );
+      check(
+        "breath intro: the card is a polite status region",
+        (await page.getAttribute("#prompt-text", "role")) === "status",
+      );
+      await page.click("#prompt-notnow");
+      const st = await stored(page);
+      check(
+        "breath intro: Not now stores no consent and leaves the breath features off",
+        st.consent === undefined &&
+          !(await visible(page, "#prompt-card")) &&
+          !st.breathIntroShown &&
+          !st.breathingMoments,
+        st,
+      );
+      check("breath intro: Not now has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      const { page, errors } = await introPage();
+      await page.click("#prompt-action");
+      check(
+        "breath intro: Try it opens the consent dialog and does not start the check",
+        (await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
+          !/Breathe in/.test(await page.textContent("#relax-status")),
+      );
+      await page.click("#consent-cancel");
+      const st = await stored(page);
+      check(
+        "breath intro: declining stores nothing and does not run the check",
+        st.consent === undefined && !st.breathIntroShown && !/Breathe in/.test(await page.textContent("#relax-status")),
+        st,
+      );
+      check("breath intro: declining has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      const { page, errors } = await introPage();
+      await page.click("#prompt-action");
+      await page.check("#consent-check");
+      await page.click("#consent-agree");
+      const st = await stored(page);
+      check(
+        "breath intro: accepting records consent and runs the breath check once",
+        st.consent?.version === 1 &&
+          st.breathIntroShown === true &&
+          /Breathe in slowly/.test(await page.textContent("#relax-status")),
+        st,
+      );
+      check("breath intro: accepting has no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+    {
+      // With consent already given the offer still comes through the scheduler and starts only after Try it.
+      const { page } = await introPage({ consent: true });
+      check(
+        "breath intro: with consent the offer carries no agree note",
+        !/agree/.test(await page.textContent("#prompt-text")),
+      );
+      await page.click("#prompt-action");
+      check(
+        "breath intro: Try it runs the check when consent exists",
+        /Breathe in slowly/.test(await page.textContent("#relax-status")) && !(await visible(page, "#consent-dialog")),
+      );
+      await page.close();
+    }
+  }
+
+  // 4g. Intent prefetch (spec progressive-loading task 6): the landing page fetches the model
+  // and WASM only after pointer intent, never under Save-Data, and the app then reuses them.
+  {
+    const vendorHits = (urls) => {
+      const n = {};
+      for (const u of urls) n[u] = (n[u] || 0) + 1;
+      return n;
+    };
+    const fetched = [];
+    const cached = [];
+    const track = (page) =>
+      page.on("request", (r) => {
+        if (/\/app\/vendor\/(pose_landmarker_lite\.task|wasm\/vision_wasm)/.test(r.url())) fetched.push(r.url());
+      });
+    {
+      // A persistent profile has a disk cache; a plain test context only keeps a small in-memory one.
+      const profileDir = path.join(outDir, "prefetch-profile");
+      rmSync(profileDir, { recursive: true, force: true }); // a stale disk cache would hide the landing download
+      const context = await chromium.launchPersistentContext(profileDir, {
+        permissions: ["camera"],
+        args,
+      });
+      await context.addInitScript(() => {
+        try {
+          const s = JSON.parse(localStorage.getItem("posture-guard:v1")) || {};
+          Object.assign(s, {
+            onboarded: 1,
+            ackVersion: 1,
+            firstRunDone: true,
+            setupDone: true,
+            breathIntroShown: true,
+          });
+          localStorage.setItem("posture-guard:v1", JSON.stringify(s));
+        } catch {
+          /* storage unavailable */
+        }
+      });
+      const page = await context.newPage();
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(String(e)));
+      track(page);
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Network.enable");
+      const byId = new Map();
+      cdp.on("Network.requestWillBeSent", (e) => byId.set(e.requestId, e.request.url));
+      cdp.on("Network.requestServedFromCache", (e) => cached.push(byId.get(e.requestId)));
+      // Chromium reports a disk cache hit on the response, not always as a separate event.
+      cdp.on("Network.responseReceived", (e) => {
+        if (e.response.fromDiskCache || e.response.fromServiceWorker) cached.push(byId.get(e.requestId));
+      });
+      await page.goto(`${base}${bust}`);
+      await page.waitForTimeout(1500);
+      check("prefetch: nothing is fetched on landing page load or idle", fetched.length === 0, fetched);
+      await page.hover('a[href="./app/"] >> nth=0');
+      // Let both downloads finish; navigating away would abort them before they reach the cache.
+      await page
+        .waitForFunction(
+          () => {
+            const done = (re) =>
+              performance.getEntriesByType("resource").some((e) => re.test(e.name) && e.responseEnd > 0);
+            return done(/pose_landmarker_lite\.task$/) && done(/vision_wasm.*\.wasm$/);
+          },
+          null,
+          { timeout: 60000 },
+        )
+        .catch(() => {});
+      await page.waitForTimeout(300);
+      check(
+        "prefetch: hovering the app link fetches the model and one WASM file",
+        fetched.some((u) => u.endsWith("pose_landmarker_lite.task")) &&
+          fetched.filter((u) => /vision_wasm.*\.wasm$/.test(u)).length === 1,
+        fetched,
+      );
+      if (y4m) {
+        await page.goto(`${base}app/${bust}`);
+        await page.click("#start-camera");
+        await page
+          .waitForFunction(() => window.__loadMarks && window.__loadMarks.warmupDone != null, null, { timeout: 60000 })
+          .catch(() => {});
+        const hits = vendorHits(fetched.filter((u) => /\.(task|wasm)$/.test(u)));
+        for (const u of Object.keys(hits)) hits[u] -= cached.filter((c) => c === u).length;
+        check(
+          "prefetch: one network request per model and WASM file across landing then app (the app reuses the cache)",
+          Object.keys(hits).length >= 2 && Object.values(hits).every((n) => n === 1),
+          hits,
+        );
+      }
+      check("prefetch: no page errors", errors.length === 0, errors);
+      await context.close();
+    }
+    {
+      fetched.length = 0;
+      const { page } = await newPage(browser);
+      track(page);
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, "connection", { value: { saveData: true }, configurable: true });
+      });
+      await page.goto(`${base}${bust}`);
+      await page.hover('a[href="./app/"] >> nth=0');
+      await page.focus('a[href="./app/"] >> nth=0');
+      await page.waitForTimeout(600);
+      check("prefetch: skipped under Save-Data", fetched.length === 0, fetched);
+      await page.close();
+    }
+  }
+
+  // 4h. "Take a break" menu (spec task 7): keyboard, 320 px, guided demo, water count.
+  {
+    const { page, errors } = await newPage(browser, { viewport: { width: 320, height: 640 } });
+    page.on("dialog", (d) => d.accept());
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    await page.waitForTimeout(1500);
+    const ids = ["break-stretch", "breathe-with-me", "breath-check", "break-eye", "break-move", "break-water"];
+    check(
+      "break menu: lists the six entries as buttons",
+      await page.evaluate(
+        (ids) =>
+          ids.every(
+            (id) =>
+              document.getElementById(id)?.tagName === "BUTTON" && !document.getElementById(id).closest("[hidden]"),
+          ),
+        ids,
+      ),
+    );
+    check(
+      "break menu: fits 320 px",
+      await page.evaluate(
+        (ids) =>
+          document.documentElement.scrollWidth <= window.innerWidth &&
+          ids.every((id) => document.getElementById(id).getBoundingClientRect().right <= window.innerWidth),
+        ids,
+      ),
+    );
+    await page.focus("#break-stretch");
+    const order = [];
+    for (let i = 0; i < ids.length; i++) {
+      order.push(await page.evaluate(() => document.activeElement.id));
+      await page.keyboard.press("Tab");
+    }
+    check("break menu: reachable by keyboard in order", order.join() === ids.join(), order);
+    await page.screenshot({ path: path.join(outDir, "break-menu-320.png"), fullPage: true });
+    await page.focus("#break-stretch");
+    await page.keyboard.press("Enter");
+    check(
+      "break menu: Stretch shows every step at once under reduced motion",
+      await page.evaluate(
+        () =>
+          document.getElementById("prompt-card").classList.contains("show") &&
+          /1\. .*\n2\. .*\n3\. /s.test(document.getElementById("prompt-text").textContent),
+      ),
+    );
+    await page.click("#prompt-notnow");
+    // Done on the static water card must not log a drink (and must not reset the reminder).
+    await page.click("#break-water");
+    await page.click("#prompt-done");
+    check(
+      "break menu: Done on the water card closes it without logging a drink",
+      await page.evaluate(
+        () =>
+          !document.getElementById("prompt-card").classList.contains("show") &&
+          !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water,
+      ),
+    );
+    await page.click("#break-water");
+    await page.click("#prompt-action");
+    await page.click("#break-water");
+    await page.click("#prompt-action");
+    const count = () => page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).water);
+    const water = await count();
+    const day = new Date().toISOString().slice(0, 10);
+    check("break menu: I drank stores a daily count", water?.[day] === 2, water);
+    check(
+      "break menu: the count shows in Your progress",
+      /2 today/.test(await page.textContent("#progress-water")),
+      await page.textContent("#progress-water"),
+    );
+    await page.reload();
+    check("break menu: the count persists across a reload", (await count())?.[day] === 2);
+    await page.click("#progress-delete");
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(500);
+    check(
+      "break menu: Delete my data clears the water count",
+      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water),
+    );
+    check("break menu: no page errors", errors.length === 0, errors);
     await page.close();
   }
 

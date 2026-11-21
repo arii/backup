@@ -409,7 +409,7 @@
       <span class="dot" aria-hidden="true"></span>
       <p>
         <b>Your camera feed is analyzed in this tab and never uploaded or saved.</b>
-        <span class="muted">The pose model and its runtime are served from this site, and GitHub hosts the site, so GitHub sees your IP address like any website. No other server is contacted. Settings, calibration, scores, usage counts for the sponsor prompt (kept locally, never sent) and any sounds you upload stay in your browser's local storage until you delete them. The shoulder and breathing features ask for your OK first. <a href="privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a>. If you opt in to offline mode, the app's own files are also cached on your device (no video, ever) until you remove them. <a href="privacy.html">Read the full privacy page</a>.</span>
+        <span class="muted">The pose model and its runtime are served from this site, and GitHub hosts the site, so GitHub sees your IP address like any website. No other server is contacted. Settings, calibration, scores, usage counts for the sponsor prompt (kept locally, never sent) and any sounds you upload stay in your browser's local storage until you delete them. Like any website, your browser may keep the pose model in its normal HTTP cache after you start the app, and also after you point at, focus or press the "Open the app" link, even if you never start it. This is not the Offline mode and holds no video. The shoulder and breathing features ask for your OK first. <a href="privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a>. If you opt in to offline mode, the app's own files are also cached on your device (no video, ever) until you remove them. <a href="privacy.html">Read the full privacy page</a>.</span>
       </p>
     </div>
   </section>
@@ -426,6 +426,7 @@
   <a href="https://github.com/arii/posture-guard/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
 </footer>
 
+<script src="prefetch.js" defer></script>
 <script>
 // Same probe as webglCanvas() in app/app.js: warn before the visitor clicks in.
 (function () {

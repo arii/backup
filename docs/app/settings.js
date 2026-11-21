@@ -6,10 +6,10 @@
 // defaults for new users, the optional single-key pause shortcut (WCAG 2.1.4
 // Character Key Shortcuts) and the camera error wording.
 
-import { normalizeMoveMinutes } from "./breaks.js";
+import { normalizeMoveMinutes, normalizeReminderMinutes } from "./breaks.js";
 
 /** Prompt ids a user can silence with "Don't show this again". */
-const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "breathing"]);
+const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "stretch", "water", "breathing"]);
 
 /** Stored choices win; anything never stored gets the default for new users. */
 export function resolveSettings(store) {
@@ -24,6 +24,9 @@ export function resolveSettings(store) {
     // breathing moments opt in, spoken cues in "Breathe with me" opt in.
     eyeBreaks: s.eyeBreaks !== false,
     moveBreakMinutes: normalizeMoveMinutes(s.moveBreakMinutes),
+    // Stretch and water reminders are off until chosen (0, 30, 45, 60 or 90 minutes).
+    stretchMinutes: normalizeReminderMinutes(s.stretchMinutes),
+    waterMinutes: normalizeReminderMinutes(s.waterMinutes),
     breathingMoments: s.breathingMoments === true,
     breatheCues: s.breatheCues === true,
     // "Don't show this again" flags, only for known prompts.

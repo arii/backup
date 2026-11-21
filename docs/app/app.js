@@ -40,6 +40,7 @@ import {
   shouldShowOnboarding,
 } from "./onboarding.js";
 import { exportJson, summarize } from "./progress.js";
+import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText } from "./wellness.js";
 import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
@@ -80,7 +81,18 @@ import {
   shouldOfferSponsor,
   sponsorText,
 } from "./sponsor.js";
-import { COACH_INTRO, DONE_INTRO } from "./onboarding.js";
+import {
+  completeStep,
+  nextSetupStep,
+  ONBOARDING_VERSION,
+  reopenSetupStep,
+  SETUP_STEPS,
+  setupProgress,
+  skipAll,
+  skipStep,
+  viewSetupStep,
+} from "./onboarding.js";
+import { RevealStages, STAGES } from "./reveal.js";
 import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
@@ -108,6 +120,7 @@ function loadStore() {
   }
 }
 const store = loadStore();
+if (store.firstRunDone) store.setupDone = true; // set up before the sequence existed: nothing to show again
 let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
   if (deleted) return;
@@ -633,6 +646,7 @@ $("consent-withdraw").addEventListener("click", () => {
 const bracing = new BracingMonitor();
 const breath = new BreathCheck();
 const AUTO_BREATH_S = 20 * 60; // coached good-posture time between automatic checks
+const BREATH_INTRO_GOOD_S = 60; // good posture needed before the first breath check is offered
 let goodSinceBreath = 0;
 let relaxLastT = null;
 Object.assign(settings, resolveSettings(store)); // relaxReminders and pauseShortcut: on for new users, stored choices kept
@@ -714,7 +728,16 @@ function relaxStep(landmarks, state, now) {
 }
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
-const NEEDS_TRACKING = ["breath-check", "breathe-with-me", "calib-good", "calib-bad"];
+const NEEDS_TRACKING = [
+  "breath-check",
+  "breathe-with-me",
+  "break-stretch",
+  "break-eye",
+  "break-move",
+  "break-water",
+  "calib-good",
+  "calib-bad",
+];
 const READY_TITLE = {
   "breath-check": "Breathe in: if your shoulders rise, you are bracing",
   "breathe-with-me": "One minute of easy breathing, then a breath check",
@@ -759,15 +782,25 @@ const CLOCK_SCALE = (() => {
   const n = Number(new URLSearchParams(location.search).get("clockScale"));
   return Number.isFinite(n) && n >= 1 && n <= 1000 ? n : 1;
 })();
-const DISMISS_KEY = { eye: "eye", move: "move", breathing: "breathing", offer: "breathing" };
+const DISMISS_KEY = {
+  eye: "eye",
+  move: "move",
+  stretch: "stretch",
+  water: "water",
+  breathing: "breathing",
+  offer: "breathing",
+};
 const dismissed = settings.promptsDismissed;
 
 function promptEnabled(id) {
   if (dismissed[DISMISS_KEY[id]]) return false;
   if (id === "eye") return settings.eyeBreaks;
   if (id === "move") return settings.moveBreakMinutes > 0;
+  if (id === "stretch") return settings.stretchMinutes > 0;
+  if (id === "water") return settings.waterMinutes > 0;
   if (id === "breathing") return settings.breathingMoments && hasConsent(store);
   if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
+  if (id === "breath_intro") return settings.relaxReminders && !store.breathIntroShown; // asks for consent itself
   return true;
 }
 
@@ -784,6 +817,8 @@ let card = null; // the prompt on screen: { id, text, t, finished }
 function renderPromptSettings() {
   $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
   $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
+  $("stretch-minutes").value = String(dismissed.stretch ? 0 : settings.stretchMinutes);
+  $("water-minutes").value = String(dismissed.water ? 0 : settings.waterMinutes);
   $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
   $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
   $("breathe-cues").checked = settings.breatheCues;
@@ -792,6 +827,8 @@ function renderPromptSettings() {
 function savePromptSettings() {
   store.eyeBreaks = settings.eyeBreaks;
   store.moveBreakMinutes = settings.moveBreakMinutes;
+  store.stretchMinutes = settings.stretchMinutes;
+  store.waterMinutes = settings.waterMinutes;
   store.breathingMoments = settings.breathingMoments;
   store.breatheCues = settings.breatheCues;
   store.promptsDismissed = { ...dismissed };
@@ -808,6 +845,18 @@ $("move-minutes").addEventListener("change", (e) => {
   breaks.setMoveMinutes(e.target.value);
   settings.moveBreakMinutes = breaks.moveMinutes;
   if (settings.moveBreakMinutes > 0) delete dismissed.move;
+  savePromptSettings();
+});
+$("stretch-minutes").addEventListener("change", (e) => {
+  breaks.setStretchMinutes(e.target.value);
+  settings.stretchMinutes = breaks.stretchMinutes;
+  if (settings.stretchMinutes > 0) delete dismissed.stretch;
+  savePromptSettings();
+});
+$("water-minutes").addEventListener("change", (e) => {
+  breaks.setWaterMinutes(e.target.value);
+  settings.waterMinutes = breaks.waterMinutes;
+  if (settings.waterMinutes > 0) delete dismissed.water;
   savePromptSettings();
 });
 $("breathing-moments").addEventListener("change", (e) => {
@@ -848,8 +897,12 @@ function sayPrompt(line) {
 const CARD_UI = {
   eye: { bar: true, snooze: true, never: true },
   move: { action: true, done: true, snooze: true, never: true },
+  stretch: { action: true, actionLabel: "Show me", done: true, snooze: true, never: true },
+  water: { action: true, actionLabel: "I drank", snooze: true, never: true },
+  demo: { bar: true, stop: true },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
+  breath_intro: { action: true, actionLabel: "Try it" },
   guide: { bar: true, stop: true },
 };
 
@@ -857,13 +910,16 @@ function renderCard() {
   const el = $("prompt-card");
   if (!card) {
     el.classList.remove("show");
+    $("prompt-figure").hidden = true;
     el.dataset.prompt = "";
     return;
   }
-  const ui = CARD_UI[card.id];
+  const ui = card.ui || CARD_UI[card.id];
+  if (card.id !== "demo") $("prompt-figure").hidden = true;
   $("prompt-text").textContent = card.text;
   $("prompt-bar").hidden = !ui.bar;
   $("prompt-action").hidden = !ui.action;
+  $("prompt-action").textContent = ui.actionLabel || "Breathe with me";
   $("prompt-done").hidden = !ui.done || card.finished;
   $("prompt-snooze").hidden = !ui.snooze || card.finished;
   $("prompt-never").hidden = !ui.never || card.finished;
@@ -888,6 +944,11 @@ function hideCard() {
 function endCard(how) {
   if (card && card.id === "guide") {
     guide.cancel();
+    hideCard();
+    return;
+  }
+  if (card && card.id === "demo") {
+    prompts.dismiss(pclock, "done");
     hideCard();
     return;
   }
@@ -918,18 +979,47 @@ function showPrompt(item) {
     startBreathCheck();
     return;
   }
+  if (item.id === "breath_intro") {
+    showBreathIntro();
+    return;
+  }
   const text =
-    item.id === "eye"
-      ? BREAK_LINES.eye
-      : item.id === "move"
-        ? BREAK_LINES.move
-        : item.id === "offer"
-          ? BREATHE_LINES.offer
-          : moments.take(pclock);
+    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water"
+      ? BREAK_LINES[item.id]
+      : item.id === "offer"
+        ? BREATHE_LINES.offer
+        : moments.take(pclock);
   card = { id: item.id, text, t: 0, finished: false };
   setCardFill(0);
   renderCard();
   if (item.id !== "offer") sayPrompt(text);
+}
+
+/** The first breath check offer. Asked at most 3 times; it never starts a check without consent. */
+function showBreathIntro() {
+  if (lowAccuracy) {
+    prompts.dismiss(pclock, "done"); // the fallback model has no reliable shoulder signal
+    return;
+  }
+  store.breathIntroOffers = (store.breathIntroOffers || 0) + 1;
+  if (store.breathIntroOffers >= 3) store.breathIntroShown = true; // the last time it asks
+  save();
+  const note = hasConsent(store) ? "" : " You will be asked to agree before anything is measured.";
+  card = { id: "breath_intro", text: RELAX_LINES.introOffer + note, t: 0, finished: false };
+  setCardFill(0);
+  renderCard();
+  sayPrompt(RELAX_LINES.introOffer);
+}
+
+function acceptBreathIntro() {
+  endCard("snooze"); // if the consent dialog is declined, the offer rests for 10 minutes
+  const go = () => {
+    store.breathIntroShown = true;
+    save();
+    startBreathCheck();
+  };
+  if (hasConsent(store)) go();
+  else requireConsent(go);
 }
 
 function startGuide() {
@@ -963,6 +1053,20 @@ function guideStep() {
   }
 }
 
+/** The first breath check offer: tracking has settled, posture was good for a minute, no setup card is open. */
+function breathIntroDue() {
+  return (
+    pstreak >= BREATH_INTRO_GOOD_S &&
+    currentStage() >= STAGES.settled &&
+    !firstRun.open &&
+    !lowAccuracy &&
+    !card &&
+    !breath.active &&
+    !guide.active &&
+    !store.breathIntroShown
+  );
+}
+
 /** Runs every tracked frame (real `now` in seconds). */
 function promptStep(state, now) {
   if (test || practice || paused) {
@@ -991,6 +1095,7 @@ function promptStep(state, now) {
   ) {
     prompts.enqueue("share", pclock);
   }
+  if (breathIntroDue()) prompts.enqueue("breath_intro", pclock);
   for (const kind of breaks.due(present)) prompts.enqueue(kind, pclock);
   if (settings.breathingMoments && moments.due(pstreak, pclock)) prompts.enqueue("breathing", pclock);
   if (sponsorCard) {
@@ -1009,6 +1114,11 @@ function promptStep(state, now) {
         sayPrompt(BREAK_LINES.eyeDone);
       }
       if (card.finished && card.t >= BREAKS.eye_look_s + 3) endCard("done");
+    } else if (card.id === "demo" && !card.static) {
+      demoStep();
+      if (card.finished && card.t >= demoLength(card.kind) + 8) endCard("done");
+    } else if (card.id === "demo") {
+      if (card.t >= 120) endCard("done");
     } else if (card.t >= 60) {
       endCard("notnow"); // ignoring a prompt counts as "Not now"
     }
@@ -1022,15 +1132,109 @@ function promptStep(state, now) {
   }
 }
 
-$("prompt-action").addEventListener("click", () => startGuide());
+$("prompt-action").addEventListener("click", () => {
+  if (card && card.id === "breath_intro") acceptBreathIntro();
+  else if (card && (card.id === "water" || card.act === "drink")) drank();
+  else if (card && card.id === "stretch") {
+    endCard("done");
+    startDemo("stretch");
+  } else startGuide();
+});
 $("prompt-done").addEventListener("click", () => {
-  if (card && card.id === "move") breaks.taken("move");
+  if (card && (card.id === "move" || card.id === "stretch")) breaks.taken(card.id);
+  // Water resets only through "I drank" (drank()), never through Done.
+  if (card && card.static && card.kind !== "water") breaks.taken(card.kind);
   endCard("done");
 });
 $("prompt-snooze").addEventListener("click", () => endCard("snooze"));
 $("prompt-notnow").addEventListener("click", () => endCard("notnow"));
 $("prompt-never").addEventListener("click", () => endCard("never"));
 $("breathe-with-me").addEventListener("click", startGuide);
+
+// -- "Take a break" menu: guided demos and the water count -----------------------
+// Demos are text steps with a small outline, 10 to 20 s, no camera analysis.
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+function showFigure(pose) {
+  const fig = $("prompt-figure");
+  fig.hidden = !pose;
+  if (pose && !reducedMotion.matches) fig.dataset.pose = pose;
+  else if (pose) fig.dataset.pose = pose === "sip" ? "cup" : "";
+}
+
+function startDemo(kind) {
+  if (card) endCard("done");
+  const still = reducedMotion.matches;
+  const finalAct = kind === "water" ? "drink" : "";
+  card = { id: "demo", kind, text: "", t: 0, finished: false, act: finalAct, ui: { bar: !still, stop: true } };
+  if (still) {
+    // Reduced motion: every step at once, no timer, the person ends it.
+    card.text = demoStaticText(kind);
+    card.finished = false;
+    card.ui = { done: true, action: kind === "water", actionLabel: "I drank" };
+    card.static = true;
+  }
+  setCardFill(0);
+  renderCard();
+  showFigure(still ? "" : demoAt(kind, 0).pose);
+  if (!still) demoStep(true);
+}
+
+function demoStep(first = false) {
+  const d = demoAt(card.kind, card.t);
+  if (d.index === card.demoIndex && !first && !d.done) {
+    setCardFill(card.t / demoLength(card.kind));
+    return;
+  }
+  card.demoIndex = d.index;
+  setCardFill(Math.min(1, card.t / demoLength(card.kind)));
+  if (d.done) {
+    if (!card.finished) {
+      card.finished = true;
+      if (card.kind !== "water") breaks.taken(card.kind);
+      if (DEMO_DONE[card.kind]) {
+        card.text = DEMO_DONE[card.kind];
+        sayPrompt(card.text);
+      }
+      if (card.kind === "water") {
+        card.ui = { action: true, actionLabel: "I drank" };
+      }
+      renderCard();
+      showFigure("");
+    }
+    return;
+  }
+  card.text = d.line;
+  showFigure(d.pose);
+  renderCard();
+  sayPrompt(d.line);
+}
+
+function openBreak(kind) {
+  if (test || practice || paused || breath.active || guide.active || !loopsStarted) return;
+  if (kind === "eye") {
+    if (card) endCard("done");
+    card = { id: "eye", text: BREAK_LINES.eye, t: 0, finished: false };
+    setCardFill(0);
+    renderCard();
+    sayPrompt(BREAK_LINES.eye);
+    return;
+  }
+  ensureAudio();
+  startDemo(kind);
+}
+
+function drank() {
+  const n = addWater(store, todayKey());
+  breaks.taken("water");
+  save();
+  renderProgress();
+  $("break-menu-note").textContent = `Added. ${n} ${n === 1 ? "drink" : "drinks"} today.`;
+  endCard("done");
+}
+
+for (const kind of ["stretch", "eye", "move", "water"])
+  $(`break-${kind}`).addEventListener("click", () => openBreak(kind));
 
 // -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
 // A small non-modal card in the session panel. Gating is in sponsor.js; the
@@ -1490,8 +1694,21 @@ function renderMiniViews(landmarks, color, needle) {
   }
 }
 
+// -- load marks -----------------------------------------------------------------
+// performance.now() at each start-up milestone, kept for the bug-report
+// diagnostics and for e2e (window.__loadMarks). Only the first hit counts.
+const loadMarks = {};
+window.__loadMarks = loadMarks;
+function markLoad(name) {
+  if (loadMarks.click !== undefined && loadMarks[name] === undefined) loadMarks[name] = Math.round(performance.now());
+}
+
 function render(out, landmarks) {
   const { result, transition, needle, cue, hold } = out;
+  if (result.kind === "scored") {
+    markLoad("firstScored");
+    if (transition.state !== State.NO_PERSON) markLoad("settled");
+  }
   renderFix(transition.state, result, cue, hold);
   if (practice) renderPractice(result);
   const badge = $("state-badge");
@@ -1589,6 +1806,7 @@ function setPaused(on) {
     breath.cancel();
     cancelPrompts();
     stopSpeech();
+    if (firstRun.open) $("first-run").hidden = true; // the setup card waits; the next frame after Resume shows it again
     $("banner").classList.remove("show");
     const badge = $("state-badge");
     badge.textContent = "paused";
@@ -1628,6 +1846,93 @@ document.addEventListener("keydown", (e) => {
   if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!paused);
 });
 
+// -- staged reveal ----------------------------------------------------------------
+// Panels carry data-stage="N" in index.html and start hidden (the hidden attribute, so
+// they leave the tab order). RevealStages (reveal.js) decides the stage from tracking
+// time on the prompt clock, so ?clockScale speeds it up too. A stage never goes back
+// down; "Simplify the page" only hides what is not yet due. Every element stays in the
+// DOM, so settings renderers and tests keep working on hidden panels.
+
+const REVEAL_ADDED = {
+  1: "this session",
+  2: "posture needle",
+  3: "reminders and sounds, calibration",
+  4: "breaks, breathing, silent test",
+  5: "progress, offline mode, share",
+};
+const reveal = (() => {
+  const returning = Number(store.onboarded) >= ONBOARDING_VERSION && !!store.firstRunDone;
+  const sessions = Number(store.usage?.sessions) || 0;
+  return new RevealStages({ returning, seasoned: returning && sessions >= 2 });
+})();
+const pinned = new Set(); // panels opened by hand (e.g. the first-run guide points at the test): never hidden again
+let shownStage = 0;
+let revealNoteTimer = null;
+
+function revealNote(text) {
+  const el = $("reveal-note");
+  el.textContent = text;
+  clearTimeout(revealNoteTimer);
+  revealNoteTimer = setTimeout(() => {
+    el.textContent = "";
+  }, 6000);
+}
+
+function currentStage() {
+  return store.revealAll ? STAGES.returning : reveal.stage;
+}
+
+function applyReveal() {
+  const stage = currentStage();
+  for (const el of document.querySelectorAll("[data-stage]")) {
+    el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el);
+  }
+  const all = !!store.revealAll;
+  const btn = $("reveal-all");
+  btn.textContent = all ? "Simplify the page" : "Show all settings";
+  btn.setAttribute("aria-pressed", String(all));
+  return stage;
+}
+
+/** Show one staged panel and keep it shown (the user asked for it). */
+function pinPanel(id) {
+  pinned.add($(id).closest("[data-stage]"));
+  applyReveal();
+}
+
+function revealStep(out) {
+  const scored = out.result.kind === "scored";
+  const { stage, changed } = reveal.update(
+    {
+      scored,
+      present: scored && out.transition.state !== State.NO_PERSON,
+      paused,
+      silentTest: !!test,
+      practice: !!practice,
+    },
+    pclock,
+  );
+  if (!changed) return;
+  applyReveal();
+  if (store.revealAll) return;
+  const added = [];
+  for (let s = shownStage + 1; s <= stage; s++) added.push(REVEAL_ADDED[s]);
+  shownStage = stage;
+  if (added.length) revealNote(`Added: ${added.join(", ")}`);
+}
+
+function setRevealAll(on) {
+  store.revealAll = on;
+  save();
+  applyReveal();
+  for (const d of document.querySelectorAll("details[data-group]")) d.open = on;
+  revealNote(on ? "Showing all settings" : "Page simplified");
+}
+$("reveal-all").addEventListener("click", () => setRevealAll(!store.revealAll));
+if (store.revealAll) setRevealAll(true);
+applyReveal();
+$("reveal-note").textContent = "";
+
 function step() {
   if (paused) return;
   const nowMs = performance.now();
@@ -1659,6 +1964,8 @@ function step() {
   account(out.transition.state, now);
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now);
+  revealStep(out);
+  setupStep(out.transition.state);
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -1744,7 +2051,7 @@ function applyWebGLState() {
  */
 let moveNetDetector = null; // TF.js detector, built once and reused across retries
 
-async function loadMoveNet(onProgress = () => {}) {
+async function loadMoveNet(onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
   if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
   // Warm the HTTP cache with byte-level progress; TF.js then reads from it.
   const files = [
@@ -1758,6 +2065,8 @@ async function loadMoveNet(onProgress = () => {}) {
     files.map((f) => new URL(`${MOVENET_DIR}/${f}`, location.href).href),
     onProgress,
   );
+  onDownloaded();
+  await gate; // building the detector blocks the page; let the live video paint first
   const tfm = await import(`${MOVENET_DIR}/movenet_bundle.mjs`);
   tfm.setWasmPaths({
     "tfjs-backend-wasm.wasm": `${MOVENET_DIR}/tfjs-backend-wasm.wasm`,
@@ -1775,7 +2084,7 @@ async function loadMoveNet(onProgress = () => {}) {
   return createMoveNetDetector(detector);
 }
 
-async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {}) {
+async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
   const { FilesetResolver, PoseLandmarker } = await import(`${TASKS_VISION}/vision_bundle.mjs`);
   const fileset = await FilesetResolver.forVisionTasks(`${TASKS_VISION}/wasm`);
   // Download the model and the runtime with progress, then hand both over as
@@ -1784,6 +2093,7 @@ async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {})
   // instead of fetching the .wasm file.
   const [model, wasm] = await downloadAll([MODEL_URL, new URL(fileset.wasmBinaryPath, location.href).href], onProgress);
   onDownloaded();
+  await gate; // creating the model blocks the page; let the live video paint first
   const options = (delegate) => ({
     baseOptions: { modelAssetBuffer: new Uint8Array(model), delegate },
     runningMode: "VIDEO",
@@ -1827,7 +2137,13 @@ const loadSteps = new LoadSteps();
 
 function showError(message) {
   $("start-error").textContent = message;
-  if (message) logProblem(message);
+  if (message) {
+    // The message and the Try again button must be in view, also on a small screen
+    // where the page may be scrolled to the start button.
+    $("start-overlay").scrollTop = 0;
+    $("start-overlay").scrollIntoView({ block: "nearest" });
+    logProblem(message);
+  }
 }
 
 // -- bug reports ----------------------------------------------------------------
@@ -1879,6 +2195,7 @@ function bugReportUrl() {
     `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
+    `- Load marks (ms): ${JSON.stringify(loadMarks)}`,
   ].join("\n");
   const body = buildBugReportBody({ diag, problems });
   const title = problems.length ? `Bug: ${bugTitle(problems[problems.length - 1])}` : "Bug: ";
@@ -1912,6 +2229,7 @@ function stopCamera(err) {
   showError(`Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
   $("start-status").textContent = "";
   loadSteps.finish();
+  $("start-overlay").classList.remove("compact");
   $("start-overlay").style.display = "";
   $("start-camera").disabled = $("start-demo").disabled = false;
   applyWebGLState();
@@ -1930,40 +2248,89 @@ function begin(source) {
   $("test-start").disabled = false;
   setTrackingControls(true);
   $("state-badge").focus(); // the Start button is gone: move focus to the status badge
-  maybeStartFirstRun();
+  renderSetupButton();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   recordSession(store, Date.now());
   save();
   resetPromptSession();
+  renderSetupButton();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
 }
 
+/** The model load started by the last click, kept so a retry after a camera
+ *  problem does not download it again. Dropped if it failed. */
+let preloaded = null;
+
+function preloadModel(canvas, gate) {
+  if (preloaded && !preloaded.failed) return preloaded;
+  const entry = { kind: canvas ? "mediapipe" : "movenet", downloaded: false, failed: false, promise: null };
+  const onDownloaded = () => {
+    entry.downloaded = true;
+    markLoad("downloadDone");
+    loadSteps.done("download");
+  };
+  const progress = (got, total) => loadSteps.progress(got, total);
+  entry.promise = canvas ? loadModel(canvas, progress, onDownloaded, gate) : loadMoveNet(progress, onDownloaded, gate);
+  entry.promise.catch(() => {
+    entry.failed = true; // handled where it is awaited; this only stops an unhandled rejection
+  });
+  preloaded = entry;
+  return entry;
+}
+
+/** Frames are playing: show the video and shrink the card to a strip under it. */
+function showLivePreview() {
+  $("start-overlay").classList.add("compact");
+  // On a narrow screen the page was scrolled to the Start button; the card shrinks, so bring the video back.
+  video.scrollIntoView({ block: "nearest" });
+  $("start-status").textContent = "Camera is on. Loading the pose model, no video leaves your computer.";
+}
+
 $("start-camera").addEventListener("click", async () => {
   ensureAudio(); // inside the click: browsers only allow audio after a gesture
+  for (const k of Object.keys(loadMarks)) delete loadMarks[k];
+  loadMarks.click = Math.round(performance.now());
   engine.setDriftBaselineEnabled(true); // back from the demo: real tracking adapts again
   $("start-camera").disabled = $("start-demo").disabled = true;
   showError("");
   showWebGLHelp(false);
   $("start-status").textContent = "";
+  $("start-overlay").classList.remove("compact");
   loadSteps.open();
+  // The model waits for this before its first long, blocking step (see loadModel).
+  // It opens once the live video has painted, or when the start fails.
+  let openGate = () => {};
+  const gate = new Promise((r) => {
+    openGate = r;
+  });
   try {
-    loadSteps.step("camera");
+    // MediaPipe needs WebGL; without it (or if it fails to start) use the MoveNet fallback.
+    const canvas = webglCanvas();
+    lowAccuracy = false;
+    // Start the download first and let it run while the browser asks for the camera.
+    // getUserMedia is still only called here, after the click.
+    loadSteps.start("camera");
+    const entry = preloadModel(canvas, gate);
+    if (!canvas) loadSteps.label("download", "WebGL is off: downloading the simpler pose model");
+    if (entry.downloaded) loadSteps.done("download");
+    else loadSteps.start("download");
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
       audio: false,
     });
     video.srcObject = stream;
     await video.play();
-    // MediaPipe needs WebGL; without it (or if it fails to start) use the MoveNet fallback.
-    const canvas = webglCanvas();
-    lowAccuracy = false;
-    const progress = (got, total) => loadSteps.progress(got, total);
+    markLoad("streamPlaying");
+    loadSteps.done("camera");
+    showLivePreview();
+    await nextPaint();
+    openGate();
     if (canvas) {
-      loadSteps.step("download");
       try {
-        poseLandmarker = await loadModel(canvas, progress, () => loadSteps.step("start"));
+        poseLandmarker = await entry.promise;
+        loadSteps.start("start", { elapsed: true });
         await warmUp(poseLandmarker, false);
       } catch (err) {
         poseLandmarker = null;
@@ -1971,23 +2338,29 @@ $("start-camera").addEventListener("click", async () => {
       }
     }
     if (!poseLandmarker) {
-      loadSteps.label(
-        "download",
-        canvas
-          ? "The main model didn't start: downloading the simpler one"
-          : "WebGL is off: downloading the simpler pose model",
-      );
-      loadSteps.step("download");
-      const detector = await loadMoveNet(progress);
-      loadSteps.step("start");
+      let detector;
+      if (canvas) {
+        loadSteps.label("download", "The main model didn't start: downloading the simpler one");
+        loadSteps.start("download");
+        preloaded = null; // the failed MediaPipe entry must not be reused
+        detector = await preloadModel(null).promise;
+      } else {
+        detector = await entry.promise;
+      }
+      loadSteps.start("start", { elapsed: true });
       poseLandmarker = detector;
       await warmUp(detector, true);
       lowAccuracy = true;
     }
+    markLoad("warmUpDone");
+    loadSteps.done("start");
     loadSteps.finish();
+    $("start-overlay").classList.remove("compact");
     begin("webcam");
   } catch (err) {
+    openGate();
     loadSteps.fail();
+    $("start-overlay").classList.remove("compact");
     $("start-status").textContent = "";
     const stream = video.srcObject;
     if (stream) for (const t of stream.getTracks()) t.stop();
@@ -1996,6 +2369,7 @@ $("start-camera").addEventListener("click", async () => {
     showError(cameraErrorMessage(err));
     $("start-camera").disabled = $("start-demo").disabled = false;
     applyWebGLState();
+    $("start-camera").textContent = "Try again"; // a retry reuses the model that is already loading
   }
 });
 
@@ -2012,26 +2386,17 @@ $("start-demo").addEventListener("click", () => {
   begin("demo");
 });
 
-// -- first-run guide ------------------------------------------------------------
-// Shown once, on the first Start (store.firstRunDone): check framing, record
-// good and slouch posture, then hear what the sounds mean. "Show the intro
-// again" in the Not working? panel brings it back.
+// -- setup sequence ("Set up as you go") -----------------------------------------
+// One small card at a time in #first-run: framing, calibrate, reminder style,
+// voice, breaks, shoulders and breathing, then "You're set". The steps and the
+// reveal stage that unlocks each one are in onboarding.js (SETUP_STEPS); progress
+// is in store.setup. Every card has Skip this step and Skip all, use defaults.
+// Skip all records no consent and turns nothing on. The sequence waits while a
+// posture reminder, a pause, a silent test, practice or a breath check is on
+// (it does not queue behind the prompt scheduler). The header Set up button and
+// "Show the intro again" open it by hand. Focus moves only after a button press.
 
-const FIRST_RUN = [
-  {
-    key: "framing",
-    title: "Check your framing",
-    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
-  },
-  {
-    key: "calibrate",
-    title: "Calibrate to your posture",
-    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
-  },
-  { key: "coach", title: "Choose your coach", intro: COACH_INTRO },
-  { key: "done", title: "You're set", intro: DONE_INTRO },
-];
-const firstRun = { step: 0, open: false };
+const firstRun = { step: 0, open: false, manual: false };
 let firstRunLive = null; // the element updated every frame on the current step
 
 function firstRunButton(label, onClick, secondary = true) {
@@ -2042,102 +2407,125 @@ function firstRunButton(label, onClick, secondary = true) {
   return b;
 }
 
-/** The "Choose your coach" controls. Each one drives the real setting (same
- *  element, same change handler), so nothing is stored twice. */
-function coachControls() {
-  const row = (text, control) => {
-    const l = document.createElement("label");
-    l.className = "note";
-    l.style.display = "block";
-    l.append(control, ` ${text}`);
-    return l;
-  };
-  const select = (src, extra = []) => {
-    const el = document.createElement("select");
-    for (const o of [...src.options, ...extra]) el.add(new Option(o.text, o.value));
-    return el;
-  };
-  const check = (src) => {
-    const el = document.createElement("input");
-    el.type = "checkbox";
-    el.checked = src.checked;
-    el.addEventListener("change", () => {
-      src.checked = el.checked;
-      src.dispatchEvent(new Event("change"));
-      $("consent-dialog").addEventListener(
-        "close",
-        () => {
-          el.checked = src.checked;
-        },
-        { once: true },
-      );
-    });
-    return el;
-  };
-  const voice = select($("voice-pick"), [new Option("Off (chime only, no voice)", "__off")]);
-  voice.id = "coach-voice";
-  voice.setAttribute("aria-label", "Voice");
-  voice.value = settings.mode === "chime_and_voice" ? $("voice-pick").value : "__off";
-  voice.addEventListener("change", () => {
-    const radio = document.querySelector(
-      `input[name=mode][value=${voice.value === "__off" ? "chime_only" : "chime_and_voice"}]`,
+/** A labelled control for a setup card. */
+function setupRow(text, control) {
+  const l = document.createElement("label");
+  l.className = "note";
+  l.style.display = "block";
+  l.append(control, ` ${text}`);
+  return l;
+}
+
+/** A select that copies the options of a real settings control and drives it (same element, same change
+ *  handler), so each setting has one write path and nothing is stored twice. */
+function mirrorSelect(src, id, label) {
+  const el = document.createElement("select");
+  for (const o of src.options) el.add(new Option(o.text, o.value));
+  el.id = id;
+  el.setAttribute("aria-label", label);
+  el.value = src.value;
+  el.addEventListener("change", () => {
+    src.value = el.value;
+    src.dispatchEvent(new Event("change"));
+  });
+  return el;
+}
+
+/** A checkbox that drives a real settings checkbox. A box that asks for consent is put back if the user declines. */
+function mirrorCheck(src, id) {
+  const el = document.createElement("input");
+  el.type = "checkbox";
+  el.id = id;
+  el.checked = src.checked;
+  el.addEventListener("change", () => {
+    src.checked = el.checked;
+    src.dispatchEvent(new Event("change"));
+    $("consent-dialog").addEventListener(
+      "close",
+      () => {
+        el.checked = src.checked;
+      },
+      { once: true },
     );
-    radio.checked = true;
-    radio.dispatchEvent(new Event("change"));
-    if (voice.value !== "__off") {
-      $("voice-pick").value = voice.value;
-      $("voice-pick").dispatchEvent(new Event("change"));
-    }
   });
-  const level = select($("coaching-level"));
-  level.id = "coach-level";
-  level.setAttribute("aria-label", "Reminder style");
-  level.value = $("coaching-level").value;
-  level.addEventListener("change", () => {
-    $("coaching-level").value = level.value;
-    $("coaching-level").dispatchEvent(new Event("change"));
-  });
-  const eye = check($("eye-breaks"));
-  eye.id = "coach-eye";
-  const move = select($("move-minutes"));
-  move.id = "coach-move";
-  move.setAttribute("aria-label", "Stand up and move");
-  move.value = $("move-minutes").value;
-  move.addEventListener("change", () => {
-    $("move-minutes").value = move.value;
-    $("move-minutes").dispatchEvent(new Event("change"));
-  });
-  const moments = check($("breathing-moments"));
-  moments.id = "coach-moments";
-  const samples = document.createElement("div");
-  samples.className = "btn-row";
-  samples.append(
-    firstRunButton("Play the reminder", () => {
+  return el;
+}
+
+function sampleButtons(...which) {
+  const all = {
+    reminder: () => {
       ensureAudio();
       playBad();
-    }),
-    firstRunButton("Play the praise chime", () => {
+    },
+    praise: () => {
       ensureAudio();
       playGood();
-    }),
-    firstRunButton("Play a voice sample", () => {
+    },
+    voice: () => {
       ensureAudio();
       speak(TEST_LINE);
-    }),
-  );
-  return [
-    row("Voice", voice),
-    row("Reminder style", level),
-    row("Eye break every 20 minutes", eye),
-    row("Stand up and move", move),
-    row("Occasional breathing moments (asks for your OK first)", moments),
-    samples,
-  ];
+    },
+  };
+  const labels = { reminder: "Play the reminder", praise: "Play the praise chime", voice: "Play a voice sample" };
+  const row = document.createElement("div");
+  row.className = "btn-row";
+  row.append(...which.map((k) => firstRunButton(labels[k], all[k])));
+  return row;
+}
+
+function setupControls(key) {
+  if (key === "style") {
+    const mode = document.createElement("select");
+    mode.id = "coach-style";
+    mode.setAttribute("aria-label", "Reminder style");
+    mode.add(new Option("Chime + voice", "chime_and_voice"));
+    mode.add(new Option("Chime only", "chime_only"));
+    mode.add(new Option("Silent", "silent"));
+    mode.value = settings.mode;
+    mode.addEventListener("change", () => {
+      const radio = document.querySelector(`input[name=mode][value=${mode.value}]`);
+      radio.checked = true;
+      radio.dispatchEvent(new Event("change"));
+    });
+    const level = mirrorSelect($("coaching-level"), "coach-level", "Coaching level");
+    return [
+      setupRow("Reminder style", mode),
+      setupRow("Coaching level", level),
+      setupRow("Say what to fix", mirrorCheck($("specific-cues"), "coach-cues")),
+      sampleButtons("reminder", "praise"),
+    ];
+  }
+  if (key === "voice") {
+    const voice = mirrorSelect($("voice-pick"), "coach-voice", "Voice");
+    const pack = mirrorSelect($("sound-pack"), "coach-pack", "Sound pack");
+    return [setupRow("Voice", voice), setupRow("Sound pack", pack), sampleButtons("reminder", "praise", "voice")];
+  }
+  if (key === "breaks") {
+    return [
+      setupRow("Eye break every 20 minutes", mirrorCheck($("eye-breaks"), "coach-eye")),
+      setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
+      setupRow("Stretch reminder", mirrorSelect($("stretch-minutes"), "coach-stretch", "Stretch reminder")),
+      setupRow("Water reminder", mirrorSelect($("water-minutes"), "coach-water", "Water reminder")),
+    ];
+  }
+  if (key === "shoulders") {
+    return [
+      setupRow(
+        "Shoulder-creep reminders and a breath check (asks for your OK first)",
+        mirrorCheck($("relax-reminders"), "coach-relax"),
+      ),
+      setupRow(
+        "Occasional breathing moments (asks for your OK first)",
+        mirrorCheck($("breathing-moments"), "coach-moments"),
+      ),
+    ];
+  }
+  return [];
 }
 
 function renderFirstRun() {
-  const step = FIRST_RUN[firstRun.step];
-  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${FIRST_RUN.length}`;
+  const step = SETUP_STEPS[firstRun.step];
+  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${SETUP_STEPS.length}: ${step.title}`;
   $("first-run-heading").textContent = step.title;
   const body = $("first-run-body");
   const intro = document.createElement("div");
@@ -2162,32 +2550,42 @@ function renderFirstRun() {
       firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
     );
     parts.push(row, firstRunLive);
-  } else if (step.key === "coach") {
-    parts.push(...coachControls());
-  } else {
+  } else if (step.key === "done") {
     const row = document.createElement("div");
     row.className = "btn-row";
     row.append(
       firstRunButton("Share BackUp", () => openShare(), false),
       firstRunButton("Start a silent test", () => {
         closeFirstRun();
+        pinPanel("test-start");
         $("test-start").scrollIntoView({ block: "center" });
         $("test-start").focus();
       }),
     );
     parts.push(row);
+  } else {
+    parts.push(...setupControls(step.key));
   }
   body.replaceChildren(...parts);
+  const last = firstRun.step === SETUP_STEPS.length - 1;
   $("first-run-back").hidden = firstRun.step === 0;
-  $("first-run-next").textContent = firstRun.step === FIRST_RUN.length - 1 ? "Done" : "Next";
-  $("first-run-skip").hidden = firstRun.step === FIRST_RUN.length - 1;
+  $("first-run-next").textContent = last ? "Done" : "Next";
+  $("first-run-skip").hidden = last;
 }
 
-function openFirstRun(step = 0) {
+function renderSetupButton() {
+  $("setup-btn").hidden = !loopsStarted || firstRun.open || !reopenSetupStep(store);
+}
+
+function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
   firstRun.open = true;
-  firstRun.step = step;
+  firstRun.manual = manual;
+  firstRun.step = SETUP_STEPS.findIndex((s) => s.key === key);
+  viewSetupStep(store, key);
+  save();
   $("first-run").hidden = false;
   renderFirstRun();
+  renderSetupButton();
 }
 
 function closeFirstRun() {
@@ -2198,56 +2596,104 @@ function closeFirstRun() {
     store.firstRunDone = true;
     save();
   }
+  renderSetupButton();
 }
 
-function maybeStartFirstRun() {
-  if (!store.firstRunDone && !firstRun.open) openFirstRun();
+/** After a card is done or skipped: the next one, or close. Returns true when a card is showing. */
+function advanceSetup() {
+  const key = firstRun.manual
+    ? SETUP_STEPS.slice(firstRun.step + 1).find((s) => !setupProgress(store).done.includes(s.key))?.key
+    : nextSetupStep(store, currentStage());
+  if (!key) {
+    closeFirstRun();
+    return false;
+  }
+  openFirstRun(key, firstRun.manual);
+  return true;
+}
+
+function focusFirstRunHeading() {
+  $("first-run-heading").tabIndex = -1;
+  $("first-run-heading").focus();
+}
+
+/** True while something else owns the screen: the sequence hides and waits. */
+function setupBlocked(state) {
+  return (
+    paused ||
+    !!test ||
+    !!practice ||
+    breath.active ||
+    guide.active ||
+    state === State.BAD_CHIME ||
+    state === State.BAD_VOICE
+  );
+}
+
+/** Runs every tracked frame: opens the next due card on its own (no focus move), hides it while blocked. */
+function setupStep(state) {
+  const blocked = setupBlocked(state);
+  if (firstRun.open) {
+    $("first-run").hidden = blocked;
+    return;
+  }
+  if (blocked || !loopsStarted) return;
+  const key = nextSetupStep(store, currentStage());
+  if (key) openFirstRun(key);
 }
 
 /** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
 function updateFirstRunLive(result, landmarks) {
   if (!firstRun.open || !firstRunLive) return;
-  if (FIRST_RUN[firstRun.step].key === "framing") {
+  const key = SETUP_STEPS[firstRun.step].key;
+  if (key === "framing") {
     const ok = result.kind === "scored";
     firstRunLive.className = ok ? "framing ok" : "framing";
     firstRunLive.textContent = ok
       ? "Head and shoulders in view \u2713"
       : causeFor(result, landmarks) || "Looking for you...";
-  } else if (FIRST_RUN[firstRun.step].key === "calibrate") {
+  } else if (key === "calibrate") {
     firstRunLive.textContent = $("calib-status").textContent;
   }
 }
 
 $("first-run-next").addEventListener("click", () => {
-  if (firstRun.step >= FIRST_RUN.length - 1) {
-    closeFirstRun();
-    $("state-badge").focus();
-    return;
-  }
-  firstRun.step += 1;
-  renderFirstRun();
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  completeStep(store, SETUP_STEPS[firstRun.step].key);
+  save();
+  if (advanceSetup()) focusFirstRunHeading();
+  else $("state-badge").focus();
 });
 $("first-run-back").addEventListener("click", () => {
-  firstRun.step = Math.max(0, firstRun.step - 1);
-  renderFirstRun();
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  const key = SETUP_STEPS[Math.max(0, firstRun.step - 1)].key;
+  openFirstRun(key, firstRun.manual);
+  focusFirstRunHeading();
 });
 $("first-run-skip").addEventListener("click", () => {
+  skipStep(store, SETUP_STEPS[firstRun.step].key);
+  save();
+  if (advanceSetup()) focusFirstRunHeading();
+  else $("state-badge").focus();
+});
+$("first-run-skip-all").addEventListener("click", () => {
+  skipAll(store);
+  save();
   closeFirstRun();
   $("state-badge").focus();
+  revealNote("Setup skipped, defaults kept. Use Set up to come back.");
+});
+$("setup-btn").addEventListener("click", () => {
+  openFirstRun(reopenSetupStep(store), true);
+  $("first-run").scrollIntoView({ block: "nearest" });
+  focusFirstRunHeading();
 });
 $("intro-again").addEventListener("click", () => {
   if (!loopsStarted) {
     $("practice-msg").textContent = "Start the webcam or the demo first, then the intro can show your live framing.";
     return;
   }
-  openFirstRun();
+  openFirstRun(SETUP_STEPS[0].key, true);
   $("first-run").scrollIntoView({ block: "nearest" });
-  $("first-run-heading").tabIndex = -1;
-  $("first-run-heading").focus();
+  focusFirstRunHeading();
 });
 
 // -- onboarding, safety notice and help -----------------------------------------
@@ -2507,6 +2953,9 @@ function renderProgress() {
   else if (!s.empty) parts.push("No silent tests yet. Take one for a baseline.");
   if (s.coached_pct_7d !== null) parts.push(`With coaching over the last 7 days: ${s.coached_pct_7d}%.`);
   $("progress-tests").textContent = parts.join(" ");
+  $("progress-water").textContent = s.water_7d
+    ? `Water you logged: ${s.water_today} today, ${s.water_7d} in the last 7 days.`
+    : "";
   const suggest = s.try_light && settings.coachingLevel !== "light";
   $("progress-suggest").textContent = suggest
     ? "Your latest silent score is at least as good as your coached score. You could try light coaching."

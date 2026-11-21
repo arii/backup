@@ -14,8 +14,14 @@ import {
   ONBOARDING_STEPS,
   ONBOARDING_VERSION,
   SAFETY_POINTS,
-  COACH_INTRO,
-  DONE_INTRO,
+  completeStep,
+  nextSetupStep,
+  reopenSetupStep,
+  SETUP_STEPS,
+  setupProgress,
+  skipAll,
+  skipStep,
+  viewSetupStep,
   SAFETY_SHORT,
   SETUP,
   SetupCheck,
@@ -135,10 +141,98 @@ test("the framing advice follows the configured shoulder band", () => {
   assert.ok(text.includes(`${Math.round(DEFAULTS.scoring.shoulder_width_max * 100)}%`));
 });
 
-test("first-run coach and done text: versions stay at 1 so existing seeds keep working", () => {
+test("setup text: versions stay at 1 so existing seeds keep working, no em dash", () => {
   assert.equal(ONBOARDING_VERSION, 1);
   assert.equal(ACK_VERSION, 1);
-  assert.match(COACH_INTRO, /Reminders & sounds/);
-  for (const re of [/Leave this tab open/, /Pause any time/, /silent test/, /share/]) assert.match(DONE_INTRO, re);
-  assert.doesNotMatch(`${COACH_INTRO} ${DONE_INTRO}`, /\u2014/); // no em dash
+  const done = SETUP_STEPS.find((x) => x.key === "done").intro;
+  for (const re of [/Leave this tab open/, /Pause any time/, /silent test/, /share/]) assert.match(done, re);
+  assert.doesNotMatch(JSON.stringify(SETUP_STEPS), /\u2014/);
+});
+
+const KEYS = SETUP_STEPS.map((s) => s.key);
+
+test("setup steps: unique keys, framing and calibrate first, stages never go down", () => {
+  assert.equal(new Set(KEYS).size, KEYS.length);
+  assert.deepEqual(KEYS.slice(0, 2), ["framing", "calibrate"]);
+  for (let i = 1; i < SETUP_STEPS.length; i++) assert.ok(SETUP_STEPS[i].stage >= SETUP_STEPS[i - 1].stage);
+});
+
+test("nextSetupStep waits for the reveal stage of each step", () => {
+  const store = {};
+  assert.equal(nextSetupStep(store, 0), null);
+  assert.equal(nextSetupStep(store, 1), null);
+  assert.equal(nextSetupStep(store, 2), "framing");
+  completeStep(store, "framing");
+  assert.equal(nextSetupStep(store, 2), "calibrate");
+  completeStep(store, "calibrate");
+  assert.equal(nextSetupStep(store, 2), null, "style needs stage 3");
+  assert.equal(nextSetupStep(store, 3), "style");
+  assert.equal(nextSetupStep(store, 5), "style");
+});
+
+test("a skipped step is not offered again on its own but stays reachable", () => {
+  const store = {};
+  skipStep(store, "framing");
+  assert.equal(nextSetupStep(store, 2), "calibrate");
+  assert.deepEqual(setupProgress(store).skipped, ["framing"]);
+  assert.equal(reopenSetupStep(store), "framing");
+  completeStep(store, "framing");
+  assert.deepEqual(setupProgress(store).skipped, [], "doing a skipped step marks it done");
+  assert.equal(reopenSetupStep(store), "calibrate");
+});
+
+test("skipStep never un-does a finished step", () => {
+  const store = {};
+  completeStep(store, "framing");
+  skipStep(store, "framing");
+  assert.deepEqual(setupProgress(store), { step: "framing", done: ["framing"], skipped: [] });
+});
+
+test("the sequence ends when every step is done or skipped", () => {
+  const store = {};
+  for (const [i, k] of KEYS.entries()) {
+    assert.ok(!store.setupDone, `not done before ${k}`);
+    if (i % 2) skipStep(store, k);
+    else completeStep(store, k);
+  }
+  assert.equal(store.setupDone, true);
+  assert.equal(store.firstRunDone, true, "kept for older code");
+  assert.equal(nextSetupStep(store, 5), null);
+  assert.equal(reopenSetupStep(store), KEYS[1], "skipped steps stay reachable from the Set up button");
+});
+
+test("skipAll ends the sequence and grants nothing", () => {
+  const store = { relaxReminders: true, eyeBreaks: true };
+  const before = JSON.stringify(store);
+  skipAll(store);
+  assert.equal(store.setupDone, true);
+  assert.equal(nextSetupStep(store, 5), null);
+  assert.equal(store.consent, undefined, "no consent record");
+  assert.equal(store.breathingMoments, undefined);
+  assert.equal(store.spokenPraise, undefined);
+  assert.equal(store.revealAll, undefined);
+  const { setup, setupDone, firstRunDone, ...rest } = store;
+  assert.equal(JSON.stringify(rest), before, "no setting changed");
+  assert.deepEqual(setup.skipped, KEYS);
+  assert.deepEqual(setup.done, []);
+});
+
+test("skipAll keeps finished steps as done", () => {
+  const store = {};
+  completeStep(store, "framing");
+  skipAll(store);
+  assert.deepEqual(setupProgress(store).done, ["framing"]);
+  assert.ok(!setupProgress(store).skipped.includes("framing"));
+});
+
+test("setupProgress ignores junk in the store", () => {
+  assert.deepEqual(setupProgress(null), { step: null, done: [], skipped: [] });
+  assert.deepEqual(setupProgress({ setup: { step: "nope", done: "x", skipped: ["framing", 3, "nope"] } }), {
+    step: null,
+    done: [],
+    skipped: ["framing"],
+  });
+  const store = {};
+  viewSetupStep(store, "style");
+  assert.equal(setupProgress(store).step, "style");
 });
