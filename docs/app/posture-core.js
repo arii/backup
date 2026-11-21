@@ -836,6 +836,16 @@ export class PostureEngine {
     return { result, transition: tr, needle: this.needle.value, nudges, cue, hold };
   }
 
+  /** A frame while an activity suppresses posture feedback (eye break, demo, breathing
+   *  guide): scores presence only. The state machine, calibration and needle are not
+   *  touched, so nothing can fire, tally or drift. Same shape as process(), plus
+   *  `held: true`. Call restart() when the activity ends. */
+  hold(landmarks, _now) {
+    const result = scorePose(landmarks, this.config.scoring);
+    const tr = transition(this.machine.state, Nudge.NONE);
+    return { result, transition: tr, needle: this.needle.value, nudges: [], cue: null, hold: null, held: true };
+  }
+
   /** Demo poses are synthetic: turn the drift baseline off while they run and
    *  back on for real tracking, re-anchoring to the recorded calibration. */
   setDriftBaselineEnabled(enabled) {
