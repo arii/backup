@@ -2147,7 +2147,7 @@ function applyWebGLState() {
 let moveNetDetector = null; // TF.js detector, built once and reused across retries
 
 async function loadMoveNet(onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
-  if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
+  if (moveNetDetector) return wrapMoveNet(moveNetDetector);
   // Warm the HTTP cache with byte-level progress; TF.js then reads from it.
   const files = [
     "movenet_bundle.mjs",
@@ -2176,7 +2176,22 @@ async function loadMoveNet(onProgress = () => {}, onDownloaded = () => {}, gate 
     enableSmoothing: true,
   });
   moveNetDetector = detector;
-  return createMoveNetDetector(detector);
+  return wrapMoveNet(detector);
+}
+
+/** One wrapper per camera session. A detector that failed is dropped, so the next try builds a fresh one. */
+function wrapMoveNet(detector) {
+  return createMoveNetDetector(detector, { onError: () => discardMoveNet(detector) });
+}
+
+function discardMoveNet(detector) {
+  if (moveNetDetector !== detector) return;
+  moveNetDetector = null;
+  try {
+    detector.dispose?.();
+  } catch {
+    // already broken; nothing more to release
+  }
 }
 
 async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
@@ -2220,7 +2235,14 @@ async function warmUp(detector, isMoveNet) {
   await nextPaint();
   if (video.readyState < 2) return;
   if (isMoveNet) {
-    if (moveNetDetector) await moveNetDetector.estimatePoses(video, { flipHorizontal: false });
+    const tf = moveNetDetector;
+    if (!tf) return;
+    try {
+      await tf.estimatePoses(video, { flipHorizontal: false });
+    } catch (err) {
+      discardMoveNet(tf); // do not reuse a detector that failed on a real frame
+      throw err;
+    }
     return;
   }
   const ts = Math.max(performance.now(), lastVideoMs + 1);
@@ -2867,6 +2889,8 @@ $("ob-ack").addEventListener("click", () => {
   ($("start-camera").disabled ? $("start-demo") : $("start-camera")).focus();
 });
 showStartControls();
+// First visit: start keyboard focus on the card, so Tab reaches Next before the header controls.
+if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 
 function openHelp() {
   const body = $("help-body");

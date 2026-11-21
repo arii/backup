@@ -217,7 +217,7 @@ test("warm-up counts elapsed seconds and stops when the step is done", () => {
   assert.equal(items[2].detail.textContent, "");
 });
 
-test("fail marks the active step failed and puts other running steps back to pending", () => {
+test("fail marks the active step failed and marks unfinished steps skipped", () => {
   const { doc, items } = fakeDoc();
   const steps = new LoadSteps(doc, { now: () => 0, timers: fakeTimers() });
   steps.open();
@@ -226,7 +226,7 @@ test("fail marks the active step failed and puts other running steps back to pen
   steps.fail("camera");
   assert.deepEqual(
     items.map((li) => li.className),
-    ["failed", "pending", "pending"],
+    ["failed", "skipped", "skipped"],
   );
   steps.open();
   steps.start("download");

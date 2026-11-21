@@ -318,6 +318,25 @@ try {
       first,
     );
     await page.screenshot({ path: path.join(outDir, "onboarding-step1.png") });
+    await page.keyboard.press("Tab");
+    const firstTab = await page.evaluate(() => document.activeElement?.id);
+    check("first run: the first Tab stop is the onboarding Next button, not the header", firstTab === "ob-next", {
+      firstTab,
+    });
+    const steps = await page.evaluate(() => {
+      const root = document.getElementById("load-steps");
+      const li = [...root.querySelectorAll("[data-step]")];
+      li[0].className = "failed";
+      li[1].className = "done";
+      li[2].className = "skipped";
+      const cs = getComputedStyle(li[2], "::before");
+      return { skippedBg: cs.backgroundImage.startsWith("url("), border: cs.borderTopWidth };
+    });
+    check(
+      "load steps: a skipped step shows a dash icon, not the empty pending circle",
+      steps.skippedBg && steps.border === "0px",
+      steps,
+    );
     await page.click("#ob-next");
     await page.click("#ob-next");
     const safety = await page.evaluate(() => ({
