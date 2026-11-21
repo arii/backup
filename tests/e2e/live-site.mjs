@@ -553,6 +553,24 @@ try {
     });
     await page.waitForSelector("#import-dialog[open]");
     check(
+      "a11y: import dialog takes focus and Escape cancels without importing",
+      (await page.evaluate(() => document.getElementById("import-dialog").contains(document.activeElement))) &&
+        (await (async () => {
+          await page.keyboard.press("Escape");
+          return page.evaluate(
+            () =>
+              !document.getElementById("import-dialog").open &&
+              !localStorage.getItem("posture-guard:v1").includes("2020-01-06"),
+          );
+        })()),
+    );
+    await page.setInputFiles("#progress-import-file", {
+      name: "good.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: 600, bad: 60 } } })),
+    });
+    await page.waitForSelector("#import-dialog[open]");
+    check(
       "import: preview shows the counts",
       /1 day/.test(await page.textContent("#import-preview")),
       await page.textContent("#import-preview"),
@@ -567,6 +585,26 @@ try {
     );
     await page.evaluate(() => document.getElementById("share-weekly").click());
     await page.waitForSelector("#share-consent-dialog[open]");
+    check(
+      "a11y: share consent dialog takes focus, has a name, and Escape leaves consent off",
+      await (async () => {
+        const inside = await page.evaluate(() => {
+          const d = document.getElementById("share-consent-dialog");
+          return (
+            d.contains(document.activeElement) && document.getElementById("share-consent-title").textContent.length > 0
+          );
+        });
+        await page.keyboard.press("Escape");
+        const off = await page.evaluate(
+          () =>
+            !document.getElementById("share-consent-dialog").open &&
+            !JSON.parse(localStorage.getItem("posture-guard:v1")).shareConsent,
+        );
+        await page.evaluate(() => document.getElementById("share-weekly").click());
+        await page.waitForSelector("#share-consent-dialog[open]");
+        return inside && off;
+      })(),
+    );
     check(
       "share weekly: the dialog lists the exact record",
       /"consistency_score"/.test(await page.textContent("#share-consent-preview")) ||

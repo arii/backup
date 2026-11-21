@@ -96,7 +96,7 @@ Scope markers: **(shipped)**, **(built)**, **(spec only)**.
    the coached score, and SHALL NOT merge the two.
 3. THE App SHALL NOT call a coached score a measure of learning.
 
-### Requirement 10: Reward restraint (shipped rule, spec only for social)
+### Requirement 10: Reward restraint (shipped rule; the peer share link is built, a leaderboard is spec only)
 1. THE App SHALL NOT use points, coins, badges that unlock features, or other tangible
    rewards for posture behaviour.
 2. ANY later social feature SHALL follow `progress-review` Requirement 6.

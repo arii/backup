@@ -1,6 +1,6 @@
 {
-  "version": "ab87d531c1da54cb",
-  "totalBytes": 33351555,
+  "version": "90ddce3bd4ef06ae",
+  "totalBytes": 33351815,
   "files": [
     {
       "url": "app.js",
@@ -34,8 +34,8 @@
     },
     {
       "url": "index.html",
-      "size": 55673,
-      "sha256": "d3b984efc62a43df4174fac8aa02cb6511949ad171680bddcc71248a00a220bc"
+      "size": 55933,
+      "sha256": "52045ee3fdbc036f5c1d2dad18df160c8949fb99b720806b6739c22cf0efa377"
     },
     {
       "url": "loading.js",

@@ -12,8 +12,8 @@ first-run guide), `.kiro/specs/wellness-tools/` (breath check, eye, move and str
 prompts) and `.kiro/specs/safety-and-disclaimers/` (consent gate). It builds on PR #70,
 which added the three-step start list in `docs/app/loading.js`.
 
-Scope marker: untagged items are built. Items tagged **(spec only)** are designed and
-not built. Everything below the "Already built" section is spec only unless stated.
+Scope marker: every requirement below is built (tasks 1 to 9 in `tasks.md`), except where an
+item says it was skipped or left as an open question.
 
 ## Baseline: what a first visitor sees today
 Measured on the local build (`docs/` via `python3 -m http.server`), headless Chromium
@@ -104,7 +104,7 @@ it is working.
 1. BEFORE tracking starts, THE App SHALL show the stage, a one-sentence promise, the two Start buttons, the privacy line and (first run only) the walkthrough. The empty needle, tiles, "This session", test, progress, offline, calibration, sounds and breaks panels SHALL NOT be shown.
 2. THE page SHALL NOT show a "Sample" still or looping demo thumbnail before the click. Decision: skipped (the spec did not recommend it, and the Try the demo button already gives a no-camera preview).
 3. THE first paint SHALL stay under 500 ms on the local build, unchanged from the baseline.
-4. WHEN JavaScript fails to load, THE page SHALL show a `<noscript>` message that says the app needs JavaScript (today the page shows a dead dashboard).
+4. WHEN JavaScript fails to load, THE page SHALL show a `<noscript>` message that says the app needs JavaScript (before this change the page showed a dead dashboard).
 
 ### Requirement 4: Progressive disclosure of panels and settings
 **User Story:** As a new user, I want to see only what I need now, and the rest when it
@@ -148,7 +148,7 @@ all of it if I want.
 5. THE "Try a breath check" button (`#practice-breath`) and `#breath-check` SHALL stay and SHALL be revealed at the same stage as the offer (Stage 2 and 4 respectively).
 6. THE breath check SHALL not run in demo mode unless the demo is on its good-posture phase, and SHALL not run while `lowAccuracy` is true (MoveNet fallback does not give a reliable shoulder signal).
 
-### Requirement 7: Wellness menu (stretch, breath, eyes, water) (spec only)
+### Requirement 7: Wellness menu (stretch, breath, eyes, water) (built, `docs/app/wellness.js`)
 **User Story:** As a user, I want one place to pick a break, with a short demo of each.
 
 #### Acceptance Criteria

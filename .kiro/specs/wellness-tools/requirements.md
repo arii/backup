@@ -22,14 +22,16 @@ Ground truth about the sensor:
 
 ## Requirements
 
-### Requirement 1: Common rules for every tool (spec only unless noted)
-1. EVERY tool SHALL be opt-in and off by default, with its own toggle in settings.
+### Requirement 1: Common rules for every tool (built, with the deviations noted per item)
+1. EVERY tool SHALL have its own setting in "Breaks & prompts". Deviation: the 20-20-20 eye break (on) and the move break (60 minutes) are on for new users because they use only presence, not shoulder, neck or face landmarks. Stretch, water, jaw, breathing moments and the breathing cues are off until chosen.
 2. NO tool SHALL make a medical claim, give a diagnosis, or promise relief. Copy uses
    verbs like "try", "notice", "if it feels comfortable".
 3. EVERY tool SHALL stop and say so if the user reports discomfort ("Skip", "Stop for today").
-4. THE App SHALL apply a global prompt budget across posture reminders and all tools:
-   at most `WELLNESS.max_prompts_per_hour` (default 6) non-posture prompts per hour, and
-   no two prompts within `WELLNESS.min_gap_s` (default 120) of each other.
+4. THE App SHALL apply a global prompt budget across all non-posture tools through
+   `PromptScheduler` (`docs/app/prompts.js`): nothing in the first 5 minutes of a session,
+   then at most one prompt per 10 minutes, plus a per-prompt cooldown. Posture reminders
+   are not subject to it. (The first draft proposed 6 per hour and a 120 s gap; the shipped
+   rule is stricter.)
 5. NO tool SHALL prompt during pause, the silent retention test, or "Learn the cues" practice.
 6. NO frame, landmark, blendshape score or tool event SHALL leave the device. Counters
    stored locally MAY be added to `store.days` (aggregates only).
@@ -51,7 +53,7 @@ Ground truth about the sensor:
    up while posture reads good.
 3. These SHALL keep their current behaviour and ids.
 
-### Requirement 3: Guided slow-breathing exercise (spec only)
+### Requirement 3: Guided slow-breathing exercise (built, `docs/app/breathing.js`)
 1. THE App SHALL offer an optional paced breathing exercise of 1, 2 or 5 minutes.
 2. THE visual SHALL be a circle that grows for the inhale and shrinks for the exhale at a
    user-chosen pace (default 5 s in, 6 s out, within a 3 to 8 s range).
@@ -105,14 +107,14 @@ reminder to relax my face.
 5. Copy SHALL NOT say the tool prevents or treats eye disease or strain. It MAY say "many
    people find short screen breaks comfortable".
 
-### Requirement 7: Stand and move microbreak timer (spec only)
+### Requirement 7: Stand and move microbreak timer (built, `docs/app/breaks.js`)
 1. THE App SHALL offer an optional timer that prompts a short movement break after a
-   user-set interval of continuous tracked sitting (default 45 minutes, range 20 to 90).
+   user-set interval of continuous tracked sitting (shipped default 60 minutes; choices off, 30, 45, 60 or 90).
 2. THE prompt SHALL suggest standing, walking, or changing position for 1 to 5 minutes.
 3. WHEN the user leaves the frame for at least 30 seconds after a prompt, THE App SHALL
    count a break and reset the timer, and SHALL NOT penalise the absence.
 4. THE App SHALL count breaks taken per day locally (`day.breaks`) for the progress review.
 
-### Requirement 8: Wheelchair, standing and varied setups (spec only)
+### Requirement 8: Wheelchair, standing and varied setups (built as wording rules)
 1. THE tools SHALL offer wording that does not assume sitting or standing ("change position").
 2. THE movement prompt SHALL be skippable and SHALL NOT reduce any score if skipped.

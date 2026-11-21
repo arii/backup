@@ -140,9 +140,12 @@
   #onboarding li, dialog li, #setup-panel li { margin: 3px 0; }
   #onboarding ul { font-size: 13px; }
   .stage { min-height: 460px; }
+  .stage:has(#webgl-help.show) { aspect-ratio: auto; min-height: 660px; }
   .step-count { color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; max-width: min(640px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 16px 18px; }
   dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+  summary { padding: 3px 0; }
+  header .stat a { display: inline-block; padding: 3px 0; }
   details.panel summary { cursor: pointer; font-weight: 600; }
   details.panel[open] summary { margin-bottom: 8px; }
   details.group { margin-top: 10px; }
@@ -170,6 +173,7 @@
   @media (max-width: 600px) {
     .stage { aspect-ratio: auto; min-height: 560px; }
     .stage:has(#onboarding:not([hidden])) { min-height: 860px; }
+    .stage:has(#webgl-help.show) { min-height: 880px; }
     /* Narrow screens: the card sits below the video, so it never covers the face. */
     .stage:has(.overlay-msg.compact) { min-height: 0; aspect-ratio: auto; display: flex; flex-direction: column; }
     .stage:has(.overlay-msg.compact) video { position: relative; inset: auto; height: auto; aspect-ratio: 4 / 3; flex: none; }
@@ -391,7 +395,7 @@
         <div class="note" style="margin-top:0">This is the exact record a link will hold. It is built from this week's data in this browser and goes nowhere until you copy the link yourself.</div>
         <label class="note" for="peer-nickname" style="display:block">Nickname (1 to 20 letters or digits, not your real name or email)</label>
         <input type="text" id="peer-nickname" maxlength="20" autocomplete="off" spellcheck="false">
-        <pre class="note" id="peer-preview" aria-label="Record that the link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+        <pre class="note" id="peer-preview" role="group" aria-label="Record that the link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
         <div class="btn-row"><button class="secondary" id="peer-create">Create link</button><button class="secondary" id="peer-copy" hidden>Copy link</button></div>
         <input type="text" id="peer-link" readonly hidden aria-label="Your share link">
         <label class="note" for="peer-paste" style="display:block">See a friend's link</label>
@@ -438,7 +442,7 @@
         <button class="secondary" id="practice-start">Learn the cues</button>
         <button class="secondary" id="practice-breath" hidden>Try a breath check</button>
         <button class="secondary" id="intro-again">Show the intro again</button>
-        <a class="report-bug-link" href="https://github.com/arii/posture-guard/issues/new" target="_blank" rel="noopener" style="align-self:center">Report a bug</a>
+        <a class="report-bug-link" href="https://github.com/arii/posture-guard/issues/new" target="_blank" rel="noopener" style="align-self:center;padding:3px 0">Report a bug</a>
       </div>
       <div class="note" id="practice-msg" aria-live="polite"></div>
     </details>
@@ -623,7 +627,7 @@
   <ul id="share-consent-list"></ul>
   <label class="note" for="share-consent-nick" style="display:block">Nickname</label>
   <input type="text" id="share-consent-nick" maxlength="20" autocomplete="off" spellcheck="false">
-  <pre class="note" id="share-consent-preview" aria-label="Exact record that a link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+  <pre class="note" id="share-consent-preview" role="group" aria-label="Exact record that a link will hold" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
   <label class="note" id="share-consent-label" style="display:block;margin-top:8px"><input type="checkbox" id="share-consent-check"> </label>
   <div class="note" id="share-consent-msg" aria-live="polite"></div>
   <div class="btn-row"><button id="share-consent-agree" disabled>Share</button><button id="share-consent-cancel" class="secondary">Not now</button></div>
