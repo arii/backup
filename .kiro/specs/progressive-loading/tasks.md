@@ -75,19 +75,29 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
   - Built: `docs/app/wellness.js`; water reminder off by default plus an "I drank" count in
     "Your progress", cleared by Delete my data.
   - _Requirements: 7_
-- [ ] 8. Update e2e and capture scripts
+- [x] 8. Update e2e and capture scripts
   - `tests/e2e/live-site.mjs`: seed `setupDone` and `revealAll` next to `onboarded`,
     `ackVersion`, `firstRunDone` (init script around lines 98 to 105); keep clicks on
     `#start-demo` and `#start-camera`; adjust the places that open `#setup-panel summary`
     (lines 599, 648); add the scenarios listed in design.md.
   - `video/scripts/capture.mjs`: add the same seeds (lines 41 to 43), wait for the compact
     card to go after the clicks on `#start-demo` (line 72) and `#start-camera` (line 108).
+  - Built in FEAT-006. `live-site.mjs` already had the seeds and the design.md scenarios (video
+    within 1.5 s with the model route held, stage 0 at most 2 checkboxes, stage 2 reveal, clockScale
+    reveal, Show all settings, skip all, breath intro, 320 px per stage); a 320 px check that the
+    video is in view while the model loads was added. `capture.mjs` seeds `setupDone`, `revealAll`
+    and `breathIntroShown` and waits for `#start-overlay` to go after both Start clicks; the demo,
+    webcam and landing recordings ran against the local build.
   - _Requirements: 10, 12.3_
-- [ ] 9. Docs and checks
+- [x] 9. Docs and checks
   - Run `node scripts/gen-precache.mjs` after `docs/app` changes.
   - Update README/landing screenshots if the first view changes (`video/scripts/capture.mjs`).
   - Mark `onboarding-and-setup` tasks 8 and 9 as superseded or merged where overlapping.
   - Run `npm run check`.
+  - Built in FEAT-006. `onboarding-and-setup` tasks 8 and 9 are marked superseded. The first view
+    did not change in a way that needs new README or landing screenshots (the landing page is
+    untouched; the app first view only gained the compact card), so none were regenerated.
+  - Re-measured: see "Measured results" in requirements.md.
   - _Requirements: 12_
 
 ## Order and parallelism
@@ -98,13 +108,19 @@ finished last; do not leave e2e red between tasks.
 
 ## Open questions for the user
 1. Camera on page load, or only after the click? Recommended: only after the click.
+   **Decision: only after the click. The model download starts in parallel with the camera prompt.**
 2. Prefetch the 15 MB model: never, on intent (hover or focus on "Open the app"), or for
    every visitor on idle? Recommended: on intent, plus parallel start on click.
    **Decision: on intent (hover, focus, pointerdown), skipped on Save-Data and 2g.**
 3. Should the first breath check ignore the 5 minute quiet start once, or wait for it?
+   **Decision: ignore it once (one-time exemption in `prompts.js`); it still goes through the
+   scheduler and always asks for consent first.**
 4. Water: reminder and "I drank" tap only, or also camera-based detection later (new
    consent text, false positives with eating and phone calls)?
    **Decision: reminder (off by default) and "I drank" tap only, no camera detection.**
 5. How strict should staging be: reveal by time and tracking state as designed, or let
    people open everything with one click from the start (design has both)?
+   **Decision: staged reveal as designed, plus an always-available "Show all settings".**
 6. Show a sample looping demo in the stage before the click (small asset), or keep it text?
+   **Decision: deferred, not built. The spec did not recommend it, it adds an asset to the
+   precache, and "Try the demo" already gives a no-camera preview (requirements 3.2).**

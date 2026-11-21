@@ -30,9 +30,9 @@ Unchecked items are **spec only**.
 - [x] 7. E2E and capture scripts
   - Seed `posture-guard:v1`; add the fresh-context onboarding check.
   - _Requirements: 7_
-- [ ] 8. Camera framing guide on the preview (spec only)
+- [x] 8. Camera framing guide on the preview (superseded: built as the framing step of the progressive setup in `.kiro/specs/progressive-loading`, task 4)
   - _Requirements: 8.1_
-- [ ] 9. One-minute "calibrate and learn" sequence (spec only)
+- [x] 9. One-minute "calibrate and learn" sequence (superseded: merged into the calibrate step and stage 2 reveal of `.kiro/specs/progressive-loading`, tasks 3 and 4)
   - _Requirements: 8.2_
 - [ ] 10. Remember last working camera device (spec only)
   - _Requirements: 8.3_

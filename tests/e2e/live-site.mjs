@@ -1008,6 +1008,28 @@ try {
     check("live preview has no errors", errors.length === 0, errors);
     await page.close();
   }
+  // 3c. At 320 px the page must not stay scrolled past the video once the card turns compact.
+  if (y4m) {
+    const { page } = await newPage(browser, { viewport: { width: 320, height: 640 } });
+    await page.route(/pose_landmarker_lite\.task/, () => {}); // never answered: the model stays loading
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-camera");
+    const inView = await page
+      .waitForFunction(
+        () => {
+          const r = document.getElementById("video").getBoundingClientRect();
+          return (
+            /compact/.test(document.getElementById("start-overlay").className) && r.top >= 0 && r.top < innerHeight / 2
+          );
+        },
+        null,
+        { timeout: 5000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check("live preview: at 320 px the video is in view while the model loads", inView);
+    await page.close();
+  }
   // 4. No WebGL: a separate browser, since the flag is per launch.
   {
     const noGL = await chromium.launch({

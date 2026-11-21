@@ -2276,6 +2276,8 @@ function preloadModel(canvas, gate) {
 /** Frames are playing: show the video and shrink the card to a strip under it. */
 function showLivePreview() {
   $("start-overlay").classList.add("compact");
+  // On a narrow screen the page was scrolled to the Start button; the card shrinks, so bring the video back.
+  video.scrollIntoView({ block: "nearest" });
   $("start-status").textContent = "Camera is on. Loading the pose model, no video leaves your computer.";
 }
 

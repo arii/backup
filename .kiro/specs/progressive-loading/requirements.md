@@ -187,3 +187,34 @@ all of it if I want.
 1. `npm run check` SHALL pass (Biome lint and format, fallow dead code, JS tests, precache check).
 2. WHEN files in `docs/app/` change, `node scripts/gen-precache.mjs` SHALL be run and the result committed.
 3. `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` SHALL keep working (see tasks 9 and 10).
+
+## Measured results
+Measured after FEAT-001 to FEAT-006 with `tests/e2e/measure-load.mjs` (same setup as the
+baseline: local build, headless Chromium, fake camera, software WebGL, fresh profile).
+Times are from the click on Start with webcam.
+
+| Moment | Before 1280x800 | After 1280x800 | Before 320x640 | After 320x640 |
+|---|---|---|---|---|
+| First contentful paint | 288 ms | 100 ms | 100 ms | 104 ms |
+| Camera frames decoded | 0.34 s | 0.25 s | 0.19 s | 0.24 s |
+| Video actually visible | 3.8 s | 0.40 s | 3.3 s | 0.25 s |
+| First scored frame | 4.5 s | 5.4 s | 3.6 s | 4.6 s |
+| "Settling in" ends | 5.2 s | 5.6 s | 4.7 s | 4.8 s |
+
+| Throttled to 1.5 Mbit/s, 1280x800 | Before | After |
+|---|---|---|
+| Video visible | 86.5 s | 0.19 s |
+| First scored frame | not recorded | 86.6 s (the download is the floor) |
+
+| Page density (visible) | Before | After |
+|---|---|---|
+| Landing: checkboxes and radios | 10 | 0 |
+| Landing: words / controls | about 840 / 48 | 200 / 15 |
+| Stage 2: checkboxes and radios | 10 | 0 |
+| Stage 2: words below the stage | about 820 | 76 |
+
+Notes: the first scored frame varies by about 1 s between runs on software WebGL, so the
+change from the baseline is within noise. At 320 px the first measurement after the staged
+reveal showed the video at 3.6 s because the page stayed scrolled to the Start button and
+the video sat above the viewport; `showLivePreview` now scrolls it into view
+(`docs/app/app.js`) and `live-site.mjs` checks it.
