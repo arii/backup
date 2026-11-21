@@ -1142,7 +1142,8 @@ $("prompt-action").addEventListener("click", () => {
 });
 $("prompt-done").addEventListener("click", () => {
   if (card && (card.id === "move" || card.id === "stretch")) breaks.taken(card.id);
-  if (card && card.static) breaks.taken(card.kind);
+  // Water resets only through "I drank" (drank()), never through Done.
+  if (card && card.static && card.kind !== "water") breaks.taken(card.kind);
   endCard("done");
 });
 $("prompt-snooze").addEventListener("click", () => endCard("snooze"));

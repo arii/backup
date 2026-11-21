@@ -2105,6 +2105,17 @@ try {
       ),
     );
     await page.click("#prompt-notnow");
+    // Done on the static water card must not log a drink (and must not reset the reminder).
+    await page.click("#break-water");
+    await page.click("#prompt-done");
+    check(
+      "break menu: Done on the water card closes it without logging a drink",
+      await page.evaluate(
+        () =>
+          !document.getElementById("prompt-card").classList.contains("show") &&
+          !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water,
+      ),
+    );
     await page.click("#break-water");
     await page.click("#prompt-action");
     await page.click("#break-water");
