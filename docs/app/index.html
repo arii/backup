@@ -251,6 +251,7 @@
       <div id="prompt-card" data-prompt="">
         <svg id="prompt-figure" viewBox="0 0 40 32" width="40" height="32" aria-hidden="true" hidden><g id="fig-all"><circle id="fig-head" cx="20" cy="9" r="5"/><path id="fig-body" d="M8 30 Q8 17 20 17 Q32 17 32 30"/><rect id="fig-cup" x="30" y="4" width="6" height="8" rx="1"/></g></svg>
         <div id="prompt-text" role="status" aria-live="polite"></div>
+        <div class="note" id="prompt-safety" hidden></div>
         <div class="hold" id="prompt-bar" hidden role="progressbar" aria-label="Countdown" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="hold-fill" id="prompt-fill"></div></div>
         <div class="btn-row">
           <button id="prompt-action" class="secondary" hidden>Breathe with me</button>
@@ -513,6 +514,13 @@
         <option value="60">Every 60 minutes</option>
         <option value="90">Every 90 minutes</option>
       </select></div>
+      <label class="note" for="jaw-minutes" style="display:block;margin-top:6px">Face and jaw check (a reminder, nothing is measured)</label>
+      <div class="modes"><select id="jaw-minutes">
+        <option value="0" selected>Off</option>
+        <option value="30">Every 30 minutes</option>
+        <option value="45">Every 45 minutes</option>
+      </select></div>
+      <div class="note">A webcam cannot see jaw tension. This is a reminder, not a reading. Stop if your jaw hurts.</div>
       <label class="note" for="water-minutes" style="display:block;margin-top:6px">Water reminder</label>
       <div class="modes"><select id="water-minutes">
         <option value="0" selected>Off</option>
@@ -565,6 +573,13 @@
         <option value="light">Light: a chime before any voice, praise only at milestones</option>
       </select></div>
       <div class="note" id="coaching-note">Light coaching gives your own habit room to take over. Check with &ldquo;Test me&rdquo; whether it sticks.</div>
+      <div id="light-suggest" hidden>
+        <div class="note" id="light-suggest-text" role="status">You have dismissed or muted a lot of reminders this week. Light coaching is quieter: a chime before any voice, praise only at milestones. Want to try it?</div>
+        <div class="btn-row">
+          <button id="light-suggest-yes" class="secondary">Switch to light coaching</button>
+          <button id="light-suggest-no" class="secondary">Not now</button>
+        </div>
+      </div>
       <div class="note" id="reminder-note" role="status">Taking a break from reminders: that is a lot in an hour. Tracking continues.</div>
       <details class="group" data-group>
       <summary>Voice, sounds and shortcuts</summary>

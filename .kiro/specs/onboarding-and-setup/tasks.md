@@ -34,5 +34,6 @@ Unchecked items are **spec only**.
   - _Requirements: 8.1_
 - [x] 9. One-minute "calibrate and learn" sequence (superseded: merged into the calibrate step and stage 2 reveal of `.kiro/specs/progressive-loading`, tasks 3 and 4)
   - _Requirements: 8.2_
-- [ ] 10. Remember last working camera device (spec only)
+- [x] 10. Remember last working camera device
+  - `openCamera()` in `app.js` stores `store.cameraDeviceId` from the working track, requests it with `deviceId: {exact}` next time (`cameraConstraints` in `settings.js`), and on `OverconstrainedError`, `NotFoundError` or `NotReadableError` (`isDeviceGoneError`) forgets it and asks again for the default camera. Permission errors are not retried. Resolution is not remembered. Listed on the privacy page.
   - _Requirements: 8.3_

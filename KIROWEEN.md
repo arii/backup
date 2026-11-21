@@ -160,11 +160,11 @@ What the Kiro phase changed (PRs #19 onward):
   studies, and several citations were checked from metadata only.
 - **Webcam accuracy.** A 2D webcam estimate depends on lighting, angle, clothing and
   body shape. "Good" is relative to the user's own calibration.
-- **Spec only, not built:** the social leaderboard, face and jaw tension prompts, eye
-  breaks and blink reminders, neck and shoulder stretch prompts, the microbreak
-  timer and the guided breathing exercise. Built: onboarding, safety acknowledgement,
-  Help, *Not working?*, *Learn the cues*, the personal progress panel, Light coaching,
-  milestone praise and the hourly reminder cap.
+- **Spec only, not built:** the social leaderboard, the face-model (blendshape) jaw
+  proxy and the blink reminder. Built: onboarding, safety acknowledgement, Help,
+  *Not working?*, *Learn the cues*, the personal progress panel, Light coaching (and a
+  suggestion to try it after repeated dismissals), milestone praise, the hourly reminder
+  cap, eye, move, stretch, water and timed jaw prompts, and the guided breathing exercise.
 - **E2E scripts.** `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` hard-code
   onboarding version 1 and ack version 1. Update them when those versions change.
 - **Physical webcam.** The automated live test uses Chromium's fake camera playing

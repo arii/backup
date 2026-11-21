@@ -19,12 +19,13 @@ Checked items are built. Unchecked items are **spec only**.
 - [x] 5. Guided slow-breathing exercise and breathing moments (`breathing.js`)
   - "Breathe with me" and rotated one-line prompts. Tests in `tests/js/breathing.test.mjs`.
   - _Requirements: 3_
-- [ ] 6. Neck and shoulder micro-stretch prompts (spec only)
+- [x] 6. Neck and shoulder micro-stretch prompts
+  - Already covered: `stretch` is a scheduler prompt (`prompts.js`, off until chosen in Breaks & prompts, 10 minute gap, quiet start, no prompts while paused or in a silent test), and the "Take a break" menu and the prompt's "Show me" button run the guided neck, shoulder roll and chest demo (`wellness.js`, `DEMO_LINES`). The demo uses no camera, never scores form, and the card carries "Stop if anything hurts" (`TOOL_SAFETY`).
   - _Requirements: 5_
 - [x] 7. 20-20-20 eye break with countdown (`breaks.js`)
   - _Requirements: 6.1, 6.2, 6.5_
-- [ ] 8. Face and jaw prompt, time-based first (spec only)
-  - Blendshape proxy only after task 4.
+- [x] 8. Face and jaw prompt, time-based part
+  - `jaw` prompt in `breaks.js` and `prompts.js`, off until set to 30 or 45 minutes, with the required text in `BREAK_LINES.jaw` and the limit note "A webcam cannot see jaw tension. This is a reminder, not a reading." The blendshape proxy stays with task 4 (spec only).
   - _Requirements: 4_
 - [ ] 9. Blink reminder from `eyeBlink*` (spec only)
   - _Requirements: 6.3, 6.4_

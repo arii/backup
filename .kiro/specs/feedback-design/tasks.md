@@ -1,6 +1,6 @@
 # Implementation Plan: Feedback Design
 
-Checked items are built. Unchecked items are **spec only**.
+Checked items are built. Unchecked items are **spec only**, or blocked (the reason is on the item).
 
 - [x] 1. Specific cues, recovery praise, faded positive chime, opt-in spoken praise (shipped)
   - `posture-core.js` cues and `positive_chime`, `app.js` settings.
@@ -25,10 +25,12 @@ Checked items are built. Unchecked items are **spec only**.
 - [x] 9. Research doc and spec cross-links
   - `docs/research/feedback-and-habit-formation.md`.
   - _Requirements: 11_
-- [ ] 10. Shame-string deny-list test over banner and cue text (spec only)
+- [x] 10. Shame-string deny-list test over banner and cue text
+  - `tests/js/feedback.test.mjs`: every cue, milestone banner and spoken line in `voice-lines.js`, plus the visible text of the app page.
   - _Requirements: 1.3, 6.5_
-- [ ] 11. Suggest Light after repeated dismissals or mutes (spec only)
+- [x] 11. Suggest Light after repeated dismissals or mutes
+  - `recordAnnoyance` and `shouldSuggestLight` in `feedback.js` (5 events in 7 days, a declined offer stays away 14 days). `app.js` records Snooze, Not now, Don't show again and a move to a quieter reminder style, and shows `#light-suggest` under Coaching level. It never switches on its own.
   - _Requirements: 7.4_
-- [ ] 12. Adaptive fading driven by the retention score (spec only)
-  - Needs real-user data. See open questions in the design.
+- [ ] 12. Adaptive fading driven by the retention score (blocked, needs real-user data)
+  - Blocked: the fade thresholds and step size cannot be chosen or tested honestly without real retention-score data from users, and the app collects none (no server, issue #51). Any numbers now would be invented. Task 11 and the progress view's "try Light" hint (silent score at least as good as coached) are the data-free versions. Revisit when volunteers share exported scores. See open questions in the design.
   - _Requirements: 3_

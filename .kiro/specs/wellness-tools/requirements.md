@@ -8,7 +8,7 @@ not a medical measurement or treatment. Safety wording lives in
 `.kiro/specs/safety-and-disclaimers/`. Evidence: `docs/research/feedback-and-habit-formation.md`.
 
 Scope markers: **(shipped)** already in the app via PR #37 (`docs/app/relax.js`).
-**(spec only)** designed and not built.
+**(built)** shipped since, see tasks.md. **(spec only)** designed and not built.
 
 Ground truth about the sensor:
 - MediaPipe Pose has 33 landmarks. The only face points are nose, eyes, ears and two
@@ -60,7 +60,7 @@ Ground truth about the sensor:
    text countdown.
 5. THE App SHALL NOT claim physiological effects. Copy: "A slow breathing break."
 
-### Requirement 4: Face and jaw tension prompt (spec only)
+### Requirement 4: Face and jaw tension prompt (time-based prompt built, blendshape proxy spec only)
 **User Story:** As a user who clenches my jaw while concentrating, I want an occasional
 reminder to relax my face.
 
@@ -84,7 +84,7 @@ reminder to relax my face.
    when the tool is on, to bound CPU cost.
 7. THE feature SHALL degrade to the time-based prompt if the model fails to load.
 
-### Requirement 5: Neck and shoulder micro-stretch prompts (spec only)
+### Requirement 5: Neck and shoulder micro-stretch prompts (built)
 1. THE App SHALL offer optional prompts such as "Gently turn your head to look over each
    shoulder", "Roll your shoulders back and down", "Look left and right".
 2. EACH prompt SHALL be short, shown on screen with a small illustration or text, and

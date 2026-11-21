@@ -70,10 +70,10 @@ to fix it.
 1. THE e2e script (`tests/e2e/live-site.mjs`) and `video/scripts/capture.mjs` SHALL seed `localStorage` key `posture-guard:v1` with the current `ackVersion` and `onboarded` via `context.addInitScript` so they reach `#start-demo`.
 2. A dedicated e2e check SHALL use a fresh context to assert the walkthrough shows, the Start buttons work after acknowledgement, the safety footer exists, Help reopens the card, and acknowledgement persists after reload.
 
-### Requirement 8: Setup coaching beyond the check (spec only)
+### Requirement 8: Setup coaching beyond the check (built)
 1. THE App MAY offer a camera preview framing guide (shoulder-width target band) before the session starts.
 2. THE App MAY offer a one-minute "calibrate and learn" sequence combining calibration with the cue practice.
-3. THE App MAY remember the last working camera device and resolution.
+3. THE App MAY remember the last working camera device and resolution (built for the device; resolution is not remembered).
 
 ### Requirement 9: Privacy of diagnostics
 1. THE SetupCheck SHALL use only reason, state, fps and a boolean. It SHALL NOT store or transmit frames or landmarks.

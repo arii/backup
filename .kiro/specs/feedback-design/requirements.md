@@ -79,7 +79,7 @@ Scope markers: **(shipped)**, **(built)**, **(spec only)**.
    speech but keep the on-screen state.
 3. THE App SHALL count recovery praise and milestone chimes separately from reminders.
 4. WHEN a user dismisses or mutes reminders repeatedly, THE App MAY suggest the `light`
-   level (spec only).
+   level (built: `shouldSuggestLight` in `feedback.js`).
 
 ### Requirement 8: Auditory design (shipped)
 1. THE positive sound SHALL be a short rising major arpeggio.

@@ -52,8 +52,15 @@ import {
   summarizeWeeks,
   tallyDay,
 } from "./progress.js";
-import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText } from "./wellness.js";
-import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText, toolSafety } from "./wellness.js";
+import {
+  NEEDS_TRACKING_TIP,
+  cameraConstraints,
+  cameraErrorMessage,
+  isDeviceGoneError,
+  isPauseShortcut,
+  resolveSettings,
+} from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
   META_URL,
@@ -115,7 +122,7 @@ import {
   viewSetupStep,
 } from "./onboarding.js";
 import { RevealStages, STAGES } from "./reveal.js";
-import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
+import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel, recordAnnoyance, shouldSuggestLight } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
@@ -171,12 +178,15 @@ const settings = {
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
+const MODE_RANK = { chime_and_voice: 2, chime_only: 1, silent: 0 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
   el.addEventListener("change", () => {
+    const quieter = MODE_RANK[el.value] < MODE_RANK[settings.mode];
     settings.mode = el.value;
     store.mode = el.value;
     save();
+    if (quieter) noteAnnoyance(); // muting counts toward the Light suggestion
   });
 });
 $("sound-pack").value = settings.soundPack;
@@ -213,7 +223,34 @@ $("coaching-level").addEventListener("change", (e) => {
   policy.setLevel(settings.coachingLevel);
   store.coachingLevel = settings.coachingLevel;
   save();
+  renderLightSuggest();
 });
+
+// Repeated dismissals or mutes: suggest Light once, never switch on our own (feedback-design 7.4).
+function renderLightSuggest() {
+  const show = shouldSuggestLight({
+    level: settings.coachingLevel,
+    log: store.annoyLog,
+    declinedAtMs: store.lightSuggestDeclinedAt,
+    nowMs: Date.now(),
+  });
+  $("light-suggest").hidden = !show;
+}
+function noteAnnoyance() {
+  store.annoyLog = recordAnnoyance(store.annoyLog, Date.now());
+  save();
+  renderLightSuggest();
+}
+$("light-suggest-yes").addEventListener("click", () => {
+  $("coaching-level").value = "light";
+  $("coaching-level").dispatchEvent(new Event("change"));
+});
+$("light-suggest-no").addEventListener("click", () => {
+  store.lightSuggestDeclinedAt = Date.now();
+  save();
+  renderLightSuggest();
+});
+renderLightSuggest();
 
 function allowed(nudge) {
   if (settings.mode === "silent") return false;
@@ -819,6 +856,7 @@ const DISMISS_KEY = {
   move: "move",
   stretch: "stretch",
   water: "water",
+  jaw: "jaw",
   breathing: "breathing",
   offer: "breathing",
 };
@@ -830,6 +868,7 @@ function promptEnabled(id) {
   if (id === "move") return settings.moveBreakMinutes > 0;
   if (id === "stretch") return settings.stretchMinutes > 0;
   if (id === "water") return settings.waterMinutes > 0;
+  if (id === "jaw") return settings.jawMinutes > 0;
   if (id === "breathing") return settings.breathingMoments && hasConsent(store);
   if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
   if (id === "breath_intro") return settings.relaxReminders && !store.breathIntroShown; // asks for consent itself
@@ -851,6 +890,7 @@ function renderPromptSettings() {
   $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
   $("stretch-minutes").value = String(dismissed.stretch ? 0 : settings.stretchMinutes);
   $("water-minutes").value = String(dismissed.water ? 0 : settings.waterMinutes);
+  $("jaw-minutes").value = String(dismissed.jaw ? 0 : settings.jawMinutes);
   $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
   $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
   $("breathe-cues").checked = settings.breatheCues;
@@ -861,6 +901,7 @@ function savePromptSettings() {
   store.moveBreakMinutes = settings.moveBreakMinutes;
   store.stretchMinutes = settings.stretchMinutes;
   store.waterMinutes = settings.waterMinutes;
+  store.jawMinutes = settings.jawMinutes;
   store.breathingMoments = settings.breathingMoments;
   store.breatheCues = settings.breatheCues;
   store.promptsDismissed = { ...dismissed };
@@ -889,6 +930,12 @@ $("water-minutes").addEventListener("change", (e) => {
   breaks.setWaterMinutes(e.target.value);
   settings.waterMinutes = breaks.waterMinutes;
   if (settings.waterMinutes > 0) delete dismissed.water;
+  savePromptSettings();
+});
+$("jaw-minutes").addEventListener("change", (e) => {
+  breaks.setJawMinutes(e.target.value);
+  settings.jawMinutes = breaks.jawMinutes;
+  if (settings.jawMinutes > 0) delete dismissed.jaw;
   savePromptSettings();
 });
 $("breathing-moments").addEventListener("change", (e) => {
@@ -933,6 +980,7 @@ const CARD_UI = {
   move: { action: true, done: true, snooze: true, never: true },
   stretch: { action: true, actionLabel: "Show me", done: true, snooze: true, never: true },
   water: { action: true, actionLabel: "I drank", snooze: true, never: true },
+  jaw: { done: true, snooze: true, never: true },
   demo: { bar: true, stop: true },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
@@ -951,6 +999,9 @@ function renderCard() {
   const ui = card.ui || CARD_UI[card.id];
   if (card.id !== "demo") $("prompt-figure").hidden = true;
   $("prompt-text").textContent = card.text;
+  const safety = toolSafety(card.id, card.kind);
+  $("prompt-safety").textContent = safety;
+  $("prompt-safety").hidden = !safety;
   $("prompt-bar").hidden = !ui.bar;
   $("prompt-action").hidden = !ui.action;
   $("prompt-action").textContent = ui.actionLabel || "Breathe with me";
@@ -1018,7 +1069,7 @@ function showPrompt(item) {
     return;
   }
   const text =
-    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water"
+    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water" || item.id === "jaw"
       ? BREAK_LINES[item.id]
       : item.id === "offer"
         ? BREATHE_LINES.offer
@@ -1175,14 +1226,23 @@ $("prompt-action").addEventListener("click", () => {
   } else startGuide();
 });
 $("prompt-done").addEventListener("click", () => {
-  if (card && (card.id === "move" || card.id === "stretch")) breaks.taken(card.id);
+  if (card && (card.id === "move" || card.id === "stretch" || card.id === "jaw")) breaks.taken(card.id);
   // Water resets only through "I drank" (drank()), never through Done.
   if (card && card.static && card.kind !== "water") breaks.taken(card.kind);
   endCard("done");
 });
-$("prompt-snooze").addEventListener("click", () => endCard("snooze"));
-$("prompt-notnow").addEventListener("click", () => endCard("notnow"));
-$("prompt-never").addEventListener("click", () => endCard("never"));
+$("prompt-snooze").addEventListener("click", () => {
+  noteAnnoyance();
+  endCard("snooze");
+});
+$("prompt-notnow").addEventListener("click", () => {
+  if (card && card.id !== "demo" && card.id !== "guide") noteAnnoyance(); // Stop on a demo is not a dismissal
+  endCard("notnow");
+});
+$("prompt-never").addEventListener("click", () => {
+  noteAnnoyance();
+  endCard("never");
+});
 $("breathe-with-me").addEventListener("click", startGuide);
 
 // -- "Take a break" menu: guided demos and the water count -----------------------
@@ -2323,6 +2383,28 @@ function showLivePreview() {
   $("start-status").textContent = "Camera is on. Loading the pose model, no video leaves your computer.";
 }
 
+/** Open the camera. A remembered device is tried first; if it is gone or cannot be used,
+ *  forget it and ask again for the default camera. The id of the one that works is remembered. */
+async function openCamera() {
+  const ask = (id) => navigator.mediaDevices.getUserMedia({ video: cameraConstraints(id), audio: false });
+  let stream;
+  const remembered = typeof store.cameraDeviceId === "string" ? store.cameraDeviceId : "";
+  try {
+    stream = await ask(remembered);
+  } catch (err) {
+    if (!remembered || !isDeviceGoneError(err)) throw err;
+    delete store.cameraDeviceId;
+    save();
+    stream = await ask("");
+  }
+  const id = stream.getVideoTracks?.()[0]?.getSettings?.().deviceId;
+  if (typeof id === "string" && id && id !== store.cameraDeviceId) {
+    store.cameraDeviceId = id;
+    save();
+  }
+  return stream;
+}
+
 $("start-camera").addEventListener("click", async () => {
   ensureAudio(); // inside the click: browsers only allow audio after a gesture
   for (const k of Object.keys(loadMarks)) delete loadMarks[k];
@@ -2351,10 +2433,7 @@ $("start-camera").addEventListener("click", async () => {
     if (!canvas) loadSteps.label("download", "WebGL is off: downloading the simpler pose model");
     if (entry.downloaded) loadSteps.done("download");
     else loadSteps.start("download");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-      audio: false,
-    });
+    const stream = await openCamera();
     video.srcObject = stream;
     await video.play();
     markLoad("streamPlaying");
@@ -2541,6 +2620,7 @@ function setupControls(key) {
       setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
       setupRow("Stretch reminder", mirrorSelect($("stretch-minutes"), "coach-stretch", "Stretch reminder")),
       setupRow("Water reminder", mirrorSelect($("water-minutes"), "coach-water", "Water reminder")),
+      setupRow("Face and jaw check", mirrorSelect($("jaw-minutes"), "coach-jaw", "Face and jaw check")),
     ];
   }
   if (key === "shoulders") {

@@ -8,7 +8,7 @@ Pose frames (shipped) ─────────> PostureEngine ──> reminde
                                             │
                      PromptBudget (spec only) ◄── every non-posture prompt asks first
                        ▲        ▲        ▲        ▲
-         BreathingGuide  JawPrompt  StretchPrompts  EyeBreak/Blink  MoveTimer   (all spec only)
+         BreathingGuide  JawPrompt  StretchPrompts  EyeBreak/Blink  MoveTimer   (built, except the face model and blink)
                                   │                       │
                   Face Landmarker (optional second model, lazy, ~2 fps)
 ```
