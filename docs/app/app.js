@@ -1190,7 +1190,7 @@ function demoStep(first = false) {
   if (d.done) {
     if (!card.finished) {
       card.finished = true;
-      breaks.taken(card.kind);
+      if (card.kind !== "water") breaks.taken(card.kind);
       if (DEMO_DONE[card.kind]) {
         card.text = DEMO_DONE[card.kind];
         sayPrompt(card.text);

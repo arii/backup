@@ -1,11 +1,11 @@
 {
-  "version": "87c81d5e131c9577",
-  "totalBytes": 32896909,
+  "version": "f6bdfcc63f5e722d",
+  "totalBytes": 32896936,
   "files": [
     {
       "url": "app.js",
-      "size": 112734,
-      "sha256": "21600a8e4e34d4a7bea1c2f36bd8cdd28f298f016f91306bb04b20c276be5189"
+      "size": 112761,
+      "sha256": "04ccb14655d1e9e10151c822c2646a538e1bcd9addee08ac0653fad716a9d8c6"
     },
     {
       "url": "breaks.js",

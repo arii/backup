@@ -14,13 +14,11 @@ const SRC = readFileSync(new URL("../../docs/prefetch.js", import.meta.url), "ut
 /** Run the script against a fake page. Returns the handlers, the fetch calls (as `added`) and a fake timer queue. */
 function page({ connection, webgl = true } = {}) {
   const handlers = {};
-  const added = [];
   const fetched = [];
   const timers = [];
   const link = { addEventListener: (type, fn) => (handlers[type] = fn) };
   const document = {
-    head: { appendChild: (el) => added.push(el) },
-    createElement: (tag) => (tag === "canvas" ? { getContext: () => (webgl ? {} : null) } : { rel: "", href: "" }),
+    createElement: (tag) => (tag === "canvas" ? { getContext: () => (webgl ? {} : null) } : {}),
     querySelectorAll: (sel) => (sel === 'a[href="./app/"]' ? [link] : []),
   };
   const ctx = {
