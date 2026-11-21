@@ -165,8 +165,8 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
   hidden. Chimes play through Web Audio, the prompt through the browser's speech
   synthesis, and *Notify when tab is hidden* adds desktop notifications.
-- **Remembers you.** Calibration, settings, custom sounds (under 1.5 MB) and daily
-  good/slouch totals persist in `localStorage`.
+- **Remembers you.** Calibration, settings, the camera you last used, custom sounds (under 1.5 MB)
+  and daily good/slouch totals persist in `localStorage`.
 
 GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
 
