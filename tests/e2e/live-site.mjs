@@ -301,6 +301,78 @@ try {
     await page.close();
   }
 
+  // 4a2. Activity states: during the eye break the demo slouches (it slouches for
+  // 20 s of every 40 s of page time) and nothing may coach: no banner, no reminder
+  // count, no fix box, no day tally. Stopping the break starts a grace window with
+  // no reminder; a reminder comes back after it while the slouch continues.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    await page.waitForFunction(() => !document.getElementById("break-eye").disabled, null, { timeout: 15000 });
+    const snap = () =>
+      page.evaluate(() => ({
+        t: performance.now() / 1000,
+        banner: document.getElementById("banner").classList.contains("show"),
+        count: Number(document.getElementById("reminder-count").textContent),
+        today: document.getElementById("today").textContent,
+        badge: document.getElementById("state-badge").textContent,
+        fixActive: document.getElementById("fix-box").classList.contains("active"),
+      }));
+    // The first slouch phase starts at page time 20 s; start the break just before it.
+    await page.waitForFunction(() => performance.now() / 1000 >= 19.5, null, { timeout: 30000, polling: 100 });
+    const before = await snap();
+    await page.evaluate(() => document.getElementById("break-eye").click());
+    const samples = [];
+    while ((await snap()).t < 29) {
+      samples.push(await snap());
+      await page.waitForTimeout(250);
+    }
+    const during = samples.filter((s) => s.t > 21);
+    check(
+      "activity: eye break while the demo slouches shows no banner, fix box, reminder or day tally",
+      during.length > 10 &&
+        during.every((s) => !s.banner && !s.fixActive && s.count === before.count && s.today === before.today),
+      {
+        before,
+        during: during
+          .filter((s) => s.banner || s.fixActive || s.count !== before.count || s.today !== before.today)
+          .slice(0, 3),
+      },
+    );
+    check(
+      "activity: the badge reads 'Eye break, posture paused' during the break",
+      during.every((s) => /Eye break, posture paused/.test(s.badge)),
+      during[0],
+    );
+    await page.click("#prompt-notnow"); // Stop: ends the break, grace begins
+    const grace = [];
+    while ((await snap()).t < 36) {
+      grace.push(await snap());
+      await page.waitForTimeout(250);
+    }
+    check(
+      "activity: stopping the break keeps reminders and banners off for the grace window",
+      grace.length > 10 && grace.every((s) => !s.banner && s.count === before.count),
+      grace.find((s) => s.banner || s.count !== before.count),
+    );
+    check(
+      "activity: the badge no longer says the break is on once it is stopped",
+      !/Eye break/.test((await snap()).badge),
+    );
+    // The slouch phase ends at 40 s. Reminders must come back before it does.
+    const resumed = await page
+      .waitForFunction((c) => Number(document.getElementById("reminder-count").textContent) > c, before.count, {
+        timeout: 12000,
+        polling: 100,
+      })
+      .then(() => true)
+      .catch(() => false);
+    check("activity: a reminder comes back after the grace window while the slouch continues", resumed, await snap());
+    check("activity: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
   // 2a. First run: a fresh profile sees the walkthrough and safety notice, and
   // the Start buttons only work after "I understand". Help replays it.
   {

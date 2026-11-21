@@ -208,7 +208,7 @@ In short:
   coached score. The progress panel suggests trying Light coaching when your latest
   silent score is at least your coached score.
 - A per-hour reminder cap (30) limits alarm fatigue, with a visible note when it
-  applies. Nothing is spoken during pause or the silent test.
+  applies. Nothing is spoken during pause or the silent test. During the eye break and the guided stretch, move, water and jaw breaks, posture coaching is suspended (no cues, reminders or praise, and that time is not counted as slouching), and it stays off for 10 seconds after the break ends.
 
 How sure are we? Sources were checked in two tiers. **Verified** means the abstract
 or page text was read and supports the claim. **Metadata only** means the citation

@@ -80,7 +80,7 @@ const TABLE = Object.freeze({
     engine: "hold",
     speak: true,
     leaveCancels: true,
-    label: "Stretch, posture paused",
+    label: "Break, posture paused",
     graceAfter_s: GRACE_S,
   }),
 });

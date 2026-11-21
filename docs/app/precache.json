@@ -1,11 +1,11 @@
 {
-  "version": "b7d104f481527d36",
-  "totalBytes": 33424815,
+  "version": "06262fb40bca8a6c",
+  "totalBytes": 33424813,
   "files": [
     {
       "url": "activity.js",
-      "size": 6690,
-      "sha256": "2a465eb83b810a3fdd2470083146e637c13650140824cd36ac7bcb8eabaff3a5"
+      "size": 6688,
+      "sha256": "983542b49480b7a4bd2cf639922418442287a03bd014a52e03465c08c7a83f13"
     },
     {
       "url": "app.js",

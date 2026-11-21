@@ -63,7 +63,7 @@ test("eye break stops cues, reminders, praise and slouch tallies but keeps its o
 test("demo and guide labels", () => {
   const m = new ActivityMachine();
   m.start(A.DEMO, 0);
-  assert.equal(m.label(1), "Stretch, posture paused");
+  assert.equal(m.label(1), "Break, posture paused");
   m.stop(A.DEMO, 2, "cancelled");
   m.start(A.BREATHE_GUIDE, 20);
   assert.equal(m.label(21), "Breathing, posture paused");

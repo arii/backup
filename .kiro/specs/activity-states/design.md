@@ -41,7 +41,7 @@ Test and practice exclude each other. Stopping PAUSED over a test returns to SIL
 | BREATH_CHECK | yes | track | no | no | yes | day | no | no | no | 0 | Breath check |
 | BREATHE_GUIDE | yes | hold | no | no | yes | none | no | no | no | 10 | Breathing, posture paused |
 | EYE_BREAK | yes | hold | no | no | yes | none | no | no | yes | 10 | Eye break, posture paused |
-| DEMO | yes | hold | no | no | yes | none | no | no | yes | 10 | Stretch, posture paused |
+| DEMO | yes | hold | no | no | yes | none | no | no | yes | 10 | Break, posture paused |
 | (grace) | yes | track | no | no | yes | day | no | yes | no | 0 | |
 
 Fields: `frames` (landmarks are processed at all), `engine` (`track` feeds `PostureEngine.process`; `hold` calls a new `PostureEngine.hold(landmarks, now)` that scores presence only and freezes the state machine, needle and calibration, with no nudges), `reminders` (posture reminders, the cue and fix box, reminder note), `praise` (timed, milestone, recovery, spoken), `speak` (any speech or clip), `score` (`day` daily totals and session good, bad, streak; `test` silent test only; `none`), `prompts` (PromptScheduler may open prompts), `setupCards`, `leaveCancels`, `graceAfter_s`, `label`.
