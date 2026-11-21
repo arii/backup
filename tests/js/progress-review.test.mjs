@@ -92,7 +92,7 @@ test("parseImport rejects files above 1 MB by bytes, not characters", () => {
   assert.equal(parseImport(undefined).ok, false);
 });
 
-test("applyImport merge sums seconds, de-duplicates tests and keeps settings", () => {
+test("applyImport merge keeps the larger value per day, de-duplicates tests and keeps settings", () => {
   const store = {
     mode: "silent",
     days: { "2026-04-09": { good: 100, bad: 10, best: 30 } },
@@ -110,12 +110,37 @@ test("applyImport merge sums seconds, de-duplicates tests and keeps settings", (
     }),
   );
   applyImport(store, parsed, "merge");
-  assert.deepEqual(store.days["2026-04-09"], { good: 150, bad: 15, best: 80 });
+  assert.deepEqual(store.days["2026-04-09"], { good: 100, bad: 10, best: 80 });
   assert.deepEqual(store.days["2026-04-08"], { good: 7, bad: 1 });
   assert.equal(store.tests.length, 2);
   assert.equal(store.tests[0].at, "2026-04-07T10:00:00.000Z", "sorted by date");
   assert.equal(store.water["2026-04-09"], 4, "water takes the larger count");
   assert.equal(store.mode, "silent");
+});
+
+test("merging the same file twice changes nothing, and a merged day stays within 86400 s", () => {
+  const file = JSON.stringify({
+    days: { "2026-04-09": { good: 50000, bad: 30000, relaxed_s: 20000, shoulder_s: 40000, best: 900, breaks: 3 } },
+  });
+  const store = { days: {} };
+  applyImport(store, parseImport(file), "merge");
+  const once = JSON.parse(JSON.stringify(store.days));
+  applyImport(store, parseImport(file), "merge");
+  assert.deepEqual(store.days, once);
+  const other = { days: { "2026-04-09": { good: 10000, bad: 80000 } } };
+  applyImport(other, parseImport(file), "merge");
+  const d = other.days["2026-04-09"];
+  assert.ok(d.good + d.bad <= 86400, "good plus bad is capped at a day");
+  assert.equal(d.good, 50000);
+});
+
+test("parseImport rejects more than 86400 s in a day", () => {
+  const day = (v) => JSON.stringify({ days: { "2026-04-09": v } });
+  assert.equal(parseImport(day({ good: 86400, bad: 0 })).ok, true);
+  assert.equal(parseImport(day({ good: 86401, bad: 0 })).ok, false);
+  assert.equal(parseImport(day({ good: 50000, bad: 40000 })).ok, false, "good plus bad over a day");
+  assert.equal(parseImport(day({ good: 10, bad: 10, relaxed_s: 86401 })).ok, false);
+  assert.equal(parseImport(day({ good: 10, bad: 10, best: 86401 })).ok, false);
 });
 
 test("applyImport replace swaps days, tests and water only", () => {
@@ -193,7 +218,27 @@ test("tallyDay counts good, bad, relaxed seconds and the best run", () => {
   tallyDay(day, "bad", 7);
   tallyDay(day, "good", 2, { relaxed: true, streak: 3 });
   tallyDay(day, "good", Number.NaN, { relaxed: true });
-  assert.deepEqual(day, { good: 22, bad: 7, relaxed_s: 12, best: 20 });
+  assert.deepEqual(day, { good: 22, bad: 7, relaxed_s: 12, shoulder_s: 17, best: 20 });
+});
+
+test("relaxed % divides by measured shoulder time, not all tracked time", () => {
+  const store = {
+    schema: 2,
+    days: {
+      [local(0)]: { good: 300, bad: 100, relaxed_s: 100, shoulder_s: 200 },
+      [local(1)]: { good: 300, bad: 100, relaxed_s: 100 }, // saved before shoulder_s: tracked time
+      [local(2)]: { good: 300, bad: 100, relaxed_s: 0, shoulder_s: 200 },
+    },
+  };
+  const s = summarize(store, NOW);
+  assert.equal(s.days[6].relaxed_pct, 50, "100 of 200 measured seconds, not 100 of 400");
+  assert.equal(s.days[5].relaxed_pct, 25, "legacy day falls back to tracked time");
+  assert.equal(s.days[4].relaxed_pct, 0, "measured but never relaxed");
+  const w = summarizeWeeks(
+    { schema: 2, days: { "2026-04-06": { good: 600, bad: 200, relaxed_s: 100, shoulder_s: 200 } } },
+    NOW,
+  );
+  assert.equal(w[7].relaxed_pct, 50);
 });
 
 test("summarize reports relaxed %, best run and bracing events, bounded and null when absent", () => {
@@ -243,7 +288,7 @@ test("summarizeWeeks: 8 weeks oldest first, coached and silent per week, relaxed
   assert.equal(w[0].week, "2026-W08");
   assert.equal(w[7].coached_pct, 70, "700 of 1000 tracked seconds");
   assert.equal(w[7].silent_pct, 80, "mean of 90 and 70");
-  assert.equal(w[7].relaxed_pct, 40, "400 of 1000 tracked seconds");
+  assert.equal(w[7].relaxed_pct, 50, "400 of the 800 tracked seconds of the only day with a relaxed counter");
   assert.equal(w[7].breaks, 3);
   assert.equal(w[6].coached_pct, null, "40 s tracked is too little to score");
   assert.equal(w[6].silent_pct, 50);

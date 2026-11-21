@@ -58,15 +58,20 @@ test("out-of-range numbers and weeks give no record", () => {
     { score: -1 },
     { score: 5.5 },
     { breaks: -1 },
-    { breaks: 5000 },
     { week: "2026-15" },
     { week: "2026-W54" },
     { week: "<script>" },
-    { tracked_s: 8 * 7 * 24 * 3600 },
   ]) {
     assert.equal(peerRecord({ ...good, ...patch }), null, JSON.stringify(patch));
   }
   assert.ok(peerRecord({ ...good, tracked_s: Number.NaN }), "NaN tracked time counts as 0");
+});
+
+test("tracked minutes and breaks above the limits are capped, not rejected", () => {
+  const rec = peerRecord({ ...good, tracked_s: 8 * 7 * 24 * 3600, breaks: 5000 });
+  assert.equal(rec.tracked_minutes, 7 * 24 * 60);
+  assert.equal(rec.breaks_taken, 1000);
+  assert.ok(isPeerRecord(rec));
 });
 
 test("link round trip keeps the record, and carries it in the fragment only", () => {

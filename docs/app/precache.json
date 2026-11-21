@@ -1,6 +1,6 @@
 {
-  "version": "90ddce3bd4ef06ae",
-  "totalBytes": 33351815,
+  "version": "d38e538a4eeb7462",
+  "totalBytes": 33353605,
   "files": [
     {
       "url": "app.js",
@@ -34,8 +34,8 @@
     },
     {
       "url": "index.html",
-      "size": 55933,
-      "sha256": "52045ee3fdbc036f5c1d2dad18df160c8949fb99b720806b6739c22cf0efa377"
+      "size": 55965,
+      "sha256": "3b725c908fa2d139d75bf112ff6d45832f24277edb9538cde2f87f3f87f2bea7"
     },
     {
       "url": "loading.js",
@@ -74,8 +74,8 @@
     },
     {
       "url": "progress.js",
-      "size": 14784,
-      "sha256": "c56152f4dcd03ccff5c00d69cedd02007ca10dc15878c7c2aee56bed14c5ef6b"
+      "size": 16240,
+      "sha256": "80bbb2fab6c2cab288139e4937130556035874de31eca2247b9698f9ceebcb7a"
     },
     {
       "url": "prompts.js",
@@ -99,8 +99,8 @@
     },
     {
       "url": "share.js",
-      "size": 7464,
-      "sha256": "83f8be210c7302da5b59509dd40292e509daae8564d2b48dfabd2bdf7247d689"
+      "size": 7766,
+      "sha256": "0803cc9f2200d09a9211c086ae4b4b75838a18c201b0286f5ce8093b549db28c"
     },
     {
       "url": "sound-packs.js",

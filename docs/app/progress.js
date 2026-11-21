@@ -19,7 +19,17 @@ export const IMPORT_MAX_BYTES = 1024 * 1024;
 const MAX_TESTS_STORED = 50;
 const MAX_IMPORT_DAYS = 3660;
 const DAY_MS = 86400000;
-const DAY_EXTRAS = Object.freeze(["relaxed_s", "best", "brace_events", "breaks"]);
+const DAY_EXTRAS = Object.freeze(["relaxed_s", "shoulder_s", "best", "brace_events", "breaks"]);
+const DAY_MAX_S = 86400; // a day has 86400 seconds; no seconds field may exceed it
+const SECONDS_FIELDS = Object.freeze(["good", "bad", "relaxed_s", "shoulder_s", "best"]);
+
+/** Seconds of good posture with a shoulder reading, the denominator for the relaxed share.
+ *  Days saved before shoulder_s existed only have relaxed_s, so they fall back to tracked time. */
+const shoulderBase = (d, good, tracked, relaxed) => {
+  const m = Math.min(secs(d.shoulder_s), good);
+  if (m > 0) return Math.max(m, relaxed);
+  return relaxed > 0 ? tracked : 0;
+};
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 const secs = (v) => (Number.isFinite(v) && v > 0 ? v : 0);
@@ -57,12 +67,15 @@ export function migrateStore(store, now = Date.now()) {
 }
 
 /** Add `dt` seconds to a day record. kind "good" or "bad"; `relaxed` is true when the
- *  shoulders were not braced (false or null adds nothing); `streak` is the current good run. */
+ *  shoulders were not braced, false when braced, null when they were not measured (no
+ *  consent or no reference yet). Measured seconds (true or false) also go to `shoulder_s`,
+ *  the denominator of the relaxed share. `streak` is the current good run. */
 export function tallyDay(day, kind, dt, { relaxed = null, streak = 0 } = {}) {
   const t = secs(dt);
   if (kind === "good") {
     day.good = secs(day.good) + t;
     if (relaxed === true) day.relaxed_s = secs(day.relaxed_s) + t;
+    if (relaxed === true || relaxed === false) day.shoulder_s = secs(day.shoulder_s) + t;
     if (Number.isFinite(streak) && streak > secs(day.best)) day.best = streak;
   } else if (kind === "bad") {
     day.bad = secs(day.bad) + t;
@@ -103,13 +116,14 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
     const tracked = good + bad;
     const enough = tracked >= cfg.min_tracked_s;
     const relaxed = Math.min(secs(d.relaxed_s), good);
+    const base = shoulderBase(d, good, tracked, relaxed);
     days.push({
       date,
       tracked_s: tracked,
       good_s: good,
       pct: enough ? pctOf(good, bad) : null,
       relaxed_s: relaxed,
-      relaxed_pct: enough && relaxed > 0 ? pctOf(relaxed, tracked - relaxed) : null,
+      relaxed_pct: enough && base > 0 ? pctOf(relaxed, base - relaxed) : null,
       best_s: Math.min(secs(d.best), good),
       brace_events: Math.floor(secs(d.brace_events)),
     });
@@ -211,10 +225,14 @@ export function parseImport(text, maxBytes = IMPORT_MAX_BYTES) {
     if (!isRealDate(key) || !d || typeof d !== "object") return reject(`Day ${key} is not valid.`);
     if (!isNum(d.good) || !isNum(d.bad)) return reject(`Day ${key} has a value that is not a number of seconds.`);
     days[key] = { good: d.good, bad: d.bad };
+    if (d.good + d.bad > DAY_MAX_S) return reject(`Day ${key} has more than 24 hours of tracked time.`);
     for (const f of DAY_EXTRAS) {
       if (d[f] === undefined) continue;
       if (!isNum(d[f])) return reject(`Day ${key} has a value that is not a number of seconds.`);
       days[key][f] = d[f];
+    }
+    for (const f of SECONDS_FIELDS) {
+      if (days[key][f] > DAY_MAX_S) return reject(`Day ${key} has more than 24 hours in one value.`);
     }
   }
   if (rawTests.length > MAX_IMPORT_DAYS) return reject("Too many tests in the file.");
@@ -246,8 +264,10 @@ export function previewImport(parsed) {
   };
 }
 
-/** Apply a parsed import. "merge" sums seconds per date and adds tests not already present
- *  (same `at`); water takes the larger count per date so importing twice cannot double it.
+/** Apply a parsed import. "merge" keeps the larger value per date and field (a day seen on
+ *  two devices is not summed, so importing the same file twice changes nothing; seconds stay
+ *  within 86400 a day) and adds tests not already present (same `at`); water also takes the
+ *  larger count per date.
  *  "replace" swaps days, tests and water. Settings, calibration and consent are never touched. */
 export function applyImport(store, parsed, mode) {
   store.days = store.days && typeof store.days === "object" ? store.days : {};
@@ -260,15 +280,13 @@ export function applyImport(store, parsed, mode) {
   }
   for (const [key, d] of Object.entries(parsed.days)) {
     const cur = store.days[key] && typeof store.days[key] === "object" ? store.days[key] : {};
-    const next = { good: secs(cur.good) + d.good, bad: secs(cur.bad) + d.bad };
+    const good = Math.min(DAY_MAX_S, Math.max(secs(cur.good), d.good));
+    const bad = Math.min(DAY_MAX_S - good, Math.max(secs(cur.bad), d.bad));
+    const next = { good, bad };
     for (const f of DAY_EXTRAS) {
-      if (f === "best") {
-        const best = Math.max(secs(cur.best), d.best ?? 0);
-        if (best > 0) next.best = best;
-      } else {
-        const sum = secs(cur[f]) + (d[f] ?? 0);
-        if (sum > 0) next[f] = sum;
-      }
+      let v = Math.max(secs(cur[f]), d[f] ?? 0);
+      if (SECONDS_FIELDS.includes(f)) v = Math.min(v, good); // relaxed, shoulder and best are parts of good
+      if (v > 0) next[f] = v;
     }
     store.days[key] = next;
   }
@@ -303,7 +321,7 @@ export function isoWeek(key) {
 
 /** Per ISO week, oldest first, for the last `weeks` weeks ending with the current one:
  *  coached % (store.days), silent-test % (mean of that week's tests, by local date) and the
- *  relaxed-shoulders share of tracked time. A week with too little tracked time has null pct. */
+ *  relaxed-shoulders share of the time the shoulders were measured. A week with too little tracked time has null pct. */
 export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRESS) {
   const today = dayKeyFor(store, now);
   const first = isoWeek(today).monday;
@@ -323,6 +341,7 @@ export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRES
       coached_pct: null,
       silent_pct: null,
       relaxed_pct: null,
+      _shoulder: 0,
       _silent: [],
     };
     rows.push(row);
@@ -337,7 +356,9 @@ export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRES
     const tracked = good + secs(d.bad);
     row.tracked_s += tracked;
     row.good_s += good;
-    row.relaxed_s += Math.min(secs(d.relaxed_s), good);
+    const relaxed = Math.min(secs(d.relaxed_s), good);
+    row.relaxed_s += relaxed;
+    row._shoulder += shoulderBase(d, good, tracked, relaxed);
     row.breaks += Math.floor(secs(d.breaks));
     row.days.push({
       date: key,
@@ -357,10 +378,11 @@ export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRES
   for (const row of rows) {
     if (row.tracked_s >= cfg.min_tracked_s) {
       row.coached_pct = pctOf(row.good_s, row.tracked_s - row.good_s);
-      if (row.relaxed_s > 0) row.relaxed_pct = pctOf(row.relaxed_s, row.tracked_s - row.relaxed_s);
+      if (row._shoulder > 0) row.relaxed_pct = pctOf(row.relaxed_s, row._shoulder - row.relaxed_s);
     }
     if (row._silent.length) row.silent_pct = Math.round(row._silent.reduce((a, b) => a + b, 0) / row._silent.length);
     delete row._silent;
+    delete row._shoulder;
   }
   return rows;
 }

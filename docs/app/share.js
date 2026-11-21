@@ -132,15 +132,20 @@ export function cleanNickname(input) {
 
 const int = (v, max) => Number.isInteger(v) && v >= 0 && v <= max;
 
-/** The record for one week, or null when the nickname is invalid or any number is out of range. */
+const PEER_MAX_MINUTES = 7 * 24 * 60;
+const PEER_MAX_BREAKS = 1000;
+
+/** The record for one week, or null when the nickname or score is invalid. Tracked minutes
+ *  and breaks are capped at the limits a link accepts (a week has 10080 minutes), so a
+ *  real total never makes the record fail. */
 export function peerRecord({ nickname, week, tracked_s, score, breaks }) {
   const rec = {
     schema: PEER_SCHEMA,
     week,
     nickname: cleanNickname(nickname),
-    tracked_minutes: Math.round((Number.isFinite(tracked_s) ? tracked_s : 0) / 60),
+    tracked_minutes: Math.min(PEER_MAX_MINUTES, Math.round((Number.isFinite(tracked_s) ? tracked_s : 0) / 60)),
     consistency_score: score,
-    breaks_taken: breaks,
+    breaks_taken: Number.isFinite(breaks) ? Math.min(PEER_MAX_BREAKS, breaks) : breaks,
   };
   return isPeerRecord(rec) ? rec : null;
 }
@@ -156,9 +161,9 @@ export function isPeerRecord(r) {
     /^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(r.week) &&
     typeof r.nickname === "string" &&
     cleanNickname(r.nickname) === r.nickname &&
-    int(r.tracked_minutes, 7 * 24 * 60) &&
+    int(r.tracked_minutes, PEER_MAX_MINUTES) &&
     int(r.consistency_score, 100) &&
-    int(r.breaks_taken, 1000)
+    int(r.breaks_taken, PEER_MAX_BREAKS)
   );
 }
 

@@ -44,7 +44,7 @@ dates from the cut-over, and record the cut-over date in `store.dayKeyCutover`.
 
 ## Import (built)
 Parse, check size, validate each day and test, preview totals, merge or replace, save.
-Merge sums `good` and `bad` per date and appends tests by `at`, de-duplicated.
+Merge keeps the larger value per date and field (`good`, `bad`, `relaxed_s`, `shoulder_s`, `best`, `brace_events`, `breaks`), so merging the same file twice changes nothing. A day seen on two devices is therefore not summed. Each seconds field is capped at 86400 and `good + bad` at 86400 per day; import rejects a file that breaks either cap. Tests are appended by `at`, de-duplicated.
 
 ## Social sharing (peer link built, server not built)
 ### Consistency score
@@ -53,6 +53,7 @@ For a week of 7 days:
 days_active   = number of days with >= 20 tracked minutes          (cap 5)
 good_band     = min(good_pct, 90) / 90                              (ceiling: rigid posture not rewarded)
 relax_band    = relaxed_s / tracked_s                               (needs day.relaxed_s)
+(The shown relaxed % divides by `day.shoulder_s`, the good seconds with a shoulder reading. Days saved before that counter fall back to tracked seconds.)
 breaks        = min(breaks_taken, 3 * days_active) / (3 * days_active)
 consistency   = 100 * (0.35*days_active/5 + 0.25*good_band + 0.2*relax_band + 0.2*breaks)
 ```

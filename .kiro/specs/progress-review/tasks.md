@@ -16,7 +16,7 @@ There is no server and no health data leaves the device (issue #51). The peer sh
   - _Requirements: 2_
 - [x] 4. `store.schema` and Import JSON
   - `readSchema`, `parseImport` (1 MB limit, finite non-negative numbers, real dates, whole-file
-    reject), `previewImport`, `applyImport` (merge sums seconds and de-duplicates tests, replace),
+    reject), `previewImport`, `applyImport` (merge keeps the larger value per day and field, caps a day at 86400 s, and de-duplicates tests, replace),
     "Import JSON" with a preview dialog. Tests: `tests/js/progress-review.test.mjs`.
   - _Requirements: 4_
 - [x] 5. Local-date day keys and migration
