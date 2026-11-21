@@ -196,7 +196,7 @@
   .load-steps li.failed { color: var(--bad); }
   .load-steps li.failed::before { border: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 3l8 8M11 3l-8 8' fill='none' stroke='%23ff5c5c' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
   .load-steps li { flex-wrap: wrap; }
-  .load-steps .load-why { flex: 0 0 100%; margin-left: 24px; font-size: 12px; font-weight: 400; color: var(--muted); }
+  .load-steps .load-why { flex: 0 0 calc(100% - 24px); margin-left: 24px; font-size: 12px; font-weight: 400; color: var(--muted); }
   .load-steps .load-detail { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
   .load-bar { width: min(340px, 100%); height: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
   .load-bar div { height: 100%; width: 0; background: var(--good); transition: width 0.2s linear; }
@@ -284,6 +284,7 @@
         </div>
         <p id="start-device-note" class="note">Works best on a laptop or desktop with a webcam.</p>
         <p id="start-status" class="note"></p>
+        <p id="start-error" class="error"></p>
         <ol id="load-steps" class="load-steps" hidden aria-live="polite" aria-label="Starting the webcam">
           <li data-step="camera"><span class="load-label">Allow the camera</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">Your browser asks first. The video stays on this computer.</span></li>
           <li data-step="download"><span class="load-label">Download the pose model</span> <span class="load-detail" aria-hidden="true"></span><span class="load-why">A 15 MB file from this site, one time. It runs in this tab.</span></li>
@@ -291,7 +292,6 @@
         </ol>
         <div id="load-bar" class="load-bar" role="progressbar" aria-label="Start-up progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
         <p id="load-hint" class="note" role="status"></p>
-        <p id="start-error" class="error"></p>
         <div id="webgl-help" role="alert">
           <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:
           <ul>

@@ -2136,7 +2136,13 @@ const loadSteps = new LoadSteps();
 
 function showError(message) {
   $("start-error").textContent = message;
-  if (message) logProblem(message);
+  if (message) {
+    // The message and the Try again button must be in view, also on a small screen
+    // where the page may be scrolled to the start button.
+    $("start-overlay").scrollTop = 0;
+    $("start-overlay").scrollIntoView({ block: "nearest" });
+    logProblem(message);
+  }
 }
 
 // -- bug reports ----------------------------------------------------------------

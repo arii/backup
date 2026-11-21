@@ -218,3 +218,5 @@ change from the baseline is within noise. At 320 px the first measurement after 
 reveal showed the video at 3.6 s because the page stayed scrolled to the Start button and
 the video sat above the viewport; `showLivePreview` now scrolls it into view
 (`docs/app/app.js`) and `live-site.mjs` checks it.
+
+Full evaluation (method, findings, fixes, limitations): [docs/ux-evaluation-progressive-loading.md](../../../docs/ux-evaluation-progressive-loading.md).
