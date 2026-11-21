@@ -1,6 +1,6 @@
 {
-  "version": "d38e538a4eeb7462",
-  "totalBytes": 33353605,
+  "version": "60daa5c911cc1c1f",
+  "totalBytes": 33412139,
   "files": [
     {
       "url": "app.js",
@@ -206,6 +206,11 @@
       "url": "voice/af_heart/breathe-with-me-for-one-minute-stop-if-y-60ac0b.mp3",
       "size": 17660,
       "sha256": "5df6515a66f53cebef523f284a986d92f57476457b5fe03944d97a79edcfb7a4"
+    },
+    {
+      "url": "voice/af_heart/check-your-face-unclench-your-jaw-and-le-c3c7e7.mp3",
+      "size": 27164,
+      "sha256": "24a12d2562d278b552010988185876360fea37ed57dd16f653d5d26c4ca16874"
     },
     {
       "url": "voice/af_heart/chest-open-your-arms-wide-and-breathe-in-8883f9.mp3",
@@ -458,6 +463,11 @@
       "sha256": "e1a73c9d3679fb388ab3278c055030422bf7a17d3ff09f093aa4097341269f70"
     },
     {
+      "url": "voice/am_michael/check-your-face-unclench-your-jaw-and-le-c3c7e7.mp3",
+      "size": 31052,
+      "sha256": "37c8bd4eaabde3cd6115f1b836d296ad31da5118f32545e5d24e38c6f24a07fc"
+    },
+    {
       "url": "voice/am_michael/chest-open-your-arms-wide-and-breathe-in-8883f9.mp3",
       "size": 26444,
       "sha256": "1a9a512623a55fa80fc59b77b83b3736f10c2322053069420ac8ce99f4573562"
@@ -679,8 +689,8 @@
     },
     {
       "url": "voice/manifest.json",
-      "size": 10164,
-      "sha256": "237978524d17e73496f1ef0f66eb94f7a77c7a174b9ec8a829c47e645fb20d9c"
+      "size": 10482,
+      "sha256": "2b78bfff31e9bb70ff1a1fa3547fca88711b7a6b7efa5b724621801eb1ec4c0c"
     },
     {
       "url": "voice-lines.js",
