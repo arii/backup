@@ -6,10 +6,10 @@
 // defaults for new users, the optional single-key pause shortcut (WCAG 2.1.4
 // Character Key Shortcuts) and the camera error wording.
 
-import { normalizeMoveMinutes, normalizeReminderMinutes } from "./breaks.js";
+import { normalizeJawMinutes, normalizeMoveMinutes, normalizeReminderMinutes } from "./breaks.js";
 
 /** Prompt ids a user can silence with "Don't show this again". */
-const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "stretch", "water", "breathing"]);
+const DISMISSIBLE_PROMPTS = Object.freeze(["eye", "move", "stretch", "water", "jaw", "breathing"]);
 
 /** Stored choices win; anything never stored gets the default for new users. */
 export function resolveSettings(store) {
@@ -27,6 +27,8 @@ export function resolveSettings(store) {
     // Stretch and water reminders are off until chosen (0, 30, 45, 60 or 90 minutes).
     stretchMinutes: normalizeReminderMinutes(s.stretchMinutes),
     waterMinutes: normalizeReminderMinutes(s.waterMinutes),
+    // Jaw relax prompt: off until chosen (30 or 45 minutes).
+    jawMinutes: normalizeJawMinutes(s.jawMinutes),
     breathingMoments: s.breathingMoments === true,
     breatheCues: s.breatheCues === true,
     // "Don't show this again" flags, only for known prompts.
@@ -60,4 +62,20 @@ export function cameraErrorMessage(err) {
     );
   }
   return `Could not start: ${detail}. Try the demo instead.`;
+}
+
+/** getUserMedia video constraints. A remembered device is requested exactly;
+ *  without one, the front camera as before. */
+export function cameraConstraints(deviceId) {
+  const base = { width: { ideal: 640 }, height: { ideal: 480 } };
+  if (typeof deviceId === "string" && deviceId) return { ...base, deviceId: { exact: deviceId } };
+  return { ...base, facingMode: "user" };
+}
+
+/** True when the error means the remembered camera is gone or cannot satisfy the
+ *  request, so the caller should forget it and ask again without it. Permission
+ *  errors are not retried. */
+export function isDeviceGoneError(err) {
+  const name = err?.name;
+  return name === "OverconstrainedError" || name === "NotFoundError" || name === "NotReadableError";
 }

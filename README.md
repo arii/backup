@@ -60,14 +60,14 @@ Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboar
 This wording is a draft. It is not legal advice, and the owner should have a lawyer
 review it before any wider launch.
 
-- BackUp is a wellness tool. It is not medical advice and not a medical device.
-  It does not diagnose, treat or prevent any condition.
+- BackUp is a wellness tool. It is not medical advice and not a medical device,
+  and it does not diagnose, treat or prevent any condition.
 - Do not hold a rigid posture. Relax your shoulders and change position often.
-  Reminders do not replace regular movement breaks. The evidence that "perfect"
+  Reminders are not a substitute for regular movement breaks. The evidence that "perfect"
   sitting posture prevents back pain is weak (see the research document).
-- Stop and see a qualified clinician if you feel pain, numbness, tingling or
-  dizziness, or if pain persists.
-- If you have a spine, nerve, neuromuscular or other medical condition, are pregnant
+- Stop and see a qualified clinician if you feel pain, numbness, tingling or dizziness,
+  or if pain persists.
+- If you have a spine, nerve, neuromuscular or other medical condition, are pregnant,
   or are recovering from an injury, check with a professional first.
 - Webcam estimates are approximate. Lighting, camera angle, clothing and body shape
   change the result. "Good" means close to your own calibrated baseline.
@@ -77,8 +77,7 @@ review it before any wider launch.
 
 How it works in the app: the first run requires an acknowledgement stored as
 `ackVersion` in `localStorage`. Bumping `ACK_VERSION` in `docs/app/onboarding.js` asks
-everyone again. The same notice appears in the app footer, the landing page, the
-landing page and under the *Relax, don't brace* panel. Full spec:
+everyone again. The same notice appears in the app footer, the landing page and under the *Relax, don't brace* panel. Full spec:
 [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/requirements.md).
 
 ### What it notices
@@ -166,8 +165,8 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
   hidden. Chimes play through Web Audio, the prompt through the browser's speech
   synthesis, and *Notify when tab is hidden* adds desktop notifications.
-- **Remembers you.** Calibration, settings, custom sounds (under 1.5 MB) and daily
-  good/slouch totals persist in `localStorage`.
+- **Remembers you.** Calibration, settings, the camera you last used, custom sounds (under 1.5 MB)
+  and daily good/slouch totals persist in `localStorage`.
 
 GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
 
@@ -240,8 +239,8 @@ non-posture prompt every 10 minutes). Items marked spec only are designed, not b
 |---|---|
 | Breath check and bracing monitor (*Relax, don't brace*) | Built |
 | Guided slow-breathing exercise (*Breathe with me*) | Built. Needs your opt-in (a dated consent record in this browser) |
-| Face and jaw tension prompt (the Pose model has no jaw landmarks, so this needs the Face Landmarker blendshapes and an extra model download) | Spec only |
-| Neck and shoulder micro-stretch prompts | Spec only |
+| Face and jaw check, a timed reminder every 30 or 45 minutes, off until you choose it (a webcam cannot see jaw tension) | Built. The blendshape version needs the Face Landmarker and an extra model download: spec only |
+| Neck and shoulder micro-stretch prompts | Built (optional reminder and the *Take a break* menu) |
 | 20-20-20 eye breaks | Built |
 | Stand and move microbreak timer | Built |
 

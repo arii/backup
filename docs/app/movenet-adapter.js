@@ -72,9 +72,13 @@ export function movenetToLandmarks(keypoints, width, height) {
  * Wraps a TF.js pose detector (estimatePoses is async) in the synchronous
  * detectForVideo shape that app.js step() expects from MediaPipe. It answers
  * with the latest finished result and starts the next inference only when
- * idle. An inference error is rethrown on every later call.
+ * idle. An inference error is rethrown on every later call and reported once
+ * through onError, so the caller can drop a detector that no longer works.
+ * Each wrapper starts a new camera session: the TF.js detector's smoothing
+ * filter is reset so it does not blend in the previous session's last pose.
  */
-export function createMoveNetDetector(detector) {
+export function createMoveNetDetector(detector, { onError = () => {} } = {}) {
+  if (typeof detector.reset === "function") detector.reset();
   let latest = null;
   let failure = null;
   let busy = false;
@@ -92,6 +96,7 @@ export function createMoveNetDetector(detector) {
           })
           .catch((err) => {
             failure = err;
+            onError(err);
           })
           .finally(() => {
             busy = false;

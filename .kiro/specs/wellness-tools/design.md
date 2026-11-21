@@ -6,9 +6,9 @@ Pose frames (shipped) ─────────> PostureEngine ──> reminde
         │                                   │
         └─> BracingMonitor, BreathCheck (relax.js, shipped)
                                             │
-                     PromptBudget (spec only) ◄── every non-posture prompt asks first
+                     PromptScheduler (prompts.js, built) ◄── every non-posture prompt asks first
                        ▲        ▲        ▲        ▲
-         BreathingGuide  JawPrompt  StretchPrompts  EyeBreak/Blink  MoveTimer   (all spec only)
+         BreathingGuide  JawPrompt  StretchPrompts  EyeBreak/Blink  MoveTimer   (built, except the face model and blink)
                                   │                       │
                   Face Landmarker (optional second model, lazy, ~2 fps)
 ```
@@ -19,8 +19,8 @@ Pose frames (shipped) ─────────> PostureEngine ──> reminde
 `tests/js/relax.test.mjs`. The breath check is a diagnostic ("did your shoulders rise?"),
 not the guided exercise below.
 
-## Spec only: shared pieces
-### PromptBudget (`docs/app/wellness.js`, pure, injected time)
+## Shared pieces
+### Prompt budget (built as `PromptScheduler` in `docs/app/prompts.js`; the draft below is the original idea)
 ```js
 export const WELLNESS = Object.freeze({ max_prompts_per_hour: 6, min_gap_s: 120 });
 class PromptBudget { request(kind, now) -> boolean; record(kind, now); snooze(kind, until) }
@@ -31,8 +31,10 @@ is not marked essential. Posture reminders are not subject to this budget but ar
 toward the combined alarm-fatigue cap in `feedback-design`.
 
 ### Settings
-Each tool has `store.wellness.<tool> = { on:false, ... }`. Defaults off. A single
-"Wellness prompts" master switch in settings gates all of them.
+Built as flat keys in the store, resolved by `resolveSettings` in `docs/app/settings.js`
+(`eyeBreaks`, `moveBreakMinutes`, `stretchMinutes`, `waterMinutes`, `jawMinutes`,
+`breathingMoments`, `promptsDismissed`). There is no `store.wellness` object and no master
+switch; each tool has its own setting and "Don't show this again".
 
 ## Tool designs
 ### Guided breathing
@@ -71,7 +73,7 @@ the rate.
 `MoveTimer` accumulates tracked sitting seconds, requests a prompt at the interval, and
 on a 30 s absence after the prompt counts one break and resets.
 
-## Correctness properties (spec only)
+## Correctness properties (P1 and P2 hold in the shipped `PromptScheduler`, tested in `tests/js/prompts.test.mjs`; P3 to P5 do not apply because the face model was not built; P6 is covered in `tests/js/breaks.test.mjs`; P7 is not built as a separate rule)
 - **P1 budget**: over any 60 minute window, `PromptBudget` grants at most
   `max_prompts_per_hour` prompts and no two within `min_gap_s`.
 - **P2 silence**: no tool prompt is granted during pause, silent test or practice.

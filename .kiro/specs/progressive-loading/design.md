@@ -205,7 +205,7 @@ stage >= 2 AND good for 60 s AND no setup card AND !store.breathIntroShown
 - Open question: if the user prefers no exemption, drop the bypass and let the intro wait
   300 s; nothing else changes.
 
-## Wellness menu and water (spec only)
+## Wellness menu and water (built, `docs/app/wellness.js`)
 One "Take a break" card at stage 4 with six entries (Stretch, Breathe with me, Breath
 check, Look away, Stand and move, Drink water). It reuses `breaks.js` (eye, move),
 `breathing.js` ("Breathe with me"), `relax.js` (breath check). New content:

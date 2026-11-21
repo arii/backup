@@ -45,6 +45,7 @@ export const BREAK_LINES = {
   move: "Time to stand up and move for a couple of minutes.",
   stretch: "Time for a gentle neck and shoulder stretch.",
   water: "Time for a few sips of water.",
+  jaw: "Check your face: unclench your jaw and let your tongue rest on the floor of your mouth.",
 };
 
 // "Take a break" demos (wellness.js): short guided steps, no camera, no form coaching.

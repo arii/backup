@@ -61,6 +61,13 @@ export class BracingMonitor {
     this.pinned = null; // relaxed ratio from an exhale-and-drop, preferred when set
     this.belowSince = null;
     this.firedAt = null;
+    this.isRelaxed = null;
+  }
+
+  /** true: neck length is at its relaxed reference. false: below it (shoulders up).
+   *  null: no reference yet or no reading. Feeds the daily relaxed-seconds counter. */
+  get relaxed() {
+    return this.isRelaxed;
   }
 
   /** Smoothed ratio, for the breath check and display. */
@@ -89,6 +96,7 @@ export class BracingMonitor {
     this.ema = null;
     this.lastT = null;
     this.belowSince = null;
+    this.isRelaxed = null;
   }
 
   /** ratio: neckRatio() or null; good: posture state is GOOD.
@@ -96,12 +104,15 @@ export class BracingMonitor {
   update(ratio, now, good) {
     if (ratio === null) {
       this.belowSince = null;
+      this.isRelaxed = null;
       return false;
     }
     const dt = this.lastT === null ? 0 : Math.max(0, now - this.lastT);
     const alpha = this.ema === null ? 1 : 1 - Math.exp(-dt / this.cfg.smoothing_tau_s);
     this.ema = this.ema === null ? ratio : this.ema + alpha * (ratio - this.ema);
     this.lastT = now;
+    const known = this.reference;
+    this.isRelaxed = known === null || known <= 0 ? null : this.ema > known * (1 - this.cfg.bracing_drop);
     if (!good) {
       this.belowSince = null;
       return false;

@@ -39,9 +39,28 @@ import {
   SetupCheck,
   shouldShowOnboarding,
 } from "./onboarding.js";
-import { exportJson, summarize } from "./progress.js";
-import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText } from "./wellness.js";
-import { NEEDS_TRACKING_TIP, cameraErrorMessage, isPauseShortcut, resolveSettings } from "./settings.js";
+import { consistencyScore } from "./consistency.js";
+import {
+  applyImport,
+  dayKeyFor,
+  exportJson,
+  IMPORT_MAX_BYTES,
+  migrateStore,
+  parseImport,
+  previewImport,
+  summarize,
+  summarizeWeeks,
+  tallyDay,
+} from "./progress.js";
+import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText, toolSafety } from "./wellness.js";
+import {
+  NEEDS_TRACKING_TIP,
+  cameraConstraints,
+  cameraErrorMessage,
+  isDeviceGoneError,
+  isPauseShortcut,
+  resolveSettings,
+} from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
   META_URL,
@@ -58,12 +77,22 @@ import {
   CONSENT_TITLE,
   consentStatus,
   hasConsent,
+  hasShareConsent,
   recordConsent,
+  recordShareConsent,
+  SHARE_CONSENT_CHECKBOX,
+  SHARE_CONSENT_POINTS,
+  SHARE_CONSENT_TITLE,
   withdrawConsent,
+  withdrawShareConsent,
 } from "./consent.js";
 import {
   SHARE_TEXT,
   cardAltText,
+  cleanNickname,
+  peerLink,
+  peerRecord,
+  readPeerLink,
   drawScoreCard,
   nativeSharePayload,
   scoreCardData,
@@ -93,7 +122,7 @@ import {
   viewSetupStep,
 } from "./onboarding.js";
 import { RevealStages, STAGES } from "./reveal.js";
-import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "./feedback.js";
+import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel, recordAnnoyance, shouldSuggestLight } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
@@ -120,6 +149,7 @@ function loadStore() {
   }
 }
 const store = loadStore();
+migrateStore(store); // schema 2: day keys are local dates from now on (old UTC keys stay as they are)
 if (store.firstRunDone) store.setupDone = true; // set up before the sequence existed: nothing to show again
 let deleted = false; // "Delete my data" ran: never write the store back
 function save() {
@@ -130,7 +160,12 @@ function save() {
     /* quota: keep in memory */
   }
 }
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => dayKeyFor(store, Date.now());
+function todayRecord() {
+  store.days = store.days || {};
+  store.days[todayKey()] = store.days[todayKey()] || { good: 0, bad: 0 };
+  return store.days[todayKey()];
+}
 
 // -- settings -----------------------------------------------------------------
 
@@ -143,12 +178,15 @@ const settings = {
   voiceDelay: DEFAULTS.state.voice_delay_s,
   voiceRepeat: DEFAULTS.state.voice_repeat_cooldown_s,
 };
+const MODE_RANK = { chime_and_voice: 2, chime_only: 1, silent: 0 };
 document.querySelectorAll("input[name=mode]").forEach((el) => {
   el.checked = el.value === settings.mode;
   el.addEventListener("change", () => {
+    const quieter = MODE_RANK[el.value] < MODE_RANK[settings.mode];
     settings.mode = el.value;
     store.mode = el.value;
     save();
+    if (quieter) noteAnnoyance(); // muting counts toward the Light suggestion
   });
 });
 $("sound-pack").value = settings.soundPack;
@@ -185,7 +223,34 @@ $("coaching-level").addEventListener("change", (e) => {
   policy.setLevel(settings.coachingLevel);
   store.coachingLevel = settings.coachingLevel;
   save();
+  renderLightSuggest();
 });
+
+// Repeated dismissals or mutes: suggest Light once, never switch on our own (feedback-design 7.4).
+function renderLightSuggest() {
+  const show = shouldSuggestLight({
+    level: settings.coachingLevel,
+    log: store.annoyLog,
+    declinedAtMs: store.lightSuggestDeclinedAt,
+    nowMs: Date.now(),
+  });
+  $("light-suggest").hidden = !show;
+}
+function noteAnnoyance() {
+  store.annoyLog = recordAnnoyance(store.annoyLog, Date.now());
+  save();
+  renderLightSuggest();
+}
+$("light-suggest-yes").addEventListener("click", () => {
+  $("coaching-level").value = "light";
+  $("coaching-level").dispatchEvent(new Event("change"));
+});
+$("light-suggest-no").addEventListener("click", () => {
+  store.lightSuggestDeclinedAt = Date.now();
+  save();
+  renderLightSuggest();
+});
+renderLightSuggest();
 
 function allowed(nudge) {
   if (settings.mode === "silent") return false;
@@ -697,6 +762,10 @@ function relaxStep(landmarks, state, now) {
   const ratio = neckRatio(landmarks);
   const good = state === State.GOOD;
   const flagged = bracing.update(ratio, now, good && !breath.active);
+  if (flagged && !breath.active) {
+    const day = todayRecord();
+    day.brace_events = (day.brace_events || 0) + 1;
+  }
   if (flagged && settings.relaxReminders && !breath.active) {
     showRelaxBanner(RELAX_LINES.bracing);
     sayRelax(RELAX_LINES.bracing);
@@ -787,6 +856,7 @@ const DISMISS_KEY = {
   move: "move",
   stretch: "stretch",
   water: "water",
+  jaw: "jaw",
   breathing: "breathing",
   offer: "breathing",
 };
@@ -798,6 +868,7 @@ function promptEnabled(id) {
   if (id === "move") return settings.moveBreakMinutes > 0;
   if (id === "stretch") return settings.stretchMinutes > 0;
   if (id === "water") return settings.waterMinutes > 0;
+  if (id === "jaw") return settings.jawMinutes > 0;
   if (id === "breathing") return settings.breathingMoments && hasConsent(store);
   if (id === "breath" || id === "offer") return settings.relaxReminders && hasConsent(store);
   if (id === "breath_intro") return settings.relaxReminders && !store.breathIntroShown; // asks for consent itself
@@ -819,6 +890,7 @@ function renderPromptSettings() {
   $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
   $("stretch-minutes").value = String(dismissed.stretch ? 0 : settings.stretchMinutes);
   $("water-minutes").value = String(dismissed.water ? 0 : settings.waterMinutes);
+  $("jaw-minutes").value = String(dismissed.jaw ? 0 : settings.jawMinutes);
   $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
   $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
   $("breathe-cues").checked = settings.breatheCues;
@@ -829,6 +901,7 @@ function savePromptSettings() {
   store.moveBreakMinutes = settings.moveBreakMinutes;
   store.stretchMinutes = settings.stretchMinutes;
   store.waterMinutes = settings.waterMinutes;
+  store.jawMinutes = settings.jawMinutes;
   store.breathingMoments = settings.breathingMoments;
   store.breatheCues = settings.breatheCues;
   store.promptsDismissed = { ...dismissed };
@@ -859,6 +932,12 @@ $("water-minutes").addEventListener("change", (e) => {
   if (settings.waterMinutes > 0) delete dismissed.water;
   savePromptSettings();
 });
+$("jaw-minutes").addEventListener("change", (e) => {
+  breaks.setJawMinutes(e.target.value);
+  settings.jawMinutes = breaks.jawMinutes;
+  if (settings.jawMinutes > 0) delete dismissed.jaw;
+  savePromptSettings();
+});
 $("breathing-moments").addEventListener("change", (e) => {
   const on = e.target.checked;
   const apply = () => {
@@ -886,6 +965,8 @@ function breaksTakenToday() {
 }
 function countBreak() {
   store.breaksToday = { day: todayKey(), n: breaksTakenToday() + 1 };
+  const day = todayRecord();
+  day.breaks = store.breaksToday.n;
   save();
 }
 
@@ -899,6 +980,7 @@ const CARD_UI = {
   move: { action: true, done: true, snooze: true, never: true },
   stretch: { action: true, actionLabel: "Show me", done: true, snooze: true, never: true },
   water: { action: true, actionLabel: "I drank", snooze: true, never: true },
+  jaw: { done: true, snooze: true, never: true },
   demo: { bar: true, stop: true },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
@@ -917,6 +999,9 @@ function renderCard() {
   const ui = card.ui || CARD_UI[card.id];
   if (card.id !== "demo") $("prompt-figure").hidden = true;
   $("prompt-text").textContent = card.text;
+  const safety = toolSafety(card.id, card.kind);
+  $("prompt-safety").textContent = safety;
+  $("prompt-safety").hidden = !safety;
   $("prompt-bar").hidden = !ui.bar;
   $("prompt-action").hidden = !ui.action;
   $("prompt-action").textContent = ui.actionLabel || "Breathe with me";
@@ -984,7 +1069,7 @@ function showPrompt(item) {
     return;
   }
   const text =
-    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water"
+    item.id === "eye" || item.id === "move" || item.id === "stretch" || item.id === "water" || item.id === "jaw"
       ? BREAK_LINES[item.id]
       : item.id === "offer"
         ? BREATHE_LINES.offer
@@ -1141,14 +1226,23 @@ $("prompt-action").addEventListener("click", () => {
   } else startGuide();
 });
 $("prompt-done").addEventListener("click", () => {
-  if (card && (card.id === "move" || card.id === "stretch")) breaks.taken(card.id);
+  if (card && (card.id === "move" || card.id === "stretch" || card.id === "jaw")) breaks.taken(card.id);
   // Water resets only through "I drank" (drank()), never through Done.
   if (card && card.static && card.kind !== "water") breaks.taken(card.kind);
   endCard("done");
 });
-$("prompt-snooze").addEventListener("click", () => endCard("snooze"));
-$("prompt-notnow").addEventListener("click", () => endCard("notnow"));
-$("prompt-never").addEventListener("click", () => endCard("never"));
+$("prompt-snooze").addEventListener("click", () => {
+  noteAnnoyance();
+  endCard("snooze");
+});
+$("prompt-notnow").addEventListener("click", () => {
+  if (card && card.id !== "demo" && card.id !== "guide") noteAnnoyance(); // Stop on a demo is not a dismissal
+  endCard("notnow");
+});
+$("prompt-never").addEventListener("click", () => {
+  noteAnnoyance();
+  endCard("never");
+});
 $("breathe-with-me").addEventListener("click", startGuide);
 
 // -- "Take a break" menu: guided demos and the water count -----------------------
@@ -1497,14 +1591,15 @@ function account(state, now) {
     const day = store.days[dayKey];
     if (state === State.GOOD) {
       session.good += dt;
-      day.good += dt;
       session.streak += dt;
       session.best = Math.max(session.best, session.streak);
+      // relaxed seconds need the shoulder consent (the monitor only runs with it)
+      tallyDay(day, "good", dt, { relaxed: hasConsent(store) ? bracing.relaxed : null, streak: session.streak });
       const milestone = policy.onGood(now, dt);
       if (milestone !== null) fireMilestone(milestone);
     } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
       session.bad += dt;
-      day.bad += dt;
+      tallyDay(day, "bad", dt);
       session.streak = 0;
       policy.onBad();
     }
@@ -2052,7 +2147,7 @@ function applyWebGLState() {
 let moveNetDetector = null; // TF.js detector, built once and reused across retries
 
 async function loadMoveNet(onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
-  if (moveNetDetector) return createMoveNetDetector(moveNetDetector);
+  if (moveNetDetector) return wrapMoveNet(moveNetDetector);
   // Warm the HTTP cache with byte-level progress; TF.js then reads from it.
   const files = [
     "movenet_bundle.mjs",
@@ -2081,7 +2176,22 @@ async function loadMoveNet(onProgress = () => {}, onDownloaded = () => {}, gate 
     enableSmoothing: true,
   });
   moveNetDetector = detector;
-  return createMoveNetDetector(detector);
+  return wrapMoveNet(detector);
+}
+
+/** One wrapper per camera session. A detector that failed is dropped, so the next try builds a fresh one. */
+function wrapMoveNet(detector) {
+  return createMoveNetDetector(detector, { onError: () => discardMoveNet(detector) });
+}
+
+function discardMoveNet(detector) {
+  if (moveNetDetector !== detector) return;
+  moveNetDetector = null;
+  try {
+    detector.dispose?.();
+  } catch {
+    // already broken; nothing more to release
+  }
 }
 
 async function loadModel(canvas, onProgress = () => {}, onDownloaded = () => {}, gate = Promise.resolve()) {
@@ -2125,7 +2235,14 @@ async function warmUp(detector, isMoveNet) {
   await nextPaint();
   if (video.readyState < 2) return;
   if (isMoveNet) {
-    if (moveNetDetector) await moveNetDetector.estimatePoses(video, { flipHorizontal: false });
+    const tf = moveNetDetector;
+    if (!tf) return;
+    try {
+      await tf.estimatePoses(video, { flipHorizontal: false });
+    } catch (err) {
+      discardMoveNet(tf); // do not reuse a detector that failed on a real frame
+      throw err;
+    }
     return;
   }
   const ts = Math.max(performance.now(), lastVideoMs + 1);
@@ -2288,6 +2405,28 @@ function showLivePreview() {
   $("start-status").textContent = "Camera is on. Loading the pose model, no video leaves your computer.";
 }
 
+/** Open the camera. A remembered device is tried first; if it is gone or cannot be used,
+ *  forget it and ask again for the default camera. The id of the one that works is remembered. */
+async function openCamera() {
+  const ask = (id) => navigator.mediaDevices.getUserMedia({ video: cameraConstraints(id), audio: false });
+  let stream;
+  const remembered = typeof store.cameraDeviceId === "string" ? store.cameraDeviceId : "";
+  try {
+    stream = await ask(remembered);
+  } catch (err) {
+    if (!remembered || !isDeviceGoneError(err)) throw err;
+    delete store.cameraDeviceId;
+    save();
+    stream = await ask("");
+  }
+  const id = stream.getVideoTracks?.()[0]?.getSettings?.().deviceId;
+  if (typeof id === "string" && id && id !== store.cameraDeviceId) {
+    store.cameraDeviceId = id;
+    save();
+  }
+  return stream;
+}
+
 $("start-camera").addEventListener("click", async () => {
   ensureAudio(); // inside the click: browsers only allow audio after a gesture
   for (const k of Object.keys(loadMarks)) delete loadMarks[k];
@@ -2316,10 +2455,7 @@ $("start-camera").addEventListener("click", async () => {
     if (!canvas) loadSteps.label("download", "WebGL is off: downloading the simpler pose model");
     if (entry.downloaded) loadSteps.done("download");
     else loadSteps.start("download");
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-      audio: false,
-    });
+    const stream = await openCamera();
     video.srcObject = stream;
     await video.play();
     markLoad("streamPlaying");
@@ -2506,6 +2642,7 @@ function setupControls(key) {
       setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
       setupRow("Stretch reminder", mirrorSelect($("stretch-minutes"), "coach-stretch", "Stretch reminder")),
       setupRow("Water reminder", mirrorSelect($("water-minutes"), "coach-water", "Water reminder")),
+      setupRow("Face and jaw check", mirrorSelect($("jaw-minutes"), "coach-jaw", "Face and jaw check")),
     ];
   }
   if (key === "shoulders") {
@@ -2752,6 +2889,8 @@ $("ob-ack").addEventListener("click", () => {
   ($("start-camera").disabled ? $("start-demo") : $("start-camera")).focus();
 });
 showStartControls();
+// First visit: start keyboard focus on the card, so Tab reaches Next before the header controls.
+if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 
 function openHelp() {
   const body = $("help-body");
@@ -2938,12 +3077,19 @@ function renderProgress() {
       bar.append(fill);
       const text = document.createElement("span");
       text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
+      if (d.pct !== null && d.best_s >= 60) text.textContent += ` \u00b7 best run ${mmss(d.best_s)}`;
       if (d.pct === null) text.className = "nodata";
       row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
       row.append(label, bar, text);
       return row;
     }),
   );
+  const relaxedDays = s.days.filter((d) => d.relaxed_pct !== null);
+  const braces = s.days.reduce((a, d) => a + d.brace_events, 0);
+  $("progress-best").textContent = relaxedDays.length
+    ? `Shoulders relaxed over the last 7 days: ${Math.round(relaxedDays.reduce((a, d) => a + d.relaxed_pct, 0) / relaxedDays.length)}% of tracked time, ${braces} bracing reminder${braces === 1 ? "" : "s"}.`
+    : "";
+  renderWeeks();
   $("progress-total").textContent = s.empty
     ? ""
     : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
@@ -2962,6 +3108,209 @@ function renderProgress() {
     : "";
   $("progress-light").hidden = !suggest;
 }
+
+function weekRow(w) {
+  const row = document.createElement("div");
+  row.className = "day-row";
+  row.setAttribute("role", "listitem");
+  const label = document.createElement("span");
+  label.textContent = `W${w.week.slice(-2)}`;
+  const bars = document.createElement("div");
+  for (const [pct, color] of [
+    [w.coached_pct, "#4cc36a"],
+    [w.silent_pct, "#6b8fd6"],
+  ]) {
+    const bar = document.createElement("div");
+    bar.className = "score-bar";
+    const fill = document.createElement("div");
+    fill.style.width = `${pct ?? 0}%`;
+    fill.style.background = color;
+    bar.append(fill);
+    bars.append(bar);
+  }
+  const fmt = (v) => (v === null ? "no data" : `${v}%`);
+  const text = document.createElement("span");
+  text.textContent = `coached ${fmt(w.coached_pct)} \u00b7 silent ${fmt(w.silent_pct)}`;
+  if (w.relaxed_pct !== null) text.textContent += ` \u00b7 relaxed ${w.relaxed_pct}%`;
+  row.setAttribute("aria-label", `Week ${w.week}, starting ${w.start}: ${text.textContent}`);
+  row.append(label, bars, text);
+  return row;
+}
+
+function renderWeeks() {
+  const weeks = summarizeWeeks(store, Date.now());
+  const any = weeks.some((w) => w.coached_pct !== null || w.silent_pct !== null);
+  $("progress-weeks").hidden = !any;
+  $("progress-weeks-note").textContent = any
+    ? "Weeks start on Monday. Green bar: coached good %. Blue bar: silent-test good %. Silent is what stays when coaching is off."
+    : "";
+  $("progress-weeks").replaceChildren(...weeks.map(weekRow));
+  renderPeer(weeks[weeks.length - 1]);
+}
+
+// -- import ------------------------------------------------------------------------------
+let pendingImport = null;
+$("progress-import").addEventListener("click", () => $("progress-import-file").click());
+$("progress-import-file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > IMPORT_MAX_BYTES) {
+    $("progress-msg").textContent = "Not imported: the file is larger than 1 MB.";
+    return;
+  }
+  let parsed;
+  try {
+    parsed = parseImport(await file.text());
+  } catch {
+    parsed = { ok: false, error: "The file could not be read." };
+  }
+  if (!parsed.ok) {
+    $("progress-msg").textContent = `Not imported: ${parsed.error}`;
+    return;
+  }
+  pendingImport = parsed;
+  const p = previewImport(parsed);
+  $("import-preview").textContent =
+    p.days || p.tests
+      ? `${p.days} day${p.days === 1 ? "" : "s"}${p.first ? ` (${p.first} to ${p.last})` : ""}, ${minutesText(p.good_s)} of good posture, ${p.tests} silent test${p.tests === 1 ? "" : "s"}.`
+      : "The file has no days or tests.";
+  $("import-dialog").showModal();
+});
+function finishImport(mode) {
+  if (pendingImport) {
+    applyImport(store, pendingImport, mode);
+    save();
+    $("progress-msg").textContent =
+      mode === "replace" ? "Replaced your progress with the file." : "Merged the file into your progress.";
+    renderProgress();
+  }
+  pendingImport = null;
+  $("import-dialog").close();
+}
+$("import-merge").addEventListener("click", () => finishImport("merge"));
+$("import-replace").addEventListener("click", () => finishImport("replace"));
+$("import-cancel").addEventListener("click", () => {
+  pendingImport = null;
+  $("import-dialog").close();
+});
+
+// -- share my weekly score (peer link, no server, opt-in) ---------------------------------
+// Nothing is sent. The record is packed into a link the user copies. See consent.js, share.js.
+const appBaseUrl = () => {
+  const u = new URL(location.href);
+  u.search = "";
+  u.hash = "";
+  return u.href;
+};
+function currentPeerRecord(week, nickname) {
+  if (!week) return null;
+  return peerRecord({
+    nickname,
+    week: week.week,
+    tracked_s: week.tracked_s,
+    score: consistencyScore(week),
+    breaks: week.breaks,
+  });
+}
+function renderPeer(week) {
+  const on = hasShareConsent(store);
+  $("peer-section").hidden = !on;
+  $("share-weekly").checked = on;
+  $("share-weekly-status").textContent = on
+    ? `On since ${store.shareConsent.at.slice(0, 10)}. Find it under Your progress. Untick to switch off.`
+    : "Off. Nothing is shared and the share section stays hidden.";
+  if (!on) return;
+  if (document.activeElement !== $("peer-nickname")) $("peer-nickname").value = store.shareNickname || "";
+  const rec = currentPeerRecord(week, $("peer-nickname").value);
+  $("peer-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+$("peer-nickname").addEventListener("input", () => renderPeer(summarizeWeeks(store, Date.now()).at(-1)));
+$("peer-create").addEventListener("click", () => {
+  const week = summarizeWeeks(store, Date.now()).at(-1);
+  const nick = cleanNickname($("peer-nickname").value);
+  const rec = currentPeerRecord(week, nick);
+  if (!rec) {
+    $("peer-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  store.shareNickname = nick;
+  save();
+  $("peer-link").value = peerLink(rec, appBaseUrl());
+  $("peer-link").hidden = false;
+  $("peer-copy").hidden = false;
+  $("peer-msg").textContent = "Link created. It holds only the record above. Copy it and send it yourself.";
+});
+$("peer-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("peer-link").value);
+    $("peer-msg").textContent = "Copied.";
+  } catch {
+    $("peer-link").select();
+    $("peer-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
+  }
+});
+function showPeer(rec) {
+  $("peer-view-body").textContent =
+    `${rec.nickname}, ${rec.week}: ${rec.tracked_minutes} tracked minutes, consistency score ${rec.consistency_score} out of 100, ${rec.breaks_taken} breaks taken.`;
+  $("peer-view-dialog").showModal();
+}
+$("peer-view").addEventListener("click", () => {
+  const rec = readPeerLink($("peer-paste").value);
+  if (!rec) {
+    $("peer-msg").textContent = "That is not a BackUp share link.";
+    return;
+  }
+  $("peer-msg").textContent = "";
+  showPeer(rec);
+});
+$("peer-view-close").addEventListener("click", () => $("peer-view-dialog").close());
+
+$("share-weekly").addEventListener("change", (e) => {
+  if (!e.target.checked) {
+    withdrawShareConsent(store);
+    save();
+    renderProgress();
+    return;
+  }
+  e.target.checked = false; // stays off until the dialog is agreed
+  $("share-consent-nick").value = store.shareNickname || "";
+  $("share-consent-check").checked = false;
+  $("share-consent-agree").disabled = true;
+  $("share-consent-msg").textContent = "";
+  renderShareConsentPreview();
+  $("share-consent-dialog").showModal();
+});
+function renderShareConsentPreview() {
+  const rec = currentPeerRecord(summarizeWeeks(store, Date.now()).at(-1), $("share-consent-nick").value);
+  $("share-consent-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+$("share-consent-title").textContent = SHARE_CONSENT_TITLE;
+$("share-consent-label").append(SHARE_CONSENT_CHECKBOX);
+$("share-consent-list").replaceChildren(
+  ...SHARE_CONSENT_POINTS.map((t) => {
+    const li = document.createElement("li");
+    li.textContent = t;
+    return li;
+  }),
+);
+$("share-consent-nick").addEventListener("input", renderShareConsentPreview);
+$("share-consent-check").addEventListener("change", (e) => {
+  $("share-consent-agree").disabled = !e.target.checked;
+});
+$("share-consent-agree").addEventListener("click", () => {
+  const nick = cleanNickname($("share-consent-nick").value);
+  if (!nick) {
+    $("share-consent-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  recordShareConsent(store);
+  store.shareNickname = nick;
+  save();
+  $("share-consent-dialog").close();
+  renderProgress();
+});
+$("share-consent-cancel").addEventListener("click", () => $("share-consent-dialog").close());
 
 $("progress-light").addEventListener("click", () => {
   $("coaching-level").value = "light";
@@ -3134,6 +3483,12 @@ renderCalibration();
 renderStats();
 renderTest();
 renderProgress();
+if (location.hash.startsWith("#peer=")) {
+  // A friend's share link: show it once, keep nothing.
+  const rec = readPeerLink(location.hash);
+  history.replaceState(null, "", location.pathname + location.search);
+  if (rec) showPeer(rec);
+}
 window.addEventListener("pagehide", save);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) save();

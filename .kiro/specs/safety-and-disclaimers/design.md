@@ -48,7 +48,7 @@ Panel line under "Relax, don't brace":
 | `docs/index.html` | Short, near the call to action | Static copy |
 | README, `KIROWEEN.md` | Short + link to this spec | Static copy |
 | Relax panel | One sentence | Static in `index.html` |
-| Each wellness tool (spec only) | "Stop if it hurts" | Per-tool copy |
+| Each wellness tool | "Stop if it hurts" | Per-tool copy |
 
 ## Acknowledgement flow
 ```

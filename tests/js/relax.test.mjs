@@ -85,3 +85,19 @@ test("breath check verdicts", () => {
   assert.ok(Math.abs(ok.relaxed - 0.61) < 1e-9);
   assert.equal(breath(null, 0.6, 0.6).kind, "unclear");
 });
+
+test("relaxed flag: null without a reference, true at the reference, false when shoulders are up, null without a reading", () => {
+  const m = new BracingMonitor();
+  assert.equal(m.relaxed, null);
+  run(m, 0.6, 0, 10);
+  assert.equal(m.relaxed, null, "no reference after 10 s");
+  run(m, 0.6, 10, 60);
+  assert.equal(m.relaxed, true);
+  run(m, 0.6 * 0.8, 70, 5);
+  assert.equal(m.relaxed, false);
+  m.update(null, 80, true);
+  assert.equal(m.relaxed, null);
+  run(m, 0.6, 81, 5);
+  m.reset();
+  assert.equal(m.relaxed, null);
+});

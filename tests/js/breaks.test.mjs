@@ -6,7 +6,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BREAKS, BreakTracker, MOVE_BREAK_OPTIONS, normalizeMoveMinutes } from "../../docs/app/breaks.js";
+import {
+  BREAKS,
+  BreakTracker,
+  JAW_OPTIONS,
+  MOVE_BREAK_OPTIONS,
+  normalizeJawMinutes,
+  normalizeMoveMinutes,
+} from "../../docs/app/breaks.js";
 
 /** Feed `seconds` of presence (or absence) at 1 s steps from `t`. Returns the new t and breaks taken. */
 function run(tr, t, seconds, present) {
@@ -100,4 +107,31 @@ test("constants match the issue", () => {
   assert.equal(BREAKS.eye_after_s, 1200);
   assert.equal(BREAKS.eye_look_s, 20);
   assert.equal(BREAKS.away_reset_s, 120);
+});
+
+test("the jaw prompt is off by default and due after 30 or 45 minutes of presence", () => {
+  assert.deepEqual([...JAW_OPTIONS], [0, 30, 45]);
+  assert.equal(normalizeJawMinutes("60"), 0);
+  assert.equal(normalizeJawMinutes("45"), 45);
+  const off = new BreakTracker({ eyeBreaks: false, moveBreakMinutes: 0 });
+  run(off, 0, 3 * 3600, true);
+  assert.deepEqual(off.due(true), []);
+  const tr = new BreakTracker({ eyeBreaks: false, moveBreakMinutes: 0, jawMinutes: 30 });
+  let t = run(tr, 0, 30 * 60 - 5, true).t;
+  assert.deepEqual(tr.due(true), []);
+  t = run(tr, t, 10, true).t;
+  assert.deepEqual(tr.due(true), ["jaw"]);
+  tr.taken("jaw");
+  assert.deepEqual(tr.due(true), []);
+  tr.setJawMinutes(0);
+  run(tr, t, 3600, true);
+  assert.deepEqual(tr.due(true), []);
+});
+
+test("two minutes away restarts the jaw timer", () => {
+  const tr = new BreakTracker({ eyeBreaks: false, moveBreakMinutes: 0, jawMinutes: 30 });
+  let t = run(tr, 0, 29 * 60, true).t;
+  t = run(tr, t, 125, false).t;
+  run(tr, t, 2 * 60, true);
+  assert.deepEqual(tr.due(true), []);
 });

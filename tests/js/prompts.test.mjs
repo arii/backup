@@ -192,3 +192,23 @@ test("stretch and water are break prompts that wait for the quiet start", () => 
   assert.equal(ask(s, "water", 410), null, "the global gap holds it back");
   assert.equal(ask(s, "water", 1100)?.id, "water");
 });
+
+test("the jaw prompt waits for the quiet start, the global gap and silent rules", () => {
+  const s = make();
+  assert.equal(ask(s, "jaw", 10), null);
+  assert.equal(ask(s, "jaw", 400, { paused: true }), null);
+  assert.equal(ask(s, "jaw", 400, { test: true }), null);
+  assert.equal(ask(s, "jaw", 400)?.id, "jaw");
+  s.dismiss(410, "done");
+  assert.equal(ask(s, "eye", 420), null, "the 10 minute gap applies after the jaw prompt");
+  assert.equal(ask(s, "eye", 400 + 600)?.id, "eye");
+});
+
+test("a jaw prompt never shows during a posture reminder or when disabled", () => {
+  const s = make((id) => id !== "jaw");
+  assert.equal(s.enqueue("jaw", 400), false);
+  const t = make();
+  t.notePosture(400);
+  assert.equal(ask(t, "jaw", 405), null);
+  assert.equal(ask(t, "jaw", 411)?.id, "jaw");
+});

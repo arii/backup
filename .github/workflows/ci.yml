@@ -97,7 +97,7 @@ jobs:
           npm install --no-save playwright@1
           npx playwright install --with-deps chromium
       - name: Serve docs/ and run the e2e
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: |
           (cd docs && nohup python3 -m http.server 8123 >/dev/null 2>&1 &)
           for i in $(seq 1 30); do

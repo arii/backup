@@ -244,7 +244,8 @@ export class LoadSteps {
   }
 
   /** Mark step `id` (default: the first active one) failed and leave the list
-   *  up, so it shows where. Other running steps go back to pending: the retry
+   *  up, so it shows where. Steps that had not finished are marked skipped (a
+   *  dash, not an empty circle that looks like it is still coming): the retry
    *  starts them again. */
   fail(id = null) {
     this.clearTimers();
@@ -252,7 +253,7 @@ export class LoadSteps {
     const target = id || lis.find((li) => li.className === "active")?.dataset.step;
     for (const li of lis) {
       if (li.dataset.step === target) li.className = "failed";
-      else if (li.className === "active") li.className = "pending";
+      else if (li.className !== "done") li.className = "skipped";
     }
     this.bar.hidden = true;
     this.hint.textContent = "";

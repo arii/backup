@@ -55,6 +55,23 @@ export function demoStaticText(kind) {
   return DEMOS[kind].map((step, i) => `${i + 1}. ${step.line}`).join("\n");
 }
 
+/** "Stop if it hurts" copy shown on the card of each wellness tool (safety-and-disclaimers
+ *  requirement 7.1). Kept apart from the spoken lines so the voice clips stay short. */
+export const TOOL_SAFETY = Object.freeze({
+  stretch: "Go gently. Stop if anything hurts.",
+  move: "Move at an easy pace. Stop if anything hurts.",
+  eye: "Stop and rest if your eyes or head hurt.",
+  jaw: "Keep it gentle. Stop if your jaw hurts.",
+  breathing: "Breathe easily. Stop if you feel dizzy.",
+  offer: "Breathe easily. Stop if you feel dizzy.",
+  guide: "Breathe easily. Stop if you feel dizzy.",
+});
+
+/** The safety line for the card on screen: a demo uses its own kind. Empty when the tool needs none (water). */
+export function toolSafety(id, kind) {
+  return TOOL_SAFETY[id === "demo" ? kind : id] || "";
+}
+
 const KEEP_DAYS = 60;
 
 /** Add one drink to the day's count (store.water). Returns the new count. Keeps the last 60 days. */

@@ -15,7 +15,7 @@ review), **Future** (a feature that does not exist yet).
 | Consent record removed by "Delete my data" | Done | stored in `posture-guard:v1` (`docs/app/privacy.js` `STORE_KEYS`) |
 | Public biometric retention and destruction statement | Done | `docs/privacy.html#biometric` |
 | Store derived scores only, never landmark arrays or embeddings; no identity matching | Done | Daily totals and counters only; stated in the privacy page |
-| Face tension tool: use Face Landmarker blendshapes, not meshes or embeddings | Future | Rule added to `.kiro/specs/wellness-tools/requirements.md` (requirement 1.11) |
+| Face tension tool: use Face Landmarker blendshapes, not meshes or embeddings | Not built, rule kept | The shipped jaw prompt is time-based and reads no face landmarks (it says a webcam cannot see jaw tension). The blendshape proxy was evaluated and rejected (`docs/research/face-landmarker-evaluation.md`). The rule stays in `.kiro/specs/wellness-tools/requirements.md` (requirement 1.11) for any future face model. |
 | Posture tracking itself reads ear, eye and nose points from the pose model. Decide whether it needs the same opt-in. | Decided, lawyer to confirm | Decision: no second consent dialog for basic tracking. Before the first camera start the app shows the on-device statement and the first-visit notice with an "I understand" step (`docs/app/onboarding.js`), then the browser asks for camera permission, which is a separate explicit per-site opt-in. Processing is in the tab only and stores derived totals. The dated consent record covers the extra shoulder and breathing features. A lawyer should confirm this is enough for BIPA-style rules. |
 | Whether the "capable of identifying" test or Zellmer v. Meta defenses fit this app | Needs lawyer | |
 
@@ -55,6 +55,8 @@ review), **Future** (a feature that does not exist yet).
 | Screen time is usage data computed locally | Done | Disclosed in the privacy page, kept local |
 | EU/UK: self-host the model and runtime so visitor IPs do not go to Google or jsDelivr | Done | `docs/app/vendor/`; e2e asserts no third-party requests |
 | Share buttons are plain links, with no third-party widgets or counters | Done | `docs/app/share.js`; e2e asserts no external requests |
+| Peer share link for the weekly score: off by default, dated consent dialog that shows the exact record, six fields, no server, nothing sent until the user copies the link; withdrawing consent removes it | Done | `docs/app/consent.js`, `docs/app/share.js`, `docs/privacy.html#share-links`; e2e "share weekly" checks |
+| Import JSON reads a local file only, rejects files over 1 MB and any value that is not a finite non-negative number | Done | `parseImport` in `docs/app/progress.js`; e2e "import" checks |
 | Sponsor prompt is triggered by counts kept only in `localStorage`; stated in the privacy page | Done | `docs/app/sponsor.js` |
 | Trademark search for "BackUp" before a store listing or paid launch | Needs lawyer | Informal findings above |
 | GDPR review (lawful basis, cookie rules). The site sets no cookies. | Needs lawyer | |

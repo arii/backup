@@ -17,7 +17,7 @@
   export function exportJson(store)     // -> string, whitelisted keys only
   ```
 - `docs/app/app.js` renders the panel, handles the download and "Delete my data".
-- Social phase (spec only): `docs/app/share.js`, plus an optional server. None.
+- Peer share link: `docs/app/share.js` (record and link), `docs/app/consistency.js` (score), `docs/app/consent.js` (share consent). No server. Option B is not built.
 
 ## Personal review
 ```
@@ -36,23 +36,24 @@ store.days, store.tests ──> summarize(store, now) ──> panel
 - Export whitelist: `schema`, `days`, `tests`, `exportedAt`. Excludes sounds, calibration.
 - Delete: `localStorage.removeItem("posture-guard:v1")`, then reset in-memory `store`.
 
-## Schema versioning (spec only for the field; the code tolerates it)
+## Schema versioning (built)
 `store.schema` integer. Version 1 is the shape above. Readers ignore unknown fields.
 Moving day keys to local dates is a version 2 migration. Converting old UTC keys is
 lossy (a day's seconds cannot be re-split), so keep old keys as they are, write local
 dates from the cut-over, and record the cut-over date in `store.dayKeyCutover`.
 
-## Import (spec only)
+## Import (built)
 Parse, check size, validate each day and test, preview totals, merge or replace, save.
-Merge sums `good` and `bad` per date and appends tests by `at`, de-duplicated.
+Merge keeps the larger value per date and field (`good`, `bad`, `relaxed_s`, `shoulder_s`, `best`, `brace_events`, `breaks`), so merging the same file twice changes nothing. A day seen on two devices is therefore not summed. Each seconds field is capped at 86400 and `good + bad` at 86400 per day; import rejects a file that breaks either cap. Tests are appended by `at`, de-duplicated.
 
-## Social leaderboard (spec only)
+## Social sharing (peer link built, server not built)
 ### Consistency score
 For a week of 7 days:
 ```
 days_active   = number of days with >= 20 tracked minutes          (cap 5)
 good_band     = min(good_pct, 90) / 90                              (ceiling: rigid posture not rewarded)
 relax_band    = relaxed_s / tracked_s                               (needs day.relaxed_s)
+(The shown relaxed % divides by `day.shoulder_s`, the good seconds with a shoulder reading. Days saved before that counter fall back to tracked seconds.)
 breaks        = min(breaks_taken, 3 * days_active) / (3 * days_active)
 consistency   = 100 * (0.35*days_active/5 + 0.25*good_band + 0.2*relax_band + 0.2*breaks)
 ```
@@ -91,6 +92,6 @@ record before every submission (or an explicit "send automatically each week" ch
 - **P5 monotonic cumulative**: cumulative good seconds equal the sum of `days[*].good`
   for finite values and never decrease when a day is added.
 - **P6 suggestion is advisory**: `try_light` never mutates settings.
-- **P7 (spec only) cap**: consistency score is the same for good % 90 and good % 100 with
+- **P7 cap**: consistency score is the same for good % 90 and good % 100 with
   the other inputs fixed.
-- **P8 (spec only) minimal payload**: the share payload has exactly the documented keys.
+- **P8 minimal payload**: the share payload has exactly the documented keys.
