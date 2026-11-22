@@ -591,8 +591,8 @@ try {
       text: document.getElementById("help-body").textContent,
     }));
     check(
-      "help: the button reopens the walkthrough with the safety notice",
-      help.open && /gentle nudge/.test(help.text) && /not a medical device/.test(help.text),
+      "help: the button reopens the short welcome with its safety reminder",
+      help.open && /gentle nudge/.test(help.text) && /not medical advice or a medical device/.test(help.text),
       { open: help.open },
     );
     await page.screenshot({ path: path.join(outDir, "help-dialog.png") });
@@ -2080,7 +2080,12 @@ try {
       await page.close();
     }
     {
-      const { page, errors } = await newPage(browser, { staged: true, consent: false });
+      const { page, errors } = await newPage(browser, {
+        staged: true,
+        consent: false,
+        // Advance discovery without an accelerated eye break blocking a manual breath check.
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+      });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       await page.click("#start-demo");
       await page.waitForSelector("#explore-panel:visible");
@@ -2101,6 +2106,7 @@ try {
           !(await shown(page, "#progress-panel")),
       );
       await page.click("#breath-check");
+      await page.waitForSelector("#consent-dialog:visible");
       check(
         "progressive onboarding: breath check still asks for permission",
         await page.locator("#consent-dialog").isVisible(),
@@ -2162,16 +2168,19 @@ try {
       await page.close();
     }
 
-    // 320 px at stage 0 and after the demo has revealed the stages.
+    // 320 px before tracking and after explicitly opening reminder settings.
     {
       const { page } = await newPage(browser, { staged: true, viewport: { width: 320, height: 640 } });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
       check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
-      check("staged reveal: no horizontal scroll at 320 px, stage 4", await fits());
-      await page.screenshot({ path: path.join(outDir, "reveal-320-stage4.png"), fullPage: true });
+      await page.waitForSelector("#explore-panel:visible");
+      await page.locator("#explore-panel summary").click();
+      await page.click('[data-explore="reminders-panel calibration-panel breaks-panel"]');
+      await page.waitForSelector("#breaks-panel:visible");
+      check("staged reveal: no horizontal scroll at 320 px after exploring reminders", await fits());
+      await page.screenshot({ path: path.join(outDir, "explore-reminders-320.png"), fullPage: true });
       await page.close();
     }
   }
