@@ -6,7 +6,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BracingMonitor, BreathCheck, neckRatio, RELAX } from "../../docs/app/relax.js";
+import {
+  BracingMonitor,
+  BreathCheck,
+  neckRatio,
+  RELAX,
+  SHOULDER_OFF_REASON,
+  shoulderChecksOn,
+} from "../../docs/app/relax.js";
 
 /** Landmarks with ears `neck` above the shoulder line (image units). */
 function pose({ neck = 0.12, width = 0.2, cx = 0.5, shoulderY = 0.6, vis = 0.99 } = {}) {
@@ -100,4 +107,10 @@ test("relaxed flag: null without a reference, true at the reference, false when 
   run(m, 0.6, 81, 5);
   m.reset();
   assert.equal(m.relaxed, null);
+});
+
+test("shoulder checks are off on the MoveNet fallback only", () => {
+  assert.equal(shoulderChecksOn(false), true);
+  assert.equal(shoulderChecksOn(true), false);
+  assert.match(SHOULDER_OFF_REASON, /main model/);
 });

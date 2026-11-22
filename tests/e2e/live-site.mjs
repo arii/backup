@@ -1438,6 +1438,29 @@ try {
           seen.badge !== "no one in view" && seen.badge !== "waiting" && seen.headForward !== "-",
           seen,
         );
+        // the shoulder features are off on the fallback (#85)
+        await page.evaluate(() => document.getElementById("breath-check").click());
+        await page.waitForTimeout(500);
+        const sh = await page.evaluate(() => {
+          const st = JSON.parse(localStorage.getItem("posture-guard:v1") || "{}");
+          const days = Object.values(st.days || {});
+          return {
+            status: document.getElementById("relax-status").textContent,
+            consentOpen: !!document.querySelector("dialog[open]"),
+            braceEvents: days.reduce((n, d) => n + (d.brace_events || 0), 0),
+            shoulderSecs: days.reduce((n, d) => n + (d.relaxed_s || 0) + (d.shoulder_s || 0), 0),
+          };
+        });
+        check(
+          "no WebGL: Breath check explains that shoulder checks need the main model and does not start",
+          /need the main model/i.test(sh.status) && !sh.consentOpen,
+          sh,
+        );
+        check(
+          "no WebGL: no bracing events or relaxed shoulder time are recorded",
+          sh.braceEvents === 0 && sh.shoulderSecs === 0,
+          sh,
+        );
       }
       check("no WebGL: no page errors", errors.length === 0, errors);
       await page.close();

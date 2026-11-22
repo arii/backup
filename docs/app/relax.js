@@ -32,6 +32,15 @@ export const RELAX = Object.freeze({
   breath_settle: 0.07, // exhale lengthening it by 7%+ = they were held up before
 });
 
+/** Why the shoulder features are off on the MoveNet fallback (it has no reliable shoulder signal). */
+export const SHOULDER_OFF_REASON = "Shoulder checks need the main model (hardware acceleration)";
+
+/** True when the shoulder features (bracing monitor, breath check verdict, relaxed time) may read landmarks.
+ *  They are off on the simpler MoveNet fallback model. */
+export function shoulderChecksOn(lowAccuracy) {
+  return !lowAccuracy;
+}
+
 /** Ears-above-shoulders gap / shoulder width, or null when not visible.
  *  Image y grows downward, so a relaxed person gives a clearly positive value. */
 export function neckRatio(lm, floor = RELAX.visibility_floor) {
