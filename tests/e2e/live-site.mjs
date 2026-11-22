@@ -930,6 +930,17 @@ try {
       (await page.textContent("#first-run-heading")) === "Remember your comfortable posture" &&
         (await page.isVisible("#first-run-body button")),
     );
+    check(
+      "first run: the baseline instructions do not ask for a slouch recording",
+      !/slouch/i.test(await page.textContent("#first-run-body")),
+    );
+    await page.click("#first-run-body button");
+    await page.waitForFunction(() => /Saved/.test(document.querySelector("#first-run-body").textContent));
+    check(
+      "first run: one comfortable-posture recording is enough to continue",
+      !(await page.isDisabled("#first-run-next")) &&
+        (await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1")).calibration.good)),
+    );
     await page.click("#first-run-next");
     check(
       "first run: the third card finishes setup without adding configuration",
@@ -2056,6 +2067,18 @@ try {
     }
 
     // Time alone never expands the workspace, even for returning visitors.
+    {
+      const { page } = await newPage(browser, { staged: true, guide: true });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForSelector("#first-run:visible");
+      await page.waitForTimeout(1500);
+      check(
+        "progressive onboarding: optional prompts do not interrupt unfinished setup",
+        await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")),
+      );
+      await page.close();
+    }
     {
       const { page, errors } = await newPage(browser, { staged: true, consent: false });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
