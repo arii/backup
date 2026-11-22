@@ -115,3 +115,19 @@ test("the app page carries the tool safety lines", () => {
   assert.match(html, /Stop if you feel dizzy/);
   assert.match(html, /Stop if anything hurts/);
 });
+
+test("the app footer's short disclaimer stays tied to the official safety wording", () => {
+  const html = read("docs/app/index.html");
+  const footer = html.match(/<footer>([\s\S]*?)<\/footer>/)[1];
+  const span = footer.match(/<span id="safety-footer">([\s\S]*?)<\/span>/)[1];
+  assert.match(norm(span), /not medical advice/i);
+  // The same phrase appears in the official short text and the Safety dialog points.
+  assert.equal(SAFETY_SHORT.toLowerCase().includes("not medical advice"), true);
+  assert.equal(
+    SAFETY_POINTS.some((point) => /not medical advice/i.test(point)),
+    true,
+  );
+  // The footer links to the Safety dialog.
+  assert.match(footer, /<a [^>]*id="safety-link"[^>]*>\s*Safety\s*<\/a>/);
+  assert.match(html, /<dialog id="safety-dialog"/);
+});
