@@ -110,3 +110,29 @@ export class FeedbackPolicy {
     return true;
   }
 }
+
+// Suggest Light after repeated dismissals or mutes (requirement 7.4). Each
+// explicit "Snooze", "Not now", "Don't show this again" or switch to a quieter
+// reminder style is one annoyance event. A suggestion is only a suggestion:
+// the person picks, and "Not now" keeps it away for two weeks.
+export const LIGHT_SUGGEST = Object.freeze({
+  count: 5, // this many events...
+  window_s: 7 * 86400, // ...within a week
+  keep: 20, // events kept in the store
+  decline_s: 14 * 86400, // a declined suggestion stays away this long
+});
+
+/** Add an event at `nowMs`. Returns a new list: recent events only, newest last, capped. */
+export function recordAnnoyance(log, nowMs, cfg = LIGHT_SUGGEST) {
+  const old = Array.isArray(log) ? log : [];
+  const kept = old.filter((t) => Number.isFinite(t) && nowMs - t < cfg.window_s * 1000 && t <= nowMs);
+  return [...kept, nowMs].slice(-cfg.keep);
+}
+
+/** True when the Light suggestion should be offered now. */
+export function shouldSuggestLight({ level, log, declinedAtMs = null, nowMs }, cfg = LIGHT_SUGGEST) {
+  if (normalizeLevel(level) === "light") return false;
+  if (Number.isFinite(declinedAtMs) && nowMs - declinedAtMs < cfg.decline_s * 1000) return false;
+  const recent = (Array.isArray(log) ? log : []).filter((t) => Number.isFinite(t) && nowMs - t < cfg.window_s * 1000);
+  return recent.length >= cfg.count;
+}

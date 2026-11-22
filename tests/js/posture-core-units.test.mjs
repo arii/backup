@@ -572,3 +572,56 @@ test("drift from the baseline is reported with its own sign; trunk ignored witho
   assert.equal(cue.side, "right");
   assert.equal(postureCue(metrics(0, 40, 0, 0, false), CFG), null);
 });
+
+// -- hold (activities that suppress posture feedback) -------------------------
+
+test("hold scores presence only and emits nothing while a bad pose streams", () => {
+  const e = new PostureEngine();
+  for (let t = 0; t < 5; t += 0.2) e.process(pose(), t); // settle into GOOD
+  const before = {
+    state: e.machine.state,
+    badSince: e.machine.badSince,
+    history: e.machine.history.slice(),
+    needle: e.needle.value,
+  };
+  let nudges = 0;
+  let out;
+  for (let t = 5; t < 305; t += 0.2) {
+    out = e.hold(SLOUCHED, t);
+    nudges += out.nudges.length;
+    assert.equal(out.held, true);
+    assert.equal(out.cue, null);
+    assert.equal(out.hold, null);
+    assert.equal(out.transition.nudge, Nudge.NONE);
+    assert.equal(out.transition.state, before.state);
+    assert.equal(out.needle, before.needle);
+  }
+  assert.equal(nudges, 0);
+  assert.equal(out.result.kind, "scored");
+  assert.equal(e.machine.state, before.state);
+  assert.equal(e.machine.badSince, before.badSince);
+  assert.deepEqual(e.machine.history, before.history);
+  assert.equal(e.needle.value, before.needle);
+});
+
+test("hold reports absence as an unreliable no-pose result", () => {
+  const e = new PostureEngine();
+  const out = e.hold(null, 1);
+  assert.equal(out.result.kind, "unreliable");
+  assert.equal(out.result.reason, Reason.NO_POSE);
+});
+
+test("after restart a bad pose needs bad_sustain_s before a reminder", () => {
+  const e = new PostureEngine();
+  for (let t = 0; t < 5; t += 0.2) e.process(pose(), t);
+  for (let t = 5; t < 65; t += 0.2) e.hold(SLOUCHED, t);
+  e.restart();
+  const need = DEFAULTS.state.bad_sustain_s;
+  let first = null;
+  for (let t = 65; t < 80; t += 0.1) {
+    const out = e.process(SLOUCHED, t);
+    if (first === null && out.nudges.length) first = t;
+  }
+  assert.ok(first !== null, "a reminder eventually fires");
+  assert.ok(first - 65 >= need - 0.2, `reminder at +${(first - 65).toFixed(1)} s, need >= ${need}`);
+});

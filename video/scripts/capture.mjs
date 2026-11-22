@@ -24,6 +24,12 @@ const bust = () => `?v=${Date.now()}`;
 const text = (page, id) => page.evaluate((i) => document.getElementById(i).textContent, id);
 const reminders = (page) => text(page, "reminder-count").then(Number);
 
+// The start overlay (full card, then the compact loading strip) is gone once tracking runs.
+const overlayGone = (page, timeout = 30000) =>
+  page.waitForFunction(() => getComputedStyle(document.getElementById("start-overlay")).display === "none", null, {
+    timeout,
+  });
+
 async function record(name, args, script) {
   const browser = await chromium.launch({ args });
   const rawDir = path.join(footageDir, `${name}-raw`);
@@ -41,6 +47,9 @@ async function record(name, args, script) {
       s.onboarded = Math.max(s.onboarded || 0, 1);
       s.ackVersion = Math.max(s.ackVersion || 0, 1);
       s.firstRunDone = true; // skip the first-run guide card
+      s.setupDone = true; // skip the progressive setup sequence
+      s.revealAll = true; // show every panel from the start (no staged reveal)
+      s.breathIntroShown = true; // the automatic breath check offer would interrupt the clip
       // Opt in to the shoulder and breathing features (docs/app/consent.js, CONSENT_VERSION 1).
       s.consent = s.consent || { version: 1, at: "2026-01-01T00:00:00.000Z" };
       localStorage.setItem("posture-guard:v1", JSON.stringify(s));
@@ -70,6 +79,7 @@ const demo = await record("demo", [], async (page, now) => {
   await page.goto(`${base}app/${bust()}`);
   await page.waitForTimeout(1200);
   await page.click("#start-demo");
+  await overlayGone(page);
   await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
     timeout: 15000,
   });
@@ -106,11 +116,7 @@ if (y4m && existsSync(y4m)) {
       await page.goto(`${base}app/${bust()}`);
       await page.waitForTimeout(1000);
       await page.click("#start-camera");
-      await page.waitForFunction(
-        () => getComputedStyle(document.getElementById("start-overlay")).display === "none",
-        null,
-        { timeout: 90000 },
-      );
+      await overlayGone(page, 90000); // the compact loading card stays until the model is warm
       const live = now();
       // The fake feed tilts the drawn figure after a few seconds; see if that reminds.
       let reminder = null;

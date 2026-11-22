@@ -82,5 +82,5 @@ draws only while its panel is visible and never during the silent test
 constants' current values; update the scripts when versions are bumped.
 
 ## Out of scope
-Account creation, analytics on onboarding completion, and per-browser device memory
-(spec only, Requirement 8).
+Account creation, analytics on onboarding completion, and remembering the camera
+resolution. The camera device id is remembered (Requirement 8.3).

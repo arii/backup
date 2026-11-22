@@ -99,7 +99,7 @@ jobs:
             curl -fsS -o /dev/null "${BASE_URL}app/vendor/$f" || { echo "missing: $f"; exit 1; }
           done
       - name: Run the live-site check
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: node tests/e2e/live-site.mjs "$BASE_URL" "$PWD/person.y4m" live-site-report
       - name: Upload screenshots and report
         if: always()

@@ -70,13 +70,11 @@ test("a posture reminder holds every other prompt back", () => {
   assert.equal(ask(s, "eye", 400 + PROMPTS.posture_hold_s)?.id, "eye");
 });
 
-test("suppressed while paused, in a silent test, or during a breath check", () => {
-  for (const ctx of [{ paused: true }, { test: true }, { breathCheck: true }]) {
-    const s = make();
-    assert.equal(ask(s, "eye", 1000, ctx), null, JSON.stringify(ctx));
-    assert.equal(s.active, null);
-    assert.equal(ask(s, "eye", 1001)?.id, "eye"); // shows once the suppression ends
-  }
+test("suppressed while an activity owns the screen", () => {
+  const s = make();
+  assert.equal(ask(s, "eye", 1000, { suppressed: true }), null);
+  assert.equal(s.active, null);
+  assert.equal(ask(s, "eye", 1001)?.id, "eye"); // shows once the suppression ends
 });
 
 test("a disabled or dismissed prompt is never queued", () => {
@@ -127,4 +125,85 @@ test("within a priority level the prompt shown longest ago goes first", () => {
   s.dismiss(301);
   s.enqueue("eye", 900);
   assert.equal(ask(s, "move", 900)?.id, "move");
+});
+
+test("breath_intro skips the quiet start once, other prompts still wait", () => {
+  const s = make();
+  s.enqueue("eye", 70);
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(80, "snooze");
+  assert.equal(ask(s, "eye", 90), null, "the quiet start still holds back everything else");
+});
+
+test("breath_intro bypasses the quiet start only once", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(80, "notnow");
+  // Not now snoozes it for 10 min from 80; the quiet start is over by then, so no bypass is involved
+  assert.equal(ask(s, "breath_intro", 80 + 599), null);
+  assert.equal(ask(s, "breath_intro", 80 + 601)?.id, "breath_intro");
+  const t = make();
+  assert.equal(ask(t, "breath_intro", 70)?.id, "breath_intro");
+  t.dismiss(75, "done");
+  t.startSession(1000);
+  assert.equal(ask(t, "breath_intro", 1010), null, "a second bypass in a new session is not granted");
+});
+
+test("the global gap applies after breath_intro", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70)?.id, "breath_intro");
+  s.dismiss(100, "done");
+  assert.equal(ask(s, "eye", 300), null);
+  assert.equal(ask(s, "eye", 70 + PROMPTS.global_gap_s)?.id, "eye");
+});
+
+test("a posture reminder still wins over breath_intro", () => {
+  const s = make();
+  s.notePosture(70);
+  assert.equal(ask(s, "breath_intro", 75), null);
+  assert.equal(ask(s, "breath_intro", 70 + PROMPTS.posture_hold_s)?.id, "breath_intro");
+});
+
+test("a suppressing activity blocks breath_intro", () => {
+  const s = make();
+  assert.equal(ask(s, "breath_intro", 70, { suppressed: true }), null);
+  assert.equal(ask(s, "breath_intro", 73)?.id, "breath_intro");
+});
+
+test("breath_intro ranks as a breath check and a disabled one is never queued", () => {
+  const s = make();
+  s.enqueue("share", 80);
+  s.enqueue("eye", 80);
+  assert.equal(ask(s, "breath_intro", 80)?.id, "breath_intro");
+  const off = make((id) => id !== "breath_intro");
+  assert.equal(off.enqueue("breath_intro", 80), false);
+  assert.equal(off.poll(80), null);
+});
+
+test("stretch and water are break prompts that wait for the quiet start", () => {
+  const s = make();
+  assert.equal(ask(s, "stretch", 10), null);
+  assert.equal(ask(s, "stretch", 400)?.id, "stretch");
+  s.dismiss(401, "snooze");
+  assert.equal(ask(s, "water", 410), null, "the global gap holds it back");
+  assert.equal(ask(s, "water", 1100)?.id, "water");
+});
+
+test("the jaw prompt waits for the quiet start, the global gap and silent rules", () => {
+  const s = make();
+  assert.equal(ask(s, "jaw", 10), null);
+  assert.equal(ask(s, "jaw", 400, { suppressed: true }), null);
+  assert.equal(ask(s, "jaw", 400)?.id, "jaw");
+  s.dismiss(410, "done");
+  assert.equal(ask(s, "eye", 420), null, "the 10 minute gap applies after the jaw prompt");
+  assert.equal(ask(s, "eye", 400 + 600)?.id, "eye");
+});
+
+test("a jaw prompt never shows during a posture reminder or when disabled", () => {
+  const s = make((id) => id !== "jaw");
+  assert.equal(s.enqueue("jaw", 400), false);
+  const t = make();
+  t.notePosture(400);
+  assert.equal(ask(t, "jaw", 405), null);
+  assert.equal(ask(t, "jaw", 411)?.id, "jaw");
 });

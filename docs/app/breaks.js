@@ -23,11 +23,35 @@ export function normalizeMoveMinutes(v) {
   return MOVE_BREAK_OPTIONS.includes(n) ? n : BREAKS.move_default_min;
 }
 
+/** Stretch and water reminders: same choices as the move break, but off unless chosen. */
+export function normalizeReminderMinutes(v) {
+  const n = Number(v);
+  return MOVE_BREAK_OPTIONS.includes(n) ? n : 0;
+}
+
+/** Jaw relax prompt: every 30 or 45 minutes, off unless chosen (wellness-tools requirement 4.3). */
+export const JAW_OPTIONS = Object.freeze([0, 30, 45]);
+
+export function normalizeJawMinutes(v) {
+  const n = Number(v);
+  return JAW_OPTIONS.includes(n) ? n : 0;
+}
+
 export class BreakTracker {
-  constructor({ eyeBreaks = true, moveBreakMinutes = BREAKS.move_default_min, cfg = BREAKS } = {}) {
+  constructor({
+    eyeBreaks = true,
+    moveBreakMinutes = BREAKS.move_default_min,
+    stretchMinutes = 0,
+    waterMinutes = 0,
+    jawMinutes = 0,
+    cfg = BREAKS,
+  } = {}) {
     this.cfg = cfg;
     this.eyeBreaks = eyeBreaks;
     this.moveMinutes = normalizeMoveMinutes(moveBreakMinutes);
+    this.stretchMinutes = normalizeReminderMinutes(stretchMinutes);
+    this.waterMinutes = normalizeReminderMinutes(waterMinutes);
+    this.jawMinutes = normalizeJawMinutes(jawMinutes);
     this.reset();
   }
 
@@ -35,6 +59,9 @@ export class BreakTracker {
     this.seated = 0; // continuous seated seconds
     this.eyeBase = 0; // seated time when the last eye break was taken or reset
     this.moveBase = 0;
+    this.stretchBase = 0;
+    this.waterBase = 0;
+    this.jawBase = 0;
     this.away = 0; // seconds away in the current absence
     this.awayCounted = false;
     this.lastT = null;
@@ -42,6 +69,15 @@ export class BreakTracker {
 
   setMoveMinutes(v) {
     this.moveMinutes = normalizeMoveMinutes(v);
+  }
+  setStretchMinutes(v) {
+    this.stretchMinutes = normalizeReminderMinutes(v);
+  }
+  setWaterMinutes(v) {
+    this.waterMinutes = normalizeReminderMinutes(v);
+  }
+  setJawMinutes(v) {
+    this.jawMinutes = normalizeJawMinutes(v);
   }
   setEyeBreaks(on) {
     this.eyeBreaks = !!on;
@@ -62,18 +98,21 @@ export class BreakTracker {
     this.away += dt;
     if (!this.awayCounted && this.away >= this.cfg.away_reset_s) {
       this.awayCounted = true;
-      this.seated = this.eyeBase = this.moveBase = 0;
+      this.seated = this.eyeBase = this.moveBase = this.stretchBase = this.waterBase = this.jawBase = 0;
       return true;
     }
     return false;
   }
 
-  /** Break kinds due right now ("eye", "move"). Nothing while away. */
+  /** Break kinds due right now ("eye", "move", "stretch", "water", "jaw"). Nothing while away. */
   due(present = true) {
     if (!present || this.away > 0) return [];
     const out = [];
     if (this.eyeBreaks && this.seated - this.eyeBase >= this.cfg.eye_after_s) out.push("eye");
     if (this.moveMinutes > 0 && this.seated - this.moveBase >= this.moveMinutes * 60) out.push("move");
+    if (this.stretchMinutes > 0 && this.seated - this.stretchBase >= this.stretchMinutes * 60) out.push("stretch");
+    if (this.waterMinutes > 0 && this.seated - this.waterBase >= this.waterMinutes * 60) out.push("water");
+    if (this.jawMinutes > 0 && this.seated - this.jawBase >= this.jawMinutes * 60) out.push("jaw");
     return out;
   }
 
@@ -81,5 +120,8 @@ export class BreakTracker {
   taken(kind) {
     if (kind === "eye") this.eyeBase = this.seated;
     if (kind === "move") this.moveBase = this.seated;
+    if (kind === "stretch") this.stretchBase = this.seated;
+    if (kind === "water") this.waterBase = this.seated;
+    if (kind === "jaw") this.jawBase = this.seated;
   }
 }

@@ -6,7 +6,13 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cameraErrorMessage, isPauseShortcut, resolveSettings } from "../../docs/app/settings.js";
+import {
+  cameraConstraints,
+  cameraErrorMessage,
+  isDeviceGoneError,
+  isPauseShortcut,
+  resolveSettings,
+} from "../../docs/app/settings.js";
 
 test("new users get the breath check and the P shortcut on", () => {
   for (const s of [resolveSettings({}), resolveSettings(null)]) {
@@ -73,4 +79,29 @@ test("breaks and prompts choices persist, and bad stored values fall back", () =
   assert.deepEqual(s.promptsDismissed, { eye: true });
   assert.equal(resolveSettings({ moveBreakMinutes: 33 }).moveBreakMinutes, 60);
   assert.equal(resolveSettings({ moveBreakMinutes: "45" }).moveBreakMinutes, 45);
+});
+
+test("the jaw prompt is off for new users and keeps only 30 or 45", () => {
+  assert.equal(resolveSettings({}).jawMinutes, 0);
+  assert.equal(resolveSettings({ jawMinutes: 45 }).jawMinutes, 45);
+  assert.equal(resolveSettings({ jawMinutes: 60 }).jawMinutes, 0);
+  assert.equal(resolveSettings({ promptsDismissed: { jaw: true } }).promptsDismissed.jaw, true);
+});
+
+test("a remembered camera is requested exactly, otherwise the front camera", () => {
+  assert.deepEqual(cameraConstraints("abc").deviceId, { exact: "abc" });
+  assert.equal(cameraConstraints("abc").facingMode, undefined);
+  for (const none of ["", undefined, null, 5]) {
+    const c = cameraConstraints(none);
+    assert.equal(c.facingMode, "user");
+    assert.equal(c.deviceId, undefined);
+  }
+});
+
+test("a missing or unusable remembered camera is retried, a refusal is not", () => {
+  for (const name of ["OverconstrainedError", "NotFoundError", "NotReadableError"])
+    assert.equal(isDeviceGoneError({ name }), true);
+  for (const name of ["NotAllowedError", "SecurityError", "TypeError"])
+    assert.equal(isDeviceGoneError({ name }), false);
+  assert.equal(isDeviceGoneError(null), false);
 });

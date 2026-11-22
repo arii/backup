@@ -229,3 +229,30 @@ test("createMoveNetDetector reports no landmarks when no pose is found", async (
   await tick();
   assert.deepEqual(d.detectForVideo(video).landmarks, []);
 });
+
+test("createMoveNetDetector resets the smoothing filter for each new session", () => {
+  let resets = 0;
+  const tf = { estimatePoses: async () => [], reset: () => resets++ };
+  createMoveNetDetector(tf);
+  createMoveNetDetector(tf);
+  assert.equal(resets, 2);
+  createMoveNetDetector({ estimatePoses: async () => [] }); // no reset method: fine
+});
+
+test("createMoveNetDetector reports an inference error through onError once", async () => {
+  const errors = [];
+  const boom = new Error("boom");
+  const d = createMoveNetDetector(
+    {
+      estimatePoses: async () => {
+        throw boom;
+      },
+    },
+    { onError: (e) => errors.push(e) },
+  );
+  d.detectForVideo(video);
+  await tick();
+  await tick();
+  assert.throws(() => d.detectForVideo(video), boom);
+  assert.deepEqual(errors, [boom]);
+});

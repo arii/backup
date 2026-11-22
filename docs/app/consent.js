@@ -46,3 +46,37 @@ export function consentStatus(store) {
     ? `Turned on ${store.consent.at.slice(0, 10)}. Shoulder and breathing features are available.`
     : "Off. Breath check, Breathe with me, breathing moments and shoulder reminders need your OK first.";
 }
+
+// -- Consent to share a weekly score by link (progress-review requirement 6.1). Separate
+// from the landmark consent above. Off by default. The dialog lists the exact record. --
+
+const SHARE_CONSENT_VERSION = 1;
+export const SHARE_CONSENT_TITLE = "Share my weekly score?";
+export const SHARE_CONSENT_POINTS = Object.freeze([
+  "What is shared: only the record shown below, when you press Create link. It holds a nickname you choose, the week, your tracked minutes, a consistency score and your breaks taken.",
+  "No video, images, landmarks, minute-by-minute data, name, email or device identifier is included.",
+  "How: the record is packed into a link that you copy and send yourself. There is no server and no account. Nothing is sent by this site.",
+  "Once someone has the link, they keep it. You cannot take back a copy. Links can be edited by whoever holds them.",
+  "You can switch this off any time under Your progress. That removes this record. Your local data stays.",
+]);
+export const SHARE_CONSENT_CHECKBOX = "I agree to create links with this record.";
+
+/** True when sharing consent is recorded for the current text. */
+export function hasShareConsent(store) {
+  const c = store?.shareConsent;
+  return (
+    !!c && Number(c.version) >= SHARE_CONSENT_VERSION && typeof c.at === "string" && !Number.isNaN(Date.parse(c.at))
+  );
+}
+
+export function recordShareConsent(store, now = Date.now()) {
+  store.shareConsent = { version: SHARE_CONSENT_VERSION, at: new Date(now).toISOString() };
+  return store;
+}
+
+/** Withdraw: the consent record and the saved nickname are removed. */
+export function withdrawShareConsent(store) {
+  delete store.shareConsent;
+  delete store.shareNickname;
+  return store;
+}

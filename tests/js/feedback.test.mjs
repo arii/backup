@@ -5,8 +5,19 @@
 // feedback.js: coaching level, hourly cap and milestone praise.
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { FEEDBACK, FeedbackPolicy, MILESTONE_TEXT, normalizeLevel } from "../../docs/app/feedback.js";
+import {
+  FEEDBACK,
+  FeedbackPolicy,
+  LIGHT_SUGGEST,
+  MILESTONE_TEXT,
+  normalizeLevel,
+  recordAnnoyance,
+  shouldSuggestLight,
+} from "../../docs/app/feedback.js";
+import { CUE_METRICS, cueText } from "../../docs/app/posture-core.js";
+import { ALL_LINES } from "../../docs/app/voice-lines.js";
 
 /** Replay slouch episodes: each is a chime then a voice reminder 10 s later, `gap` s apart. */
 function replay(level, episodes, gap = 120) {
@@ -117,4 +128,71 @@ test("absence is not a streak: a gap above 5 s resets the count", () => {
   assert.deepEqual(accrue(p, 0, 4 * 60), []);
   assert.deepEqual(accrue(p, 4 * 60 + 30, 4 * 60), [], "4 + 4 minutes with a gap between is not 5");
   assert.deepEqual(accrue(p, 4 * 60 + 30 + 4 * 60, 90), [5], "the streak after the gap reaches 5 on its own");
+});
+
+// -- tests added with feedback-design tasks 10 and 11 ----------------------------
+
+// Requirements 1.3 and 6.5: cues and praise describe what to do, never shame the person.
+const SHAME =
+  /\b(shame\w*|lazy|stupid|idiot\w*|pathetic|ugly|terrible|awful|disgust\w*|failure|failed|failing|worthless|hopeless|bad (boy|girl|person)|you should know better|what is wrong with you)\b/i;
+
+function feedbackTexts() {
+  const out = [...ALL_LINES, ...Object.values(MILESTONE_TEXT)];
+  for (const metric of CUE_METRICS)
+    for (const side of ["", "left", "right"]) out.push(...cueText(metric, side).filter((t) => typeof t === "string"));
+  return out;
+}
+
+test("no cue, banner or spoken line shames the person", () => {
+  const texts = feedbackTexts();
+  assert.ok(texts.length > 30, "the deny-list should cover many lines");
+  for (const t of texts) assert.doesNotMatch(t, SHAME, `shaming wording: ${t}`);
+});
+
+test("the deny-list also covers the visible text of the app page", () => {
+  const html = readFileSync(new URL("../../docs/app/index.html", import.meta.url), "utf8")
+    .replace(/<(style|script)[\s\S]*?<\/\1>/g, " ")
+    .replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(html, SHAME);
+});
+
+test("the deny-list catches shaming text", () => {
+  for (const bad of ["You failed again", "Don't be lazy", "Shame on you", "Bad girl"]) assert.match(bad, SHAME);
+});
+
+const DAY = 86400 * 1000;
+
+test("light is suggested after repeated dismissals or mutes within a week", () => {
+  let log = [];
+  const now = 10 * DAY;
+  for (let i = 0; i < LIGHT_SUGGEST.count - 1; i++) log = recordAnnoyance(log, now + i);
+  assert.equal(shouldSuggestLight({ level: "standard", log, nowMs: now + 10 }), false);
+  log = recordAnnoyance(log, now + 20);
+  assert.equal(shouldSuggestLight({ level: "standard", log, nowMs: now + 30 }), true);
+});
+
+test("light is not suggested when already on, or for old events", () => {
+  const now = 30 * DAY;
+  const log = Array.from({ length: 6 }, (_, i) => now + i);
+  assert.equal(shouldSuggestLight({ level: "light", log, nowMs: now + 10 }), false);
+  assert.equal(shouldSuggestLight({ level: "standard", log, nowMs: now + 8 * DAY }), false);
+});
+
+test("a declined suggestion stays away for two weeks, then may return", () => {
+  const now = 100 * DAY;
+  const log = Array.from({ length: 6 }, (_, i) => now - i * 1000);
+  assert.equal(shouldSuggestLight({ level: "standard", log, declinedAtMs: now - DAY, nowMs: now }), false);
+  const later = now + 15 * DAY;
+  const fresh = Array.from({ length: 6 }, (_, i) => later - i * 1000);
+  assert.equal(shouldSuggestLight({ level: "standard", log: fresh, declinedAtMs: now, nowMs: later }), true);
+});
+
+test("the annoyance log drops old events, caps its size and ignores junk", () => {
+  const now = 50 * DAY;
+  assert.deepEqual(recordAnnoyance([now - 8 * DAY, "x", null, now - 1000], now), [now - 1000, now]);
+  let log = [];
+  for (let i = 0; i < 40; i++) log = recordAnnoyance(log, now + i);
+  assert.equal(log.length, LIGHT_SUGGEST.keep);
+  assert.deepEqual(recordAnnoyance("junk", now), [now]);
+  assert.equal(shouldSuggestLight({ level: "standard", log: undefined, nowMs: now }), false);
 });

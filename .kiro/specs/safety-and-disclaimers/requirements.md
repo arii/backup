@@ -70,12 +70,12 @@ THE README and `KIROWEEN.md` SHALL carry the short notice.
 4. Research citations in `docs/research/` SHALL describe the evidence and its limits, and
    say the app is not clinically validated.
 
-### Requirement 7: Wellness tools (spec only for the tools, rule applies now)
+### Requirement 7: Wellness tools
 1. EACH wellness tool (`wellness-tools` spec) SHALL carry "stop if it hurts" or equivalent
    in its own copy.
 2. THE breath panel SHALL carry the sentence from Requirement 3.3.
 
-### Requirement 8: Regulatory pointers for counsel (spec only)
+### Requirement 8: Regulatory pointers for counsel (owner-only)
 THE owner SHOULD ask counsel to confirm:
 1. That the app stays within the US FDA "general wellness" policy for low-risk products
    (FDA, *General Wellness: Policy for Low Risk Devices*, January 2026) by making no

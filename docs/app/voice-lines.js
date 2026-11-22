@@ -28,6 +28,7 @@ export const RECOVERY_PRAISE = ["That's better.", "There you go.", "Much better.
 
 // Anti-bracing (relax.js): good posture is a relaxed stack, not a squeeze.
 export const RELAX_LINES = {
+  introOffer: "Want to try a 30 second breath check? It looks at your shoulders.",
   bracing: "Shoulders creeping up? Breathe out and let them drop.",
   inhale: "Breath check. Take a slow, deep breath in.",
   exhale: "And breathe out. Let your shoulders drop.",
@@ -42,6 +43,24 @@ export const BREAK_LINES = {
   eye: "Look at something 20 feet away for 20 seconds.",
   eyeDone: "Nice. Your eyes had a rest.",
   move: "Time to stand up and move for a couple of minutes.",
+  stretch: "Time for a gentle neck and shoulder stretch.",
+  water: "Time for a few sips of water.",
+  jaw: "Check your face: unclench your jaw and let your tongue rest on the floor of your mouth.",
+};
+
+// "Take a break" demos (wellness.js): short guided steps, no camera, no form coaching.
+export const DEMO_LINES = {
+  stretchNeck: "Neck. Let one ear drift toward your shoulder, then switch sides. Keep it gentle.",
+  stretchRoll: "Shoulders. Roll them up, back and down, slowly.",
+  stretchChest: "Chest. Open your arms wide and breathe in. Stop if anything hurts.",
+  stretchDone: "Nice. Shake it out.",
+  moveStand: "Stand up.",
+  moveWalk: "Walk or sway for a bit. Roll your ankles.",
+  moveReach: "Reach up high, then let your arms drop.",
+  moveDone: "Good. Back to it when you are ready.",
+  waterPick: "Pick up your glass of water.",
+  waterSip: "Take a few slow sips.",
+  waterPut: "Put it down. Tap I drank to count it.",
 };
 
 // Breathing moments (breathing.js): rotated so they do not fade into the background.
@@ -74,6 +93,7 @@ export const ALL_LINES = [
     ...RECOVERY_PRAISE,
     ...Object.values(RELAX_LINES),
     ...Object.values(BREAK_LINES),
+    ...Object.values(DEMO_LINES),
     ...BREATHING_MOMENTS,
     ...Object.values(BREATHE_LINES),
   ]),

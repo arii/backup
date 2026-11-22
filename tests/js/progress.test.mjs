@@ -101,7 +101,8 @@ test("export contains only whitelisted keys and drops sounds and calibration", (
     voiceText: "hello",
   };
   const out = JSON.parse(exportJson(store, NOW));
-  assert.deepEqual(Object.keys(out).sort(), ["days", "exportedAt", "schema", "tests"]);
+  assert.deepEqual(out.water, {});
+  assert.deepEqual(Object.keys(out).sort(), ["days", "exportedAt", "schema", "tests", "water"]);
   assert.deepEqual(out.days, { [key(0)]: { good: 100, bad: 50 } });
   assert.deepEqual(Object.keys(out.tests[0]).sort(), ["at", "bad", "good", "minutes"]);
   assert.equal(out.exportedAt, new Date(NOW).toISOString());
