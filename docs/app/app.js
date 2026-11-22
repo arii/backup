@@ -1268,7 +1268,8 @@ function promptEnqueueDue(present) {
 
 /** Runs every tracked frame (real `now` in seconds). present: someone is in view. */
 function promptStep(state, now, present) {
-  if (inMode()) {
+  // Let people finish (or skip) the short posture setup before offering extras.
+  if (inMode() || nextSetupStep(store, STAGES.settled)) {
     plast = null;
     return;
   }
@@ -2899,6 +2900,7 @@ function renderFirstRun() {
   const last = (!firstRun.manual && step.key === "done") || firstRun.step === SETUP_STEPS.length - 1;
   $("first-run-back").hidden = firstRun.step === 0;
   $("first-run-next").textContent = last ? "Keep working" : "Continue";
+  $("first-run-next").disabled = false;
   $("first-run-skip").hidden = last;
 }
 
@@ -2974,7 +2976,12 @@ function updateFirstRunLive(result, landmarks) {
       ? "Head and shoulders in view \u2713"
       : causeFor(result, landmarks) || "Looking for you...";
   } else if (key === "calibrate") {
-    firstRunLive.textContent = $("calib-status").textContent;
+    const c = engine.calibration.status;
+    firstRunLive.textContent = c.active
+      ? `Saving your posture… hold comfortably (${c.remaining_s.toFixed(1)} s)`
+      : c.error ||
+        (c.good ? "Saved. Continue whenever you’re ready." : "Hold comfortably for 3 seconds when you save.");
+    $("first-run-next").disabled = !!c.active;
   }
 }
 
