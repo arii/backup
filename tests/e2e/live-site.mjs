@@ -192,6 +192,43 @@ try {
     check("landing page loads", resp.status() === 200, { status: resp.status() });
     check("landing page links to the app", html.includes('href="./app/"'));
     check("landing page has no errors", errors.length === 0, errors);
+    const text = await page.evaluate(() => document.body.innerText);
+    check(
+      "landing: subtitle, demo link, privacy line and sponsor disclosure are visible",
+      /A private webcam posture coach/.test(text) &&
+        /Try the demo \(no camera\)/.test(text) &&
+        /Camera frames never leave this tab/.test(text) &&
+        /never gates features/.test(text),
+    );
+    check("landing: WebGL warning is not in the page text when WebGL works", !/WebGL is turned off/.test(text));
+    check(
+      "landing: WebGL warning is hidden by default",
+      await page.evaluate(() => document.getElementById("webgl-warning").hidden),
+    );
+    check("landing: feature list has 5 cards", (await page.locator("#features .card").count()) === 5);
+    check(
+      "landing: hero image is eager and Known limitations is present",
+      (await page.locator('.hero-shot img[loading="eager"]').count()) === 1 &&
+        (await page.locator("#limitations summary").innerText()) === "Known limitations",
+    );
+    await page.close();
+  }
+
+  // 1b. ?demo starts the demo without a camera and strips the param.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.goto(`${base}app/?demo`);
+    await page.waitForFunction(() => document.getElementById("start-overlay").style.display === "none", null, {
+      timeout: 15000,
+    });
+    const st = await page.evaluate(() => ({
+      search: location.search,
+      note: getComputedStyle(document.getElementById("demo-note")).display,
+      help: document.getElementById("webgl-help").hidden,
+    }));
+    check("?demo starts the demo without a camera and strips the param", st.search === "" && st.note === "block", st);
+    check("app: #webgl-help is hidden when WebGL works", st.help === true, st);
+    check("?demo has no errors", errors.length === 0, errors);
     await page.close();
   }
 

@@ -121,6 +121,7 @@
   .error:empty, #warnings:empty { display: none; }
   #webgl-help { display: none; text-align: left; max-width: 560px; background: var(--panel); border: 1px solid var(--warn); border-radius: 8px; padding: 12px 16px; font-size: 14px; }
   #webgl-help.show { display: block; }
+  #webgl-help[hidden] { display: none; }
   #webgl-help b { color: var(--warn); }
   #webgl-help ul { margin: 6px 0 0; padding-left: 20px; color: var(--text); }
   #webgl-help li { margin: 4px 0; }
@@ -302,7 +303,7 @@
         </ol>
         <div id="load-bar" class="load-bar" role="progressbar" aria-label="Start-up progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div id="load-fill"></div></div>
         <p id="load-hint" class="note" role="status"></p>
-        <div id="webgl-help" role="alert">
+        <div id="webgl-help" role="alert" hidden>
           <b>Your browser has WebGL turned off.</b> The webcam will still work, using a simpler pose model on your CPU. It is less accurate and slower, and uses more battery. For the best results, turn WebGL on:
           <ul>
             <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>

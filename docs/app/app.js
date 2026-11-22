@@ -2287,6 +2287,7 @@ function showSetupPanel() {
 }
 
 function showWebGLHelp(show) {
+  $("webgl-help").hidden = !show;
   $("webgl-help").classList.toggle("show", show);
 }
 
@@ -3667,3 +3668,10 @@ window.addEventListener("pagehide", save);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) save();
 });
+
+// ?demo (the landing page "Try the demo" link): start the demo as if #start-demo
+// were clicked, then drop the param so a reload does not restart it.
+if (new URLSearchParams(location.search).has("demo")) {
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (!$("start-demo").disabled) $("start-demo").click();
+}
