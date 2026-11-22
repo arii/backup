@@ -1268,8 +1268,7 @@ function promptEnqueueDue(present) {
 
 /** Runs every tracked frame (real `now` in seconds). present: someone is in view. */
 function promptStep(state, now, present) {
-  // Let people finish (or skip) the short posture setup before offering extras.
-  if (inMode() || nextSetupStep(store, STAGES.settled)) {
+  if (inMode()) {
     plast = null;
     return;
   }
@@ -1277,6 +1276,8 @@ function promptStep(state, now, present) {
   plast = now;
   preal += dt;
   pclock += dt * CLOCK_SCALE;
+  // The reveal clock must keep running to open setup. Only optional prompts wait.
+  if (nextSetupStep(store, STAGES.settled)) return;
   const allow = rules();
   if (breaks.update(present, pclock)) countBreak();
   if (allow.engine === "track") pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0; // a held state says nothing about posture
