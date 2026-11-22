@@ -142,7 +142,7 @@
   #onboarding ul, dialog ul, #setup-panel ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
   #onboarding li, dialog li, #setup-panel li { margin: 3px 0; }
   #onboarding ul { font-size: 13px; }
-  .stage { min-height: 460px; }
+  .stage { min-height: 460px; width: 100%; min-width: 0; }
   .stage:has(#webgl-help.show) { aspect-ratio: auto; min-height: 660px; }
   .step-count { color: var(--muted); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; max-width: min(640px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; padding: 16px 18px; }
@@ -326,7 +326,7 @@
     <div class="panel coaching" style="margin-top:16px" data-stage="1" hidden>
       <h2>This session</h2>
       <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b> &middot; breaks taken today <b id="breaks-count">0</b></div>
-      <div class="note">A break is 2 minutes or more away from the camera. Breaks are not part of the posture score.</div>
+      <div class="note">Breaks (2+ minutes away) are not scored.</div>
       <div class="score-bar"><div id="good-bar"></div></div>
       <div class="note">Today: <span id="today"></span></div>
       <div id="sponsor-card" role="status" hidden>

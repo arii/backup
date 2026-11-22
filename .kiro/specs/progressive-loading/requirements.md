@@ -220,3 +220,10 @@ the video sat above the viewport; `showLivePreview` now scrolls it into view
 (`docs/app/app.js`) and `live-site.mjs` checks it.
 
 Full evaluation (method, findings, fixes, limitations): [docs/ux-evaluation-progressive-loading.md](../../../docs/ux-evaluation-progressive-loading.md).
+
+## Pre-start screen budget
+
+Targets for what is visible before the visitor starts anything.
+
+- App (`docs/app/`): at most 40 words and 5 controls at 1280, 1000 and 320 px. The header shows only the brand and Help. Status, Pause, Not working? and Show all settings appear once tracking starts. Privacy, Consumer Health Data policy, third-party notices, GitHub, Report a bug, Sponsor and the technical notes (MediaPipe, `posture-core.js`, background tab at about 5 fps) live in the About & credits dialog and the README.
+- Landing page (`docs/index.html`): at most 300 visible words with details collapsed (now about 96, was about 1020 including all sections). Headline, one-line pitch, Start button, three short feature lines, the three safety sentences and a quiet footer stay visible. What you need, How it works, All features, Screenshots and Privacy are collapsed `<details>`.

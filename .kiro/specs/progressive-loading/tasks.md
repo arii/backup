@@ -124,3 +124,5 @@ finished last; do not leave e2e red between tasks.
 6. Show a sample looping demo in the stage before the click (small asset), or keep it text?
    **Decision: deferred, not built. The spec did not recommend it, it adds an asset to the
    precache, and "Try the demo" already gives a no-camera preview (requirements 3.2).**
+
+- [x] Pre-start screen budget: minimal app start screen, About & credits dialog, and a collapsed-by-default landing page (see requirements.md, "Pre-start screen budget").
