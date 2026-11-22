@@ -993,6 +993,18 @@ try {
     const dashW = await noScroll();
     await page.screenshot({ path: path.join(outDir, "app-320-dashboard.png"), fullPage: true });
     check("reflow: no horizontal scroll at 320 px on the dashboard", dashW.scrollWidth <= dashW.innerWidth, dashW);
+    const cameraStage = await page.locator(".stage").boundingBox();
+    check(
+      "reflow: running mobile camera uses its 4:3 ratio instead of the start-screen height",
+      Math.abs(cameraStage.height - (cameraStage.width * 3) / 4) <= 2,
+      cameraStage,
+    );
+    const demoNote = await page.locator("#demo-note").boundingBox();
+    check(
+      "reflow: demo explanation stays below the camera instead of covering the subject",
+      demoNote.y >= cameraStage.y + cameraStage.height,
+      demoNote,
+    );
     // P shortcut: pauses by default, ignored once turned off, and the choice is stored.
     await page.click("#first-run-skip");
     await page.keyboard.press("p");
