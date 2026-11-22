@@ -254,6 +254,9 @@
     .card, .quickstart { padding: 15px; }
   }
   .requirements { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+  .subtitle { font-size: clamp(18px, 2.6vw, 22px); color: var(--muted); margin: 0 0 8px; }
+  .proof { margin: 0 0 14px; font-size: 14px; color: var(--muted); max-width: 34em; }
+  #webgl-warning[hidden] { display: none; }
   #webgl-warning { display: none; margin-top: 14px; max-width: 560px; background: var(--panel); border: 1px solid var(--warn); border-radius: 8px; padding: 12px 16px; font-size: 14px; }
   #webgl-warning.show { display: block; }
   #webgl-warning b { color: var(--warn); }
@@ -275,19 +278,21 @@
   <div class="hero-grid">
     <div>
       <h1>BackUp</h1>
+      <p class="subtitle">A private webcam posture coach</p>
       <p class="tagline">Posture to Die For.</p>
-      <p class="lede">A webcam posture coach in your browser. <b>No install. No video leaves your computer.</b></p>
       <div class="cta-row">
         <a class="btn primary" href="./app/">Try it in your browser</a>
+        <a class="btn" href="./app/?demo">Try the demo (no camera)</a>
       </div>
+      <p class="proof">Camera frames never leave this tab; check the Network tab or use offline mode.
+        Occasional sponsor nudge, never gates features.</p>
       <ul class="quick">
         <li>Chimes when you slouch, then says the fix.</li>
         <li>Quiet when you sit up.</li>
-        <li>Works with any webcam.</li>
       </ul>
       <p class="requirements" id="safety-note">BackUp is a wellness tool, not medical advice or a medical device.
         Do not hold a rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.</p>
-      <div id="webgl-warning" role="alert">
+      <div id="webgl-warning" role="alert" hidden>
         <b>WebGL is turned off in this browser.</b> The webcam will still work, with a simpler, less accurate pose model on your CPU. For the best results, turn it on:
         <ul>
           <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
@@ -300,7 +305,7 @@
     <figure class="hero-shot">
       <img src="assets/app-desktop.png" width="1280" height="800"
            alt="The BackUp browser app in demo mode: a skeleton outline, a posture needle in the slouching zone, and the advice 'Head forward: tuck your chin and bring your ears back over your shoulders'"
-           loading="lazy">
+           loading="eager" fetchpriority="high">
     </figure>
   </div>
 </header>
@@ -308,44 +313,37 @@
 <main>
   <details id="requirements">
     <summary>What you need</summary>
-    <p>A webcam and a recent Chrome, Edge or Firefox. Turn on hardware acceleration (WebGL) for best accuracy. Without it the webcam uses a simpler, slower fallback.</p>
-  </details>
-
-  <details id="how">
-    <summary>How it works</summary>
-    <ol class="pipeline">
-      <li><b>Place your camera</b>
-        <span class="muted">Eye level, about an arm's length away, head and shoulders in frame, light in front of you.</span></li>
-      <li><b>Press Start</b>
-        <span class="muted">Sit naturally and record your good posture once. No camera? Try the demo.</span></li>
-      <li><b>Follow the chime</b>
-        <span class="muted">A chime means adjust, then a short spoken fix if you stay slouched.</span></li>
-    </ol>
-    <p class="muted">Webcam estimates are approximate and nothing here is clinically validated. Bad posture must hold about 2 seconds before a chime. A spoken prompt follows about 10 seconds later and repeats at most every 30 seconds.</p>
+    <p>A webcam and a recent desktop Chrome, Edge or Firefox. Turn on hardware acceleration (WebGL) for best accuracy. Without it the webcam uses a simpler, slower fallback.</p>
+    <p>Safari and phones: not tested and not supported yet. Best on a laptop or desktop. The camera can stop when the tab is in the background on iOS Safari, so a phone is a poor fit. The demo needs no camera and works in any modern browser.</p>
   </details>
 
   <details id="features">
     <summary>All features</summary>
     <div class="features">
-      <div class="card"><h3>Says what to fix</h3><p>Reminders name the problem and the fix, on screen and out loud.</p></div>
-      <div class="card"><h3>Natural recorded voice</h3><p>Kokoro voices, with browser speech as a fallback. Chime only and silent modes too.</p></div>
       <div class="card"><h3>Posture needle</h3><p>Shows how far you are from your own good posture. No score number.</p></div>
+      <div class="card"><h3>Says what to fix</h3><p>Reminders name the problem and the fix, on screen and out loud.</p></div>
       <div class="card"><h3>Silent test</h3><p>A short test with no chime or voice, compared with your coached score.</p></div>
-      <div class="card"><h3>Relax, don't brace</h3><p>An optional breath check. It is not a medical test.</p></div>
-      <div class="card"><h3>Progress panel</h3><p>The last 7 days, kept in your browser. Export or delete any time.</p></div>
+      <div class="card"><h3>No-penalty progress</h3><p>The last 7 days in a progress panel. No streaks to lose.</p></div>
+      <div class="card"><h3>Local data</h3><p>Settings and history stay in your browser. Export or delete any time.</p></div>
     </div>
   </details>
 
-  <details id="screens">
-    <summary>Screenshots</summary>
-    <div class="shots">
-      <figure class="shot">
-        <img src="assets/app-desktop.png" width="1280" height="800" alt="Browser app on a desktop screen: skeleton, posture needle, advice box and metric tiles" loading="lazy">
-      </figure>
-      <figure class="shot">
-        <img src="assets/app-phone.png" width="390" height="844" alt="Browser app on a phone-width screen with a green good posture badge" loading="lazy">
-      </figure>
-    </div>
+  <details id="how">
+    <summary>Under the hood</summary>
+    <p class="muted">Place the camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you. Press Start, sit naturally and record your good posture once.</p>
+    <p class="muted">Bad posture must hold about 2 seconds before a chime. A spoken prompt follows about 10 seconds later and repeats at most every 30 seconds.</p>
+  </details>
+
+  <details id="limitations">
+    <summary>Known limitations</summary>
+    <ul class="muted">
+      <li>Glasses: glare or reflections can confuse the pose model.</li>
+      <li>Low light: tracking gets jumpy. Put light in front of you.</li>
+      <li>Side-angle or off-center cameras: readings assume the camera faces you.</li>
+      <li>Partial framing: head and both shoulders need to be in view.</li>
+      <li>One person only.</li>
+      <li>A webcam gives approximate estimates. Nothing here is clinically validated.</li>
+    </ul>
   </details>
 
   <details id="privacy-details">
@@ -378,7 +376,11 @@
   }
   var ok = (typeof OffscreenCanvas !== "undefined" && works(new OffscreenCanvas(1, 1))) ||
     works(document.createElement("canvas"));
-  if (!ok) document.getElementById("webgl-warning").classList.add("show");
+  if (!ok) {
+    var w = document.getElementById("webgl-warning");
+    w.hidden = false;
+    w.classList.add("show");
+  }
 })();
 </script>
 </body>
