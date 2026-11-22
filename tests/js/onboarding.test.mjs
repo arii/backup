@@ -55,7 +55,7 @@ test("a higher ACK_VERSION re-asks for every existing store, ack step only", () 
   assert.equal(needsAckOnly(markOnboarded({})), false);
 });
 
-test("safety text carries the required phrases and the third step is the notice", () => {
+test("one short welcome includes safety without a multi-page walkthrough", () => {
   const all = SAFETY_POINTS.join(" ").toLowerCase();
   for (const phrase of [
     "not medical advice",
@@ -72,8 +72,8 @@ test("safety text carries the required phrases and the third step is the notice"
   ])
     assert.ok(all.includes(phrase), phrase);
   assert.ok(/medical advice/.test(SAFETY_SHORT) && /rigid posture/.test(SAFETY_SHORT));
-  assert.equal(ONBOARDING_STEPS.length, 3);
-  assert.equal(ONBOARDING_STEPS[2].points, SAFETY_POINTS);
+  assert.equal(ONBOARDING_STEPS.length, 1);
+  assert.ok(ONBOARDING_STEPS[0].points.includes(SAFETY_SHORT));
 });
 
 test("no diagnosis is reported before the fault has persisted", () => {
@@ -145,7 +145,7 @@ test("setup text: versions stay at 1 so existing seeds keep working, no em dash"
   assert.equal(ONBOARDING_VERSION, 1);
   assert.equal(ACK_VERSION, 1);
   const done = SETUP_STEPS.find((x) => x.key === "done").intro;
-  for (const re of [/Leave this tab open/, /Pause any time/, /silent test/, /share/]) assert.match(done, re);
+  for (const re of [/Leave this tab open/, /Pause any time/, /optional/]) assert.match(done, re);
   assert.doesNotMatch(JSON.stringify(SETUP_STEPS), /\u2014/);
 });
 
@@ -165,9 +165,10 @@ test("nextSetupStep waits for the reveal stage of each step", () => {
   completeStep(store, "framing");
   assert.equal(nextSetupStep(store, 2), "calibrate");
   completeStep(store, "calibrate");
-  assert.equal(nextSetupStep(store, 2), null, "style needs stage 3");
-  assert.equal(nextSetupStep(store, 3), "style");
-  assert.equal(nextSetupStep(store, 5), "style");
+  assert.equal(nextSetupStep(store, 2), "done");
+  completeStep(store, "done");
+  assert.equal(nextSetupStep(store, 5), null, "settings never become automatic setup tasks");
+  assert.equal(reopenSetupStep(store), "style", "optional personalization remains reachable");
 });
 
 test("a skipped step is not offered again on its own but stays reachable", () => {

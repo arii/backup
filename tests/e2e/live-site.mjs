@@ -506,7 +506,7 @@ try {
     }));
     check(
       "first run: onboarding card shows and the Start buttons are hidden",
-      first.card && /How it works/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer),
+      first.card && /gentle nudge/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer),
       first,
     );
     for (const w of [1280, 320]) {
@@ -533,7 +533,7 @@ try {
     await page.screenshot({ path: path.join(outDir, "onboarding-step1.png") });
     await page.keyboard.press("Tab");
     const firstTab = await page.evaluate(() => document.activeElement?.id);
-    check("first run: the first Tab stop is the onboarding Next button, not the header", firstTab === "ob-next", {
+    check("first run: full safety notice is keyboard reachable before acknowledgement", firstTab === "", {
       firstTab,
     });
     const steps = await page.evaluate(() => {
@@ -550,15 +550,14 @@ try {
       steps.skippedBg && steps.border === "0px",
       steps,
     );
-    await page.click("#ob-next");
-    await page.click("#ob-next");
+    await page.locator("#onboarding summary").click();
     const safety = await page.evaluate(() => ({
       title: document.getElementById("ob-title").textContent,
       text: document.getElementById("ob-body").textContent,
       ack: !document.getElementById("ob-ack").hidden,
     }));
     check(
-      "first run: step 3 is the safety notice with an acknowledgement button",
+      "first run: the short welcome includes safety and a single acknowledgement",
       safety.ack &&
         /medical advice/.test(safety.text) &&
         /rigid posture/.test(safety.text) &&
@@ -593,7 +592,7 @@ try {
     }));
     check(
       "help: the button reopens the walkthrough with the safety notice",
-      help.open && /How it works/.test(help.text) && /not a medical device/.test(help.text),
+      help.open && /gentle nudge/.test(help.text) && /not a medical device/.test(help.text),
       { open: help.open },
     );
     await page.screenshot({ path: path.join(outDir, "help-dialog.png") });
@@ -928,55 +927,15 @@ try {
     await page.click("#first-run-next");
     check(
       "first run: step 2 offers calibration",
-      (await page.textContent("#first-run-heading")) === "Calibrate to your posture" &&
+      (await page.textContent("#first-run-heading")) === "Remember your comfortable posture" &&
         (await page.isVisible("#first-run-body button")),
     );
     await page.click("#first-run-next");
     check(
-      "first run: step 3 is Reminder style (stage 5 here, so it follows at once)",
-      (await page.textContent("#first-run-heading")) === "Reminder style" &&
-        (await page.locator("#coach-style, #coach-level, #coach-cues").count()) === 3 &&
-        /Step 3 of 7: Reminder style/.test(await page.textContent("#first-run-count")),
-    );
-    await page.selectOption("#coach-style", "chime_only");
-    check(
-      "first run: the style choice drives the real radio and the stored mode",
-      (await page.evaluate(() => document.querySelector("input[name=mode]:checked").value)) === "chime_only",
-    );
-    await page.click("#first-run-next");
-    check(
-      "first run: step 4 is Voice and sounds with sample buttons",
-      (await page.textContent("#first-run-heading")) === "Voice and sounds" &&
-        (await page.locator("#coach-voice, #coach-pack").count()) === 2 &&
-        (await page.locator("#first-run-body button").count()) === 3,
-    );
-    await page.click("#first-run-next");
-    check(
-      "first run: step 5 is Breaks",
-      (await page.textContent("#first-run-heading")) === "Breaks" &&
-        (await page.locator("#coach-eye, #coach-move").count()) === 2,
-    );
-    await page.selectOption("#coach-move", "45");
-    await page.uncheck("#coach-eye");
-    const coach = await page.evaluate(() => {
-      const s = JSON.parse(localStorage.getItem("posture-guard:v1"));
-      return { move: s.moveBreakMinutes, eye: s.eyeBreaks };
-    });
-    check("first run: break choices change the real settings", coach.move === 45 && coach.eye === false, coach);
-    await page.click("#first-run-next");
-    check(
-      "first run: step 6 is Shoulders and breathing, breathing moments off by default",
-      (await page.textContent("#first-run-heading")) === "Shoulders and breathing" &&
-        (await page.locator("#coach-relax, #coach-moments").count()) === 2 &&
-        !(await page.isChecked("#coach-moments")),
-    );
-    await page.click("#first-run-next");
-    check(
-      "first run: last step says to leave the tab open and has Share and a silent test",
-      /Leave this tab open/.test(await page.textContent("#first-run-body")) &&
-        /Pause any time/.test(await page.textContent("#first-run-body")) &&
-        (await page.locator("#first-run-body button").allTextContents()).join("|") ===
-          "Share BackUp|Start a silent test",
+      "first run: the third card finishes setup without adding configuration",
+      /You’re ready/.test(await page.textContent("#first-run-heading")) &&
+        /Step 3 of 3/.test(await page.textContent("#first-run-count")) &&
+        (await page.locator("#first-run-body button").count()) === 0,
     );
     await page.click("#first-run-next");
     const done = await page.evaluate(() => ({
@@ -2096,27 +2055,45 @@ try {
       await page.close();
     }
 
-    // clockScale=600: every stage within seconds; the stage never goes back; focus stays put.
+    // Time alone never expands the workspace, even for returning visitors.
     {
-      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      const { page, errors } = await newPage(browser, { staged: true, consent: false });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.getElementById("breaks-panel").hidden, null, { timeout: 8000 });
+      await page.waitForSelector("#explore-panel:visible");
+      await page.waitForTimeout(2000);
       check(
-        "staged reveal: with ?clockScale=600 the settings panels reveal in the demo",
-        (await shown(page, "#breaks-panel")) && (await shown(page, "#test-start")),
+        "progressive onboarding: time does not reveal configuration or optional tools",
+        !(await shown(page, "#breaks-panel")) &&
+          !(await shown(page, "#break-menu")) &&
+          !(await shown(page, "#progress-panel")) &&
+          !(await shown(page, "#reminders-panel")),
       );
+      await page.locator("#explore-panel summary").click();
+      await page.click('[data-explore="break-menu relax-panel"]');
       check(
-        "staged reveal: the settings groups stay closed",
-        await page.evaluate(() => [...document.querySelectorAll("details[data-group]")].every((d) => !d.open)),
+        "progressive onboarding: breathing and breaks open only when requested",
+        (await shown(page, "#break-menu")) &&
+          !(await shown(page, "#reminders-panel")) &&
+          !(await shown(page, "#progress-panel")),
       );
+      await page.click("#breath-check");
       check(
-        "staged reveal: a reveal does not move focus",
-        await page.evaluate(() => !document.getElementById("reveal-note").contains(document.activeElement)),
+        "progressive onboarding: breath check still asks for permission",
+        await page.locator("#consent-dialog").isVisible(),
       );
-      // Stage 3 and 4 panels are checked first; stage 5 (progress, offline) waits for a later session.
-      check("staged reveal: progress and offline wait for a later session", !(await shown(page, "#progress-panel")));
-      check("staged reveal: no errors with a fast clock", errors.length === 0, errors);
+      await page.click("#consent-cancel");
+      check(
+        "progressive onboarding: exploring does not grant consent",
+        await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent),
+      );
+      await page.reload();
+      await page.click("#start-demo");
+      check(
+        "progressive onboarding: selected tools survive reload without revealing other features",
+        (await shown(page, "#break-menu")) && !(await shown(page, "#progress-panel")),
+      );
+      check("progressive onboarding: no page errors", errors.length === 0, errors);
       await page.close();
     }
 
@@ -2228,7 +2205,7 @@ try {
       await page.click("#setup-btn");
       check(
         "setup: Set up reopens the first skipped step and moves focus to its heading",
-        (await page.textContent("#first-run-heading")) === "Check your framing" &&
+        (await page.textContent("#first-run-heading")) === "Get comfortable" &&
           (await page.evaluate(() => document.activeElement?.id)) === "first-run-heading",
       );
       await page.click("#first-run-skip-all");
