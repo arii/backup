@@ -68,7 +68,7 @@ Times from the click on Start with webcam. "Before" is the FEAT-001 baseline.
 | First scored frame, 1280x800 | 4.5 s | 5.0 s (within run-to-run noise) |
 | First scored frame, 1.5 Mbit/s | not recorded | 86.5 s (the 15 MB model download is the floor) |
 | Landing: checkboxes and radios | 10 | 0 |
-| Landing: words / controls | about 840 / 48 | 200 / 15 |
+| Landing: words / controls | about 840 / 48 | 38 / 4 (landing page itself: about 1020 to 96 words) |
 | Stage 2: words below the stage | about 820 | 76 |
 | Controls, visible (1280x800): landing / start ready / settled / stage 2 | not recorded | 15 / 16 / 15 / 20 |
 | Checkboxes and radios at every stage | 10 | 0 |

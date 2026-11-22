@@ -42,6 +42,7 @@
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
+import http from "node:http";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -62,13 +63,31 @@ const VENDORED = [
   "wasm/vision_wasm_nosimd_internal.wasm",
 ];
 
-/** Node-side fetch that always reads the body. An unread body leaves the
- *  socket paused, and when python's http.server then closes the connection,
- *  undici crashes the whole script with assert(!this.paused) (#58). */
-async function fetchStatus(url) {
-  const res = await fetch(url, { headers: { connection: "close" } });
-  const bytes = (await res.arrayBuffer()).byteLength;
-  return { ok: res.ok, status: res.status, type: res.headers.get("content-type") || "", bytes };
+/** Node-side GET that reads the whole body. It uses node:http with a fresh,
+ *  non-pooled connection, not the global fetch. Global fetch (undici) keeps a
+ *  pooled socket that can be left paused, and when python's http.server closes
+ *  it, undici throws an uncaught assert(!this.paused) from Parser.finish and
+ *  kills the whole run (#58). Reading the body (arrayBuffer) did not prevent
+ *  it, so the undici client is avoided entirely. */
+function fetchStatus(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { agent: false, headers: { connection: "close" } }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("error", reject);
+      res.on("end", () => {
+        const status = res.statusCode ?? 0;
+        resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          type: res.headers["content-type"] || "",
+          bytes: Buffer.concat(chunks).length,
+        });
+      });
+    });
+    req.setTimeout(30000, () => req.destroy(new Error(`timeout fetching ${url}`)));
+    req.on("error", reject);
+  });
 }
 
 function check(name, ok, detail) {
@@ -790,10 +809,6 @@ try {
       startW.scrollWidth <= startW.innerWidth,
       startW,
     );
-    check(
-      "start screen says it works best on a laptop or desktop",
-      /laptop or desktop with a webcam/i.test(await page.textContent("#start-overlay")),
-    );
     const pre = await page.evaluate(() => ({
       breath: document.getElementById("breath-check").disabled,
       good: document.getElementById("calib-good").disabled,
@@ -1114,6 +1129,7 @@ try {
       "silent test: stopping early is not saved",
       (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0,
     );
+    await page.click("#about-link");
     await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
     const href = await page.getAttribute("#report-bug", "href");
     const issue = new URL(href);
@@ -1833,8 +1849,14 @@ try {
     await page.goto(`${base}app/${bust}`);
     check(
       "app footer links to the Consumer Health Data Privacy Policy and Sponsor",
-      (await page.locator('footer a[href="../privacy.html#consumer-health-data"]').count()) === 1 &&
-        (await page.locator('footer a[href="https://github.com/sponsors/arii"]').count()) === 1,
+      (await page.locator("footer #safety-link").count()) === 1 &&
+        (await page.locator("footer #about-link").count()) === 1 &&
+        (await page.locator("#about-dialog").evaluate((d) => d.showModal() ?? true)) &&
+        (await page.locator('#about-dialog a[href="../privacy.html#consumer-health-data"]').isVisible()) &&
+        (await page.locator('#about-dialog a[href="../privacy.html"]').isVisible()) &&
+        (await page.locator('#about-dialog a[href="https://github.com/sponsors/arii"]').isVisible()) &&
+        (await page.locator('#about-dialog a[href$="THIRD_PARTY_NOTICES.md"]').isVisible()) &&
+        (await page.locator("#report-bug").isVisible()),
     );
     check("landing and privacy pages have no errors", errors.length === 0, errors);
     await page.close();
@@ -1868,6 +1890,39 @@ try {
         }
         return { checks, words };
       });
+    const minimalStart = (page) =>
+      page.evaluate(() => {
+        const vis = (e) => {
+          const r = e.getBoundingClientRect();
+          const st = getComputedStyle(e);
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            st.visibility !== "hidden" &&
+            !e.closest("[hidden]") &&
+            !e.closest("details:not([open]) > :not(summary)")
+          );
+        };
+        const controls = [...document.querySelectorAll("button,input,select,a[href],summary")].filter(vis);
+        let words = 0;
+        let text = "";
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+          const p = t.parentElement;
+          if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || !vis(p)) continue;
+          words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+          text += ` ${t.textContent}`;
+        }
+        const header = [...document.querySelectorAll("header button, header a[href]")].filter(vis).map((e) => e.id);
+        return {
+          words,
+          controls: controls.length,
+          header,
+          leaked: /waiting|fps|source/i.test(text),
+          setupPanel: vis(document.getElementById("setup-panel")),
+          disclaimer: /not medical advice/i.test(text),
+        };
+      });
     const shown = (page, sel) => page.locator(sel).isVisible();
     const STAGED_IDS = [
       "good-pct",
@@ -1898,6 +1953,25 @@ try {
       await page.waitForSelector("#start-camera:visible");
       const d0 = await density(page);
       check("staged reveal: stage 0 shows at most 2 checkboxes", d0.checks <= 2, d0);
+      for (const [w, h] of [
+        [1280, 800],
+        [1000, 700],
+        [320, 640],
+      ]) {
+        await page.setViewportSize({ width: w, height: h });
+        const m = await minimalStart(page);
+        check(
+          `minimal start (${w}px): at most 40 words and 5 controls, header is only Help, no status text, Not working? hidden`,
+          m.words <= 40 &&
+            m.controls <= 5 &&
+            m.header.join() === "help-btn" &&
+            !m.leaked &&
+            !m.setupPanel &&
+            m.disclaimer,
+          m,
+        );
+      }
+      await page.setViewportSize({ width: 1280, height: 800 });
       check(
         "staged reveal: stage 0 hides the dashboard panels with the hidden attribute",
         await page.evaluate(() => [...document.querySelectorAll("[data-stage]")].every((e) => e.hidden)),
@@ -1907,10 +1981,7 @@ try {
         STAGED_IDS,
       );
       check("staged reveal: hidden controls stay in the DOM", missing.length === 0, missing);
-      check(
-        "staged reveal: 'Show all settings' is offered before tracking",
-        (await page.locator("#reveal-all").textContent()).trim() === "Show all settings",
-      );
+      check("staged reveal: 'Show all settings' is not shown before tracking", !(await shown(page, "#reveal-all")));
       await page.screenshot({ path: path.join(outDir, "reveal-stage0.png") });
       check("staged reveal: stage 0 has no errors", errors.length === 0, errors);
       await page.close();
@@ -1973,6 +2044,11 @@ try {
     {
       const { page, errors } = await newPage(browser, { staged: true });
       await page.goto(`${base}app/${bust}`);
+      await page.click("#start-demo");
+      check(
+        "staged reveal: after start, Show all settings and Not working? are offered",
+        (await shown(page, "#reveal-all")) && (await shown(page, "#setup-panel")),
+      );
       await page.click("#reveal-all");
       const all = await page.evaluate(() => ({
         hiddenLeft: [...document.querySelectorAll("[data-stage]")].filter((e) => e.hidden).length,
@@ -1995,6 +2071,7 @@ try {
       await page.screenshot({ path: path.join(outDir, "reveal-all-320.png"), fullPage: true });
       await page.reload();
       check("staged reveal: Show all settings survives a reload", await shown(page, "#breaks-panel"));
+      await page.click("#start-demo"); // the toggle is offered once tracking has started
       await page.click("#reveal-all");
       check(
         "staged reveal: Simplify the page hides the panels again",

@@ -81,10 +81,8 @@ export const mb = (bytes) => (bytes / 1e6).toFixed(bytes >= 1e7 ? 0 : 1);
 /** Hints shown when a step runs long, by step id. */
 const SLOW_HINTS = {
   camera: "Look for the camera prompt near the address bar and choose Allow.",
-  download: "Still downloading. On a slow connection the first visit can take a minute; after that it's cached.",
-  start:
-    "Still starting. The first start prepares the model for your graphics chip and can take a few seconds. " +
-    "The page may pause briefly.",
+  download: "Still downloading. A slow connection can take a minute, once.",
+  start: "Still starting. The first start can take a few seconds.",
 };
 const SLOW_AFTER_S = { camera: 8, download: 12, start: 6 };
 
