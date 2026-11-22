@@ -42,6 +42,7 @@
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
 import { chromium } from "playwright";
+import http from "node:http";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -62,13 +63,31 @@ const VENDORED = [
   "wasm/vision_wasm_nosimd_internal.wasm",
 ];
 
-/** Node-side fetch that always reads the body. An unread body leaves the
- *  socket paused, and when python's http.server then closes the connection,
- *  undici crashes the whole script with assert(!this.paused) (#58). */
-async function fetchStatus(url) {
-  const res = await fetch(url, { headers: { connection: "close" } });
-  const bytes = (await res.arrayBuffer()).byteLength;
-  return { ok: res.ok, status: res.status, type: res.headers.get("content-type") || "", bytes };
+/** Node-side GET that reads the whole body. It uses node:http with a fresh,
+ *  non-pooled connection, not the global fetch. Global fetch (undici) keeps a
+ *  pooled socket that can be left paused, and when python's http.server closes
+ *  it, undici throws an uncaught assert(!this.paused) from Parser.finish and
+ *  kills the whole run (#58). Reading the body (arrayBuffer) did not prevent
+ *  it, so the undici client is avoided entirely. */
+function fetchStatus(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { agent: false, headers: { connection: "close" } }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("error", reject);
+      res.on("end", () => {
+        const status = res.statusCode ?? 0;
+        resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          type: res.headers["content-type"] || "",
+          bytes: Buffer.concat(chunks).length,
+        });
+      });
+    });
+    req.setTimeout(30000, () => req.destroy(new Error(`timeout fetching ${url}`)));
+    req.on("error", reject);
+  });
 }
 
 function check(name, ok, detail) {
