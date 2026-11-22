@@ -139,6 +139,8 @@ acceleration / WebGL turned on** for best accuracy. Everything runs in your brow
 video is uploaded. If WebGL is off, the site says so up front and the webcam switches to a
 simpler fallback (TF.js MoveNet on the WASM/CPU backend). It is less accurate and slower,
 and an on-screen notice says so. *Try the demo* works either way.
+Safari and phones are not tested or supported yet. Use a laptop or desktop; iOS
+Safari can stop the camera when the tab is in the background.
 To turn it on in Chrome or Edge, open `chrome://settings/system`, enable *Use
 graphics acceleration when available*, relaunch, and check `chrome://gpu`. On
 Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set

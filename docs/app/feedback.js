@@ -136,3 +136,11 @@ export function shouldSuggestLight({ level, log, declinedAtMs = null, nowMs }, c
   const recent = (Array.isArray(log) ? log : []).filter((t) => Number.isFinite(t) && nowMs - t < cfg.window_s * 1000);
   return recent.length >= cfg.count;
 }
+
+const REMINDER_TAB_PREFIX = "\u26a0 Sit up \u00b7 ";
+
+/** Tab title for the badge class: warning prefix only while a reminder is active. */
+export function tabTitleFor(badgeClass, baseTitle) {
+  const active = /\bbad_(chime|voice)\b/.test(String(badgeClass || ""));
+  return active ? REMINDER_TAB_PREFIX + baseTitle : baseTitle;
+}

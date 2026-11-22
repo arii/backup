@@ -122,7 +122,14 @@ import {
   viewSetupStep,
 } from "./onboarding.js";
 import { RevealStages, STAGES } from "./reveal.js";
-import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel, recordAnnoyance, shouldSuggestLight } from "./feedback.js";
+import {
+  FeedbackPolicy,
+  MILESTONE_TEXT,
+  tabTitleFor,
+  normalizeLevel,
+  recordAnnoyance,
+  shouldSuggestLight,
+} from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
@@ -1886,6 +1893,14 @@ function markLoad(name) {
   if (loadMarks.click !== undefined && loadMarks[name] === undefined) loadMarks[name] = Math.round(performance.now());
 }
 
+// The tab title mirrors an active reminder so it shows in a background tab.
+// Set only when the text changes (no blinking).
+const BASE_TITLE = document.title;
+function syncTabTitle() {
+  const t = tabTitleFor($("state-badge").className, BASE_TITLE);
+  if (document.title !== t) document.title = t;
+}
+
 /** The badge: the state, or the activity while one holds posture feedback. */
 function renderBadge(transition, result, held, label) {
   const badge = $("state-badge");
@@ -1912,6 +1927,7 @@ function renderBadge(transition, result, held, label) {
     badge.textContent = "practice";
     badge.className = "badge practice";
   }
+  syncTabTitle();
 }
 
 function renderMetrics(result) {
@@ -2020,6 +2036,7 @@ function setPaused(on) {
     const badge = $("state-badge");
     badge.textContent = "paused";
     badge.className = "badge paused";
+    syncTabTitle();
     $("fps").textContent = "-";
   } else {
     engine.restart();
@@ -2287,6 +2304,7 @@ function showSetupPanel() {
 }
 
 function showWebGLHelp(show) {
+  $("webgl-help").hidden = !show;
   $("webgl-help").classList.toggle("show", show);
 }
 
@@ -3667,3 +3685,10 @@ window.addEventListener("pagehide", save);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) save();
 });
+
+// ?demo (the landing page "Try the demo" link): start the demo as if #start-demo
+// were clicked, then drop the param so a reload does not restart it.
+if (new URLSearchParams(location.search).has("demo")) {
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (!$("start-demo").disabled) $("start-demo").click();
+}
