@@ -46,27 +46,22 @@ export const SAFETY_POINTS = Object.freeze([
 /** One sentence for the "Relax, don't brace" panel. */
 export const RELAX_SAFETY = "This is a gentle check, not a medical test. Stop if anything hurts.";
 
-/** The three walkthrough steps. Step 3 is the safety notice (SAFETY_POINTS). */
+/** One short welcome. The full safety notice remains available on demand. */
 export const ONBOARDING_STEPS = Object.freeze([
   {
-    title: "How it works",
-    points: ["Video stays in this tab. Nothing is uploaded.", "Camera at eye level, head and shoulders in frame."],
-  },
-  {
-    title: "What you will see and hear",
+    title: "A gentle nudge, not another task",
     points: [
-      'A needle and a "what to fix" box show how to improve.',
-      "If you keep slouching you get a chime, then a spoken cue.",
+      "Use your camera for a reminder when you slouch. Your video stays on this device.",
+      "Start with posture. Explore breaks and breathing when you’re ready.",
+      SAFETY_SHORT,
     ],
   },
-  { title: "Before you start", points: SAFETY_POINTS },
 ]);
 
 /** Closing sentence of the setup sequence (rendered in app.js). */
 const DONE_INTRO =
-  "Leave this tab open and keep your laptop awake: reminders stop if the tab closes or the machine sleeps. " +
-  "Pause any time with the Pause button. A silent test now gives you a baseline to compare with later. " +
-  "If a friend might like it, you can share the page.";
+  "Leave this tab open while you work. Pause any time. Move often and sit comfortably, not rigidly. " +
+  "Breaks and breathing are optional, whenever you’re ready.";
 
 /** The "Set up as you go" sequence. `stage` is the reveal stage (reveal.js) from which the card may
  *  appear on its own. Every choice can be changed later in the matching settings panel. */
@@ -74,42 +69,47 @@ export const SETUP_STEPS = Object.freeze([
   {
     key: "framing",
     stage: 2,
-    title: "Check your framing",
+    title: "Get comfortable",
     intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
   },
   {
     key: "calibrate",
     stage: 2,
-    title: "Calibrate to your posture",
-    intro: "Sit well and record 3 s, then slouch your usual way and record 3 s. Skip it to use the defaults.",
+    title: "Remember your comfortable posture",
+    intro:
+      "Relax your shoulders and sit naturally. Save this position so reminders fit you. No need to pose perfectly.",
   },
+  { key: "done", stage: 2, title: "You’re ready", intro: DONE_INTRO },
   {
     key: "style",
     stage: 3,
+    optional: true,
     title: "Reminder style",
     intro: "Choose how BackUp tells you. You can change this under Reminders & sounds.",
   },
   {
     key: "voice",
     stage: 3,
+    optional: true,
     title: "Voice and sounds",
     intro: "Pick a voice and a sound pack, and listen to them. You can change this under Reminders & sounds.",
   },
   {
     key: "breaks",
     stage: 4,
+    optional: true,
     title: "Breaks",
     intro: "Short breaks are part of good posture. You can change this under Breaks & prompts.",
   },
   {
     key: "shoulders",
     stage: 4,
+    optional: true,
     title: "Shoulders and breathing",
     intro:
       "BackUp can notice shoulders creeping up and offer a breath check. These features stay off until you agree " +
       "to what they look at, and you can withdraw that any time under Breaks & prompts.",
   },
-  { key: "done", stage: 4, title: "You're set", intro: DONE_INTRO },
 ]);
 
 const stepKeys = SETUP_STEPS.map((s) => s.key);
@@ -140,7 +140,9 @@ function writeProgress(store, p) {
 export function nextSetupStep(store, stage) {
   if (store && store.setupDone) return null;
   const p = setupProgress(store);
-  const s = SETUP_STEPS.find((x) => x.stage <= stage && !p.done.includes(x.key) && !p.skipped.includes(x.key));
+  const s = SETUP_STEPS.find(
+    (x) => !x.optional && x.stage <= stage && !p.done.includes(x.key) && !p.skipped.includes(x.key),
+  );
   return s ? s.key : null;
 }
 

@@ -1276,6 +1276,8 @@ function promptStep(state, now, present) {
   plast = now;
   preal += dt;
   pclock += dt * CLOCK_SCALE;
+  // The reveal clock must keep running to open setup. Only optional prompts wait.
+  if (nextSetupStep(store, STAGES.settled)) return;
   const allow = rules();
   if (breaks.update(present, pclock)) countBreak();
   if (allow.engine === "track") pstreak = state === State.GOOD ? pstreak + dt * CLOCK_SCALE : 0; // a held state says nothing about posture
@@ -2076,7 +2078,8 @@ document.addEventListener("keydown", (e) => {
 // Panels carry data-stage="N" in index.html and start hidden (the hidden attribute, so
 // they leave the tab order). RevealStages (reveal.js) decides the stage from tracking
 // time on the prompt clock, so ?clockScale speeds it up too. A stage never goes back
-// down; "Simplify the page" only hides what is not yet due. Every element stays in the
+// down internally; only the first two stages are automatic. Optional panels need
+// an explicit choice, even on repeat visits. Every element stays in the
 // DOM, so settings renderers and tests keep working on hidden panels.
 
 const REVEAL_ADDED = {
@@ -2105,14 +2108,16 @@ function revealNote(text) {
 }
 
 function currentStage() {
-  return store.revealAll ? STAGES.returning : reveal.stage;
+  // Time and repeat visits never opt someone into a more complicated workspace.
+  return store.revealAll ? STAGES.returning : Math.min(reveal.stage, STAGES.settled);
 }
 
 function applyReveal() {
   const stage = currentStage();
   for (const el of document.querySelectorAll("[data-stage]")) {
-    el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el);
+    el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el) && !store.explored?.includes(el.id);
   }
+  $("explore-panel").hidden = stage < STAGES.settled;
   const all = !!store.revealAll;
   const btn = $("reveal-all");
   btn.textContent = all ? "Simplify the page" : "Show all settings";
@@ -2140,7 +2145,7 @@ function revealStep(out) {
   );
   if (!changed) return;
   applyReveal();
-  if (store.revealAll) return;
+  if (store.revealAll || stage > STAGES.settled) return;
   const added = [];
   for (let s = shownStage + 1; s <= stage; s++) added.push(REVEAL_ADDED[s]);
   shownStage = stage;
@@ -2151,10 +2156,23 @@ function setRevealAll(on) {
   store.revealAll = on;
   save();
   applyReveal();
-  for (const d of document.querySelectorAll("details[data-group]")) d.open = on;
+  for (const d of document.querySelectorAll("details[data-group], details.panel[data-stage]")) d.open = on;
   revealNote(on ? "Showing all settings" : "Page simplified");
 }
 $("reveal-all").addEventListener("click", () => setRevealAll(!store.revealAll));
+for (const button of document.querySelectorAll("[data-explore]")) {
+  button.addEventListener("click", () => {
+    const ids = button.dataset.explore.split(" ");
+    store.explored = [...new Set([...(store.explored || []), ...ids])];
+    save();
+    applyReveal();
+    const panel = $(ids[0]);
+    if (panel.tagName === "DETAILS") panel.open = true;
+    panel.scrollIntoView({ block: "nearest" });
+    panel.tabIndex = -1;
+    panel.focus({ preventScroll: true });
+  });
+}
 if (store.revealAll) setRevealAll(true);
 applyReveal();
 $("reveal-note").textContent = "";
@@ -2712,8 +2730,8 @@ $("start-demo").addEventListener("click", () => {
 });
 
 // -- setup sequence ("Set up as you go") -----------------------------------------
-// One small card at a time in #first-run: framing, calibrate, reminder style,
-// voice, breaks, shoulders and breathing, then "You're set". The steps and the
+// One small card at a time in #first-run: framing, comfortable posture, then done.
+// Reminder style, voice and break preferences are manual personalization. The steps and the
 // reveal stage that unlocks each one are in onboarding.js (SETUP_STEPS); progress
 // is in store.setup. Every card has Skip this step and Skip all, use defaults.
 // Skip all records no consent and turns nothing on. The sequence waits while a
@@ -2851,7 +2869,8 @@ function setupControls(key) {
 
 function renderFirstRun() {
   const step = SETUP_STEPS[firstRun.step];
-  $("first-run-count").textContent = `Step ${firstRun.step + 1} of ${SETUP_STEPS.length}: ${step.title}`;
+  const steps = firstRun.manual ? SETUP_STEPS : SETUP_STEPS.filter((s) => !s.optional);
+  $("first-run-count").textContent = `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
   $("first-run-heading").textContent = step.title;
   const body = $("first-run-body");
   const intro = document.createElement("div");
@@ -2871,31 +2890,18 @@ function renderFirstRun() {
     firstRunLive.setAttribute("aria-live", "polite");
     const row = document.createElement("div");
     row.className = "btn-row";
-    row.append(
-      firstRunButton("Record good posture", () => engine.calibration.start("good"), false),
-      firstRunButton("Record slouch posture", () => engine.calibration.start("bad"), false),
-    );
+    row.append(firstRunButton("Save my comfortable posture", () => engine.calibration.start("good"), false));
     parts.push(row, firstRunLive);
   } else if (step.key === "done") {
-    const row = document.createElement("div");
-    row.className = "btn-row";
-    row.append(
-      firstRunButton("Share BackUp", () => openShare(), false),
-      firstRunButton("Start a silent test", () => {
-        closeFirstRun();
-        pinPanel("test-start");
-        $("test-start").scrollIntoView({ block: "center" });
-        $("test-start").focus();
-      }),
-    );
-    parts.push(row);
+    // The first success is the end of setup, not another list of tasks.
   } else {
     parts.push(...setupControls(step.key));
   }
   body.replaceChildren(...parts);
-  const last = firstRun.step === SETUP_STEPS.length - 1;
+  const last = (!firstRun.manual && step.key === "done") || firstRun.step === SETUP_STEPS.length - 1;
   $("first-run-back").hidden = firstRun.step === 0;
-  $("first-run-next").textContent = last ? "Done" : "Next";
+  $("first-run-next").textContent = last ? "Keep working" : "Continue";
+  $("first-run-next").disabled = false;
   $("first-run-skip").hidden = last;
 }
 
@@ -2971,12 +2977,19 @@ function updateFirstRunLive(result, landmarks) {
       ? "Head and shoulders in view \u2713"
       : causeFor(result, landmarks) || "Looking for you...";
   } else if (key === "calibrate") {
-    firstRunLive.textContent = $("calib-status").textContent;
+    const c = engine.calibration.status;
+    firstRunLive.textContent = c.active
+      ? `Saving your posture… hold comfortably (${c.remaining_s.toFixed(1)} s)`
+      : c.error ||
+        (c.good ? "Saved. Continue whenever you’re ready." : "Hold comfortably for 3 seconds when you save.");
+    $("first-run-next").disabled = !!c.active;
   }
 }
 
 $("first-run-next").addEventListener("click", () => {
+  const finished = !firstRun.manual && SETUP_STEPS[firstRun.step].key === "done";
   completeStep(store, SETUP_STEPS[firstRun.step].key);
+  if (finished) store.setupDone = true;
   save();
   if (advanceSetup()) focusFirstRunHeading();
   else $("state-badge").focus();
@@ -3036,9 +3049,10 @@ function fillList(ul, points) {
 function renderOnboardingStep() {
   const step = ONBOARDING_STEPS[ob.step];
   const last = ob.step === LAST_STEP;
-  $("ob-count").textContent = ob.ackOnly ? "Safety notice" : `${ob.step + 1} of ${ONBOARDING_STEPS.length}`;
-  $("ob-title").textContent = step.title;
-  fillList($("ob-body"), step.points);
+  $("ob-count").textContent = ob.ackOnly ? "Safety notice" : "Welcome to BackUp";
+  $("ob-title").textContent = ob.ackOnly ? "Before you start" : step.title;
+  fillList($("ob-body"), ob.ackOnly ? SAFETY_POINTS : step.points);
+  fillList($("ob-safety"), SAFETY_POINTS);
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
   $("ob-next").hidden = last;
   $("ob-ack").hidden = !last;

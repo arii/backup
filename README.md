@@ -36,22 +36,16 @@ Docs last verified: 2026-11-20.
 
 ## Getting started (first visit)
 
-1. **Open the app and read the walkthrough.** A new visitor sees three short steps:
-   how it works and camera placement, what you will see and hear, and the safety
-   notice. Press *I understand* to unlock the Start buttons. The *Help* button replays
-   it at any time.
-2. **Place the camera.** Eye level, about an arm's length away, head and shoulders in
-   frame, light in front of you, a plain background.
-3. **Press *Start with webcam*** (or *Try the demo* if you have no camera). Sit
-   naturally, then use *Record good posture* once so "good" means your own baseline.
-4. **If it does not work, press *Not working?*** A checklist watches the live frames
-   and names the likely cause (nobody in view, too close or far, low light or blocked
-   view, low frame rate) with a plain fix. WebGL help and the bug report link are there
-   too.
-5. **Press *Learn the cues*** to practice: sit tall, then push your head forward, tilt
-   it, raise one shoulder, lean. The matching tile lights up. No sounds, nothing is
-   recorded. The practice and *Not working?* panels each show a small live
-   skeleton and needle, so you can see your posture next to the instructions.
+1. **Open the app.** One short welcome explains privacy and safety. The full
+   safety notice is available without leaving the page.
+2. **Start the webcam** (or try the demo). Keep your head and shoulders in frame.
+3. **Get comfortable.** Optionally save your comfortable posture with a single
+   three-second recording. There is no required slouch recording or settings tour.
+4. **Keep working.** Posture guidance stays simple. Detailed measurements and
+   session stats are collapsed; settings never appear just because time passes.
+5. **Explore when ready.** Open *Explore more* for breathing and breaks, reminder
+   preferences, or progress and offline tools. Your choices stay in this browser.
+   *Show all settings* is still available, and *Help* has camera troubleshooting.
 
 Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboarding-and-setup/requirements.md).
 

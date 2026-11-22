@@ -179,7 +179,7 @@
   .modes select { padding: 5px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
   @media (max-width: 600px) {
     .stage { aspect-ratio: auto; min-height: 560px; }
-    .stage:has(#onboarding:not([hidden])) { min-height: 860px; }
+    .stage:has(#onboarding:not([hidden])) { min-height: 540px; }
     .stage:has(#webgl-help.show) { min-height: 880px; }
     /* Narrow screens: the card sits below the video, so it never covers the face. */
     .stage:has(.overlay-msg.compact) { min-height: 0; aspect-ratio: auto; display: flex; flex-direction: column; }
@@ -245,11 +245,11 @@
   <h1>BackUp</h1>
   <span id="state-badge" class="badge post-start" tabindex="-1">waiting</span>
   <span id="settling-note" hidden>Settling in: waiting for a clear good or slouched posture.</span>
-  <span class="stat post-start"><b id="fps">-</b> fps</span>
-  <span class="stat post-start">source <b id="source">-</b></span>
+  <span class="stat post-start" data-stage="5" hidden><b id="fps">-</b> fps</span>
+  <span class="stat post-start" data-stage="5" hidden>source <b id="source">-</b></span>
   <button class="secondary post-start" id="pause" disabled title="Pause tracking and all sounds (shortcut: P, can be turned off under Reminders &amp; sounds)">Pause</button>
   <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
-  <button class="secondary" id="setup-btn" hidden title="Set up BackUp one small step at a time">Set up</button>
+  <button class="secondary" id="setup-btn" hidden title="Revisit setup or personalize your reminders">Personalize</button>
   <button class="secondary" id="share-btn" data-stage="5" hidden title="Share BackUp with a friend">Share</button>
   <button class="link post-start" id="reveal-all" aria-pressed="false" title="Show every panel and setting now, instead of adding them as you go">Show all settings</button>
   <span id="reveal-note" role="status" aria-live="polite"></span>
@@ -277,17 +277,18 @@
       <div id="demo-note" class="note" style="position:absolute;left:12px;bottom:10px;display:none">Demo: 20 s good posture, then 20 s slouching, repeating</div>
       <div class="overlay-msg" id="start-overlay">
         <h2 id="start-title">BackUp: Posture to Die For.</h2>
-        <p id="start-tagline" style="color:var(--warn);font-weight:600">Slouch, and it will haunt you.</p>
-        <p id="start-intro">Video stays on your device.</p>
+        <p id="start-tagline">Sit comfortably. Get gentle reminders.</p>
+        <p id="start-intro">Camera at eye level, shoulders visible. Video stays on-device.</p>
         <noscript><p class="error">BackUp needs JavaScript to run. Turn it on for this site, then reload the page.</p></noscript>
         <section id="onboarding" aria-labelledby="ob-title" hidden>
           <div class="step-count" id="ob-count"></div>
           <h3 id="ob-title" tabindex="-1"></h3>
           <ul id="ob-body" aria-live="polite"></ul>
+          <details class="group"><summary>Full safety notice</summary><ul id="ob-safety"></ul></details>
           <div class="btn-row">
             <button class="secondary" id="ob-back">Back</button>
             <button id="ob-next">Next</button>
-            <button id="ob-ack" hidden>I understand</button>
+            <button id="ob-ack" hidden>I understand — get started</button>
           </div>
         </section>
         <div class="btn-row" id="start-actions" style="justify-content:center" hidden>
@@ -327,8 +328,8 @@
         <button class="link" id="first-run-skip-all" title="Keep the default settings. Nothing is turned on and no consent is recorded.">Skip all, use defaults</button>
       </div>
     </div>
-    <div class="panel coaching" style="margin-top:16px" data-stage="1" hidden>
-      <h2>This session</h2>
+    <details class="panel coaching" id="session-panel" style="margin-top:16px" data-stage="1" hidden>
+      <summary>This session</summary>
       <div class="stat">good posture <b id="good-pct">-</b> of tracked time &middot; best streak <b id="best-streak">-</b> &middot; reminders <b id="reminder-count">0</b> &middot; breaks taken today <b id="breaks-count">0</b></div>
       <div class="note">Breaks (2+ minutes away) are not scored.</div>
       <div class="score-bar"><div id="good-bar"></div></div>
@@ -342,7 +343,7 @@
           <button class="link" id="sponsor-never">Don&rsquo;t ask again</button>
         </div>
       </div>
-    </div>
+    </details>
     <div class="panel" id="practice-panel" aria-labelledby="practice-title">
       <h2 id="practice-title">Learn the cues</h2>
       <div class="step-count" id="practice-count"></div>
@@ -364,7 +365,7 @@
         <button class="secondary" id="practice-stop">Stop practice</button>
       </div>
     </div>
-    <div class="panel" data-stage="4" hidden>
+    <div class="panel" id="silent-panel" data-stage="4" hidden>
       <h2>Is it working? Test me</h2>
       <div class="note" style="margin-top:0">A silent check: no sounds, banners, needle or hints, so it measures your habit, not the coaching.
         Sit and work as usual. If the coaching is sticking, your silent score climbs over the days.</div>
@@ -453,7 +454,7 @@
       Posture feedback is hidden until the test ends, so the score shows your own habit.
     </div>
     <div class="panel coaching" data-stage="2" hidden>
-      <h2>Posture needle</h2>
+      <h2>Your posture, right now</h2>
       <svg viewBox="0 0 200 128" style="width:100%;max-width:300px;display:block;margin:0 auto" role="img" aria-label="Posture needle: left is upright, right is slouched">
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
         <path d="M57 25.5 A 86 86 0 0 1 143 25.5" fill="none" stroke="#ffb340" stroke-width="14"/>
@@ -471,16 +472,31 @@
         </div>
       </div>
       <div class="note" id="pre-start-note">The needle and the numbers fill in after you start the webcam or the demo.</div>
+      <details class="group"><summary>Posture details</summary>
       <div class="tiles" style="margin-top:8px">
         <div class="tile" id="t-head_forward"><div class="label">Head forward</div><div class="value" id="m-head_forward_deg">-</div></div>
         <div class="tile" id="t-head_tilt"><div class="label">Head tilt</div><div class="value" id="m-head_tilt_deg">-</div></div>
         <div class="tile" id="t-shoulder_level"><div class="label">Shoulder level</div><div class="value" id="m-shoulder_level_deg">-</div></div>
         <div class="tile" id="t-trunk_lean"><div class="label">Trunk lean</div><div class="value" id="m-trunk_lean_deg">-</div></div>
       </div>
+      </details>
     </div>
+    <section class="panel coaching" id="explore-panel" aria-labelledby="explore-title" hidden>
+      <h2 id="explore-title">When you’re ready</h2>
+      <p class="note" style="margin-top:0">Posture reminders are running. Nothing else to set up.</p>
+      <details class="group">
+        <summary>Explore more</summary>
+        <p class="note">Try a breath check, take a break, or make BackUp your own. All optional.</p>
+        <div class="btn-row">
+          <button class="secondary" data-explore="break-menu relax-panel">Breathing &amp; breaks</button>
+          <button class="secondary" data-explore="reminders-panel calibration-panel breaks-panel">Adjust reminders</button>
+          <button class="secondary" data-explore="progress-panel silent-panel offline-panel">Progress &amp; offline</button>
+        </div>
+      </details>
+    </section>
     <div class="panel coaching" id="break-menu" data-stage="4" hidden>
       <h2 id="break-menu-title">Take a break</h2>
-      <div class="note" style="margin-top:0">Pick one. Each shows a short guided demo on the video. No camera analysis for stretch, move or water, and it never affects your score.</div>
+      <div class="note" style="margin-top:0">A short pause from your desk. Choose what feels useful.</div>
       <div class="break-menu" role="group" aria-labelledby="break-menu-title">
         <button id="break-stretch" class="secondary" disabled title="Start the webcam or demo first">Stretch</button>
         <button id="breathe-with-me" class="secondary" disabled title="Start the webcam or demo first">Breathe with me</button>
@@ -491,15 +507,15 @@
       </div>
       <div class="note" id="break-menu-note" role="status"></div>
     </div>
-    <div class="panel coaching" data-stage="4" hidden>
-      <h2>Relax, don&rsquo;t brace</h2>
+    <details class="panel coaching" id="relax-panel" data-stage="4" hidden>
+      <summary>Relax your shoulders</summary>
       <div class="note" style="margin-top:0">Good posture is a relaxed stack, not a squeeze. Pinching your shoulder blades back
         to look upright is tiring for your upper back. Lift your chest a little and let your shoulders hang.
         <span id="relax-safety"></span></div>
       <div class="stat" style="margin-top:8px">shoulders <b id="relax-shoulders">-</b></div>
       <div class="note" id="relax-status">Breath check: breathe in slowly. If your shoulders rise toward your ears, you&rsquo;re bracing. Stop if anything hurts.</div>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Tell me when my shoulders creep up, and run a breath check every 20 min of good posture (asks for your OK first)</label>
-    </div>
+    </details>
     <div class="panel coaching" id="breaks-panel" data-stage="4" hidden>
       <h2>Breaks &amp; prompts</h2>
       <div class="note" style="margin-top:0">Gentle prompts, one at a time. None in the first 5 minutes, at most one every 10 minutes, and never during a pause or a silent test.</div>
@@ -557,8 +573,8 @@
       <label class="note" style="display:flex;gap:8px;margin-top:0"><input type="checkbox" id="share-weekly"> Let me create a link with my weekly score (off by default)</label>
       <div class="note" id="share-weekly-status" role="status"></div>
     </div>
-    <div class="panel" data-stage="3" hidden>
-      <h2>Calibrate to your desk</h2>
+    <details class="panel" id="calibration-panel" data-stage="3" hidden>
+      <summary>Your comfortable posture</summary>
       <div class="btn-row">
         <button id="calib-good" disabled title="Start the webcam or demo first">Record good posture</button>
         <button id="calib-bad" disabled title="Start the webcam or demo first">Record slouch posture</button>
@@ -566,8 +582,8 @@
       </div>
       <div class="note" id="calib-status">Sit well, press "Record good posture", hold still 3 s. Then slouch your usual way and record that.</div>
       <div class="error" id="calib-error"></div>
-    </div>
-    <div class="panel" data-stage="3" hidden>
+    </details>
+    <div class="panel" id="reminders-panel" data-stage="3" hidden>
       <h2>Reminders &amp; sounds</h2>
       <div class="modes">
         <label><input type="radio" name="mode" value="chime_and_voice" checked> Chime + voice</label>
