@@ -196,3 +196,12 @@ test("the annoyance log drops old events, caps its size and ignores junk", () =>
   assert.deepEqual(recordAnnoyance("junk", now), [now]);
   assert.equal(shouldSuggestLight({ level: "standard", log: undefined, nowMs: now }), false);
 });
+
+import { tabTitleFor } from "../../docs/app/feedback.js";
+test("tabTitleFor prefixes only while a reminder is active", () => {
+  assert.equal(tabTitleFor("badge bad_chime", "BackUp"), "\u26a0 Sit up \u00b7 BackUp");
+  assert.equal(tabTitleFor("badge bad_voice", "BackUp"), "\u26a0 Sit up \u00b7 BackUp");
+  for (const c of ["badge good", "badge paused", "badge no_person", "badge activity", "badge practice", ""]) {
+    assert.equal(tabTitleFor(c, "BackUp"), "BackUp");
+  }
+});

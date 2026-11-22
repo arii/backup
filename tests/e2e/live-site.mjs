@@ -246,6 +246,18 @@ try {
     });
     const slouch = await ui(page);
     check("demo slouch triggers a reminder", slouch.badge === "sit up", slouch);
+    const slouchTitle = await page.title();
+    check(
+      "tab title carries the warning prefix while the reminder is active",
+      /^\u26a0 Sit up \u00b7 BackUp/.test(slouchTitle),
+      {
+        slouchTitle,
+      },
+    );
+    await page.click("#pause");
+    const pausedTitle = await page.title();
+    check("tab title resets when paused", /^BackUp/.test(pausedTitle), { pausedTitle });
+    await page.click("#pause");
     await page.screenshot({ path: path.join(outDir, "demo-slouch.png") });
     check("demo has no errors", errors.length === 0, errors);
     report.demo = { early, slouch };
@@ -497,6 +509,27 @@ try {
       first.card && /How it works/.test(first.title) && !first.demoVisible && /not medical advice/i.test(first.footer),
       first,
     );
+    for (const w of [1280, 320]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.focus("#ob-title");
+      const ring = await page.evaluate(() => {
+        const t = document.getElementById("ob-title");
+        const cs = getComputedStyle(t);
+        const sc = document.getElementById("ob-count").getBoundingClientRect();
+        const ext = parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth);
+        return {
+          outline: cs.outlineColor,
+          style: cs.outlineStyle,
+          gap: t.getBoundingClientRect().top - ext - sc.bottom,
+        };
+      });
+      check(
+        `onboarding title focus ring is blue and clears the step count by >= 4px at ${w}px`,
+        ring.outline === "rgb(158, 197, 255)" && ring.style === "solid" && ring.gap >= 4,
+        ring,
+      );
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: path.join(outDir, "onboarding-step1.png") });
     await page.keyboard.press("Tab");
     const firstTab = await page.evaluate(() => document.activeElement?.id);
