@@ -50,18 +50,13 @@ export const RELAX_SAFETY = "This is a gentle check, not a medical test. Stop if
 export const ONBOARDING_STEPS = Object.freeze([
   {
     title: "How it works",
-    points: [
-      "Your webcam, the pose model and the posture logic all run in this tab. No video or landmarks leave your computer.",
-      "Place the camera at eye level, about an arm's length away, with your head and shoulders in frame.",
-      "Face a light (a window or lamp in front of you) and use a plain background if you can.",
-    ],
+    points: ["Video stays in this tab. Nothing is uploaded.", "Camera at eye level, head and shoulders in frame."],
   },
   {
     title: "What you will see and hear",
     points: [
-      'A needle and a "what to fix" box show which part of your posture drifted and how to correct it.',
-      "If you keep slouching you get a chime first, then a spoken cue.",
-      'Praise is opt-in. A silent "Test me" check shows whether the habit sticks without reminders.',
+      'A needle and a "what to fix" box show how to improve.',
+      "If you keep slouching you get a chime, then a spoken cue.",
     ],
   },
   { title: "Before you start", points: SAFETY_POINTS },

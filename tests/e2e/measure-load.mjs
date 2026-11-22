@@ -6,9 +6,9 @@
 // (.kiro/specs/progressive-loading, requirement 10). Not part of CI: timings from
 // headless Chromium with software WebGL (SwiftShader) are relative, not absolute.
 //
-//   node tests/e2e/measure-load.mjs <base-url> <fake-camera.y4m|""> <out-dir> [scenarios]
+//   node tests/e2e/measure-load.mjs <base-url> <fake-camera.y4m|""> <out-dir> [scenarios] [--budget]
 //
-// scenarios: comma list of desk (1280x800), m320 (320x640), slow (1280x800 with the
+// scenarios: comma list of desk (1280x800), w1000 (1000x700), m320 (320x640), slow (1280x800 with the
 // network held to about 1.5 Mbit/s). Default: all three. Prints one JSON object.
 //
 // Marks are milliseconds from the click on Start with webcam:
@@ -185,6 +185,7 @@ async function run(label, viewport, { throttle = false } = {}) {
 
 const scenarios = {
   desk: () => run("desk", { width: 1280, height: 800 }),
+  w1000: () => run("w1000", { width: 1000, height: 700 }),
   m320: () => run("m320", { width: 320, height: 640 }),
   slow: () => run("slow", { width: 1280, height: 800 }, { throttle: true }),
 };
@@ -193,4 +194,13 @@ for (const name of only.split(",")) {
   if (!scenarios[name]) throw new Error(`unknown scenario ${name}`);
   results.push(await scenarios[name]());
 }
-console.log(JSON.stringify({ base, results }, null, 2));
+// Pre-start budget (minimal start screen): at most 40 words and 5 controls at landing.
+const budget = { words: 40, controls: 5 };
+const summary = results.map((r) => ({
+  label: r.label,
+  landingWords: r.landing.words,
+  landingControls: r.landing.controls,
+  withinBudget: r.landing.words <= budget.words && r.landing.controls <= budget.controls,
+}));
+console.log(JSON.stringify({ base, budget, summary, results }, null, 2));
+if (process.argv.includes("--budget") && summary.some((r) => !r.withinBudget)) process.exitCode = 1;

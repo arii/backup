@@ -36,7 +36,6 @@ import {
   PRACTICE_STEPS,
   RELAX_SAFETY,
   SAFETY_POINTS,
-  SAFETY_SHORT,
   SetupCheck,
   shouldShowOnboarding,
 } from "./onboarding.js";
@@ -2282,6 +2281,11 @@ function webglCanvas() {
   return null;
 }
 
+/** "Not working?" stays out of sight until tracking starts, fails or loads slowly. */
+function showSetupPanel() {
+  $("setup-panel").hidden = false;
+}
+
 function showWebGLHelp(show) {
   $("webgl-help").classList.toggle("show", show);
 }
@@ -2291,6 +2295,7 @@ const CAMERA_LABEL = $("start-camera").textContent;
 /** Without WebGL the camera still works, through the slower MoveNet fallback; say so up front. */
 function applyWebGLState() {
   const ok = Boolean(webglCanvas());
+  if (!ok) showSetupPanel();
   $("start-camera").textContent = CAMERA_LABEL;
   showWebGLHelp(!ok);
   return ok;
@@ -2502,6 +2507,8 @@ function stopCamera(err) {
   video.srcObject = null;
   lowAccuracy = false;
   $("lowpower-note").style.display = "none";
+  document.body.classList.add("pre-start");
+  showSetupPanel();
   showWebGLHelp(!webglCanvas());
   showError(`Tracking stopped: ${err.message || err}. Reload to try again, or try the demo.`);
   $("start-status").textContent = "";
@@ -2516,6 +2523,8 @@ let loopsStarted = false;
 
 function begin(source) {
   $("source").textContent = source;
+  document.body.classList.remove("pre-start"); // status, Pause and Show all settings appear now
+  showSetupPanel();
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
   $("lowpower-note").style.display = lowAccuracy ? "block" : "none";
@@ -2528,6 +2537,7 @@ function begin(source) {
   renderSetupButton();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
+  revealNote("Added: status, Pause, Not working? help, Show all settings");
   recordSession(store, Date.now());
   save();
   resetPromptSession();
@@ -2662,6 +2672,7 @@ $("start-camera").addEventListener("click", async () => {
     if (stream) for (const t of stream.getTracks()) t.stop();
     video.srcObject = null;
     poseLandmarker = null;
+    showSetupPanel();
     showError(cameraErrorMessage(err));
     $("start-camera").disabled = $("start-demo").disabled = false;
     applyWebGLState();
@@ -3007,7 +3018,7 @@ function fillList(ul, points) {
 function renderOnboardingStep() {
   const step = ONBOARDING_STEPS[ob.step];
   const last = ob.step === LAST_STEP;
-  $("ob-count").textContent = ob.ackOnly ? "Safety notice" : `Step ${ob.step + 1} of ${ONBOARDING_STEPS.length}`;
+  $("ob-count").textContent = ob.ackOnly ? "Safety notice" : `${ob.step + 1} of ${ONBOARDING_STEPS.length}`;
   $("ob-title").textContent = step.title;
   fillList($("ob-body"), step.points);
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
@@ -3061,6 +3072,7 @@ $("help-btn").addEventListener("click", openHelp);
 $("help-close").addEventListener("click", () => $("help-dialog").close());
 $("help-notworking").addEventListener("click", () => {
   $("help-dialog").close();
+  showSetupPanel();
   $("setup-panel").open = true;
   $("setup-panel").scrollIntoView({ block: "nearest" });
   $("setup-panel").querySelector("summary").focus();
@@ -3075,13 +3087,21 @@ $("help-practice").addEventListener("click", () => {
 });
 
 fillList($("safety-list"), SAFETY_POINTS);
-$("safety-footer").textContent = SAFETY_SHORT;
 $("relax-safety").textContent = RELAX_SAFETY;
 $("safety-link").addEventListener("click", (e) => {
   e.preventDefault();
   $("safety-dialog").showModal();
 });
 $("safety-close").addEventListener("click", () => $("safety-dialog").close());
+$("about-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  $("about-dialog").showModal();
+});
+$("about-close").addEventListener("click", () => $("about-dialog").close());
+// A slow camera, download or start also brings up the "Not working?" help.
+new MutationObserver(() => {
+  if ($("load-hint").textContent) showSetupPanel();
+}).observe($("load-hint"), { childList: true, characterData: true, subtree: true });
 
 // -- setup check ("Not working?") ----------------------------------------------------
 
