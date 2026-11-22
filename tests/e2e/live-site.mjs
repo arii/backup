@@ -43,6 +43,7 @@
 
 import { chromium } from "playwright";
 import http from "node:http";
+import https from "node:https";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -69,14 +70,23 @@ const VENDORED = [
  *  it, undici throws an uncaught assert(!this.paused) from Parser.finish and
  *  kills the whole run (#58). Reading the body (arrayBuffer) did not prevent
  *  it, so the undici client is avoided entirely. */
-function fetchStatus(url) {
+function fetchStatus(url, redirects = 5) {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, { agent: false, headers: { connection: "close" } }, (res) => {
+    const mod = new URL(url).protocol === "https:" ? https : http;
+    const req = mod.get(url, { agent: false, headers: { connection: "close" } }, (res) => {
+      const status = res.statusCode ?? 0;
+      if (status >= 300 && status < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        res.on("error", reject);
+        res.on("end", () => {
+          fetchStatus(new URL(res.headers.location, url).href, redirects - 1).then(resolve, reject);
+        });
+        return;
+      }
       const chunks = [];
       res.on("data", (c) => chunks.push(c));
       res.on("error", reject);
       res.on("end", () => {
-        const status = res.statusCode ?? 0;
         resolve({
           ok: status >= 200 && status < 300,
           status,
