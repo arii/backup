@@ -249,7 +249,7 @@
   <button class="secondary post-start" id="pause" disabled title="Pause tracking and all sounds (shortcut: P, can be turned off under Reminders &amp; sounds)">Pause</button>
   <button class="secondary" id="help-btn" aria-haspopup="dialog" title="How it works, camera placement, troubleshooting">Help</button>
   <button class="secondary" id="setup-btn" hidden title="Revisit setup or personalize your reminders">Personalize</button>
-  <button class="secondary" id="share-btn" data-stage="5" hidden title="Share BackUp with a friend">Share</button>
+  <button class="secondary post-start" id="share-btn" data-stage="5" hidden title="Share BackUp with a friend">Share</button>
   <button class="link post-start" id="reveal-all" aria-pressed="false" title="Show every panel and setting now, instead of adding them as you go">Show all settings</button>
   <span id="reveal-note" role="status" aria-live="polite"></span>
 </header>
@@ -489,7 +489,7 @@
         <div class="btn-row">
           <button class="secondary" data-explore="break-menu relax-panel">Breathing &amp; breaks</button>
           <button class="secondary" data-explore="reminders-panel calibration-panel breaks-panel">Adjust reminders</button>
-          <button class="secondary" data-explore="progress-panel silent-panel offline-panel">Progress &amp; offline</button>
+          <button class="secondary" data-explore="progress-panel silent-panel offline-panel weekly-panel share-btn">Progress &amp; offline</button>
         </div>
       </details>
     </section>
@@ -567,7 +567,7 @@
         <button id="consent-withdraw" class="secondary" hidden>Withdraw my OK</button>
       </div>
     </div>
-    <div class="panel" data-stage="5" hidden>
+    <div class="panel" id="weekly-panel" data-stage="5" hidden>
       <h2>Share my weekly score</h2>
       <label class="note" style="display:flex;gap:8px;margin-top:0"><input type="checkbox" id="share-weekly"> Let me create a link with my weekly score (off by default)</label>
       <div class="note" id="share-weekly-status" role="status"></div>
