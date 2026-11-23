@@ -577,11 +577,11 @@ let reminderCount = 0;
 let bannerTimer = null;
 let praiseTimer = null; // the spoken half of a praise line, queued after the arpeggio
 
-/** Banner text for a reminder: what is off and how to fix it when the engine
- *  has a cue for this frame, the generic wording otherwise. */
+/** Banner text for a reminder: what is off, when the engine has a cue for this
+ *  frame, "Sit up" otherwise. */
 function reminderText(nudge, cue) {
-  if (nudge === Nudge.CHIME) return cue ? `${cue.title}: ${cue.fix}` : "Reminder: sit up";
-  if (nudge === Nudge.VOICE) return cue ? `${cue.title}: ${cue.fix}` : `Reminder: ${settings.voiceText}`;
+  // One short cue on the video (K5, #98); the voice says the full fix.
+  if (nudge === Nudge.CHIME || nudge === Nudge.VOICE) return cue ? cue.title : "Sit up";
   return BANNERS[nudge];
 }
 
@@ -1825,7 +1825,7 @@ function syncTabTitle() {
 }
 
 /** The badge: the state, or the activity while one holds posture feedback. */
-function renderBadge(transition, result, held, label) {
+function renderBadge(transition, result, held, label, zone) {
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
@@ -1835,6 +1835,10 @@ function renderBadge(transition, result, held, label) {
       ? "settling in"
       : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  if (transition.state === State.GOOD && zone === "drift") {
+    badge.textContent = "drifting"; // amber with the needle and skeleton (frame 05, #98)
+    badge.className = "badge drift";
+  }
   const settling = !test && !practice && !held && badge.textContent === "settling in";
   $("settling-note").hidden = !settling;
   badge.title = settling ? $("settling-note").textContent : "";
@@ -1871,6 +1875,36 @@ function renderNeedle(view, held) {
   else if (view.label) setGaugeLabel(view.label); // one word; the cue itself is the banner on the video
 }
 
+// Under the gauge (K1, K2 in #98): while good, "Looking good" and a green fill toward the
+// next praise; while slipping, an amber fill that is full when the chime plays. The bar
+// stays full for a moment on the chime frame, then hides: no fill while slouching.
+const CHIME_FULL_MS = 600;
+let chimeFullUntil = -Infinity;
+function renderGaugeStatus(zone, hold, nudge) {
+  const now = performance.now();
+  if (nudge === Nudge.CHIME) chimeFullUntil = now + CHIME_FULL_MS;
+  let kind = null;
+  let fraction = 0;
+  if (now < chimeFullUntil) {
+    kind = "warn";
+    fraction = 1;
+  } else if (hold && zone === "good" && hold.kind === "praise") {
+    kind = "good";
+    fraction = hold.fraction;
+  } else if (hold && zone === "drift" && hold.kind === "slipping") {
+    kind = "warn";
+    fraction = hold.fraction;
+  }
+  $("gauge-praise").hidden = kind !== "good";
+  const bar = $("gauge-bar");
+  bar.hidden = kind === null;
+  if (kind === null) return;
+  bar.className = `gauge-bar ${kind}`;
+  bar.setAttribute("aria-label", kind === "good" ? "Toward the next praise" : "Toward the reminder");
+  $("gauge-fill").style.width = `${(fraction * 100).toFixed(1)}%`;
+  bar.setAttribute("aria-valuenow", String(Math.round(fraction * 100)));
+}
+
 // The gauge is role="img", so screen readers read its aria-label, not the <text> inside.
 // Both carry the same words, so the state never depends on colour or the needle angle (#95).
 function setGaugeLabel(label) {
@@ -1888,12 +1922,20 @@ function render(out, landmarks) {
     if (transition.state !== State.NO_PERSON) markLoad("settled");
   }
   if (practice) renderPractice(result);
-  renderBadge(transition, result, held, label);
+  const view = gaugeView(transition.state, result.kind === "scored", out.cue != null, needle);
+  renderBadge(transition, result, held, label, view.zone);
   returnToMainOnStart();
   $("warnings").textContent = causeFor(result, landmarks);
   renderMetrics(result);
-  const view = gaugeView(transition.state, result.kind === "scored", out.cue != null, needle);
   renderNeedle(view, held);
+  // Praise on the video goes as soon as posture leaves the green zone (frame 05, #98).
+  const banner = $("banner");
+  if (view.zone !== "good" && banner.classList.contains("positive")) banner.classList.remove("show", "positive");
+  renderGaugeStatus(
+    view.zone,
+    held || activity.inGrace(clockS()) || !!test || !!practice ? null : out.hold,
+    out.transition.nudge,
+  );
   drawSkeleton(landmarks, test || held ? ZONE_COLOR.none : view.color);
   renderTest();
   renderCalibration();

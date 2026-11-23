@@ -294,14 +294,31 @@ try {
     await page.close();
   }
 
-  // 2a. Issue #97: the needle, its label and the skeleton colour agree, while slouching and
-  // after recovery. Demo on a 4x clock, so a cycle (20 s good, 20 s slouch) takes 10 s.
-  {
-    const { page, errors } = await newPage(browser);
+  // 2a. Issues #97 and #98 (K1 to K4, frames 04 to 06 and 14): the badge, needle zone, label
+  // and skeleton colour agree; "Looking good" with a green fill while good; an amber fill
+  // that is full when the chime plays; one short cue. Demo on a 4x clock (a cycle is 10 s).
+  for (const width of [1280, 375]) {
+    const { page, errors } = await newPage(browser, { viewport: { width, height: 900 } });
     await page.addInitScript(() => {
       const realNow = performance.now.bind(performance);
       const t0 = realNow();
       performance.now = () => t0 + (realNow() - t0) * 4;
+      // Record the fill on every change, so a short full bar at the chime is not missed.
+      window.__fill = { maxWarn: 0, atChime: null, warnSeen: false };
+      document.addEventListener("DOMContentLoaded", () => {
+        const bar = document.getElementById("gauge-bar");
+        const badge = document.getElementById("state-badge");
+        new MutationObserver(() => {
+          if (!bar.hidden && bar.classList.contains("warn")) {
+            window.__fill.warnSeen = true;
+            window.__fill.maxWarn = Math.max(window.__fill.maxWarn, Number(bar.getAttribute("aria-valuenow")));
+          }
+        }).observe(bar, { attributes: true });
+        new MutationObserver(() => {
+          if (badge.textContent === "sit up" && window.__fill.atChime === null)
+            window.__fill.atChime = bar.hidden ? -1 : Number(bar.getAttribute("aria-valuenow"));
+        }).observe(badge, { childList: true, characterData: true, subtree: true });
+      });
     });
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
@@ -320,47 +337,100 @@ try {
           else if (g > 160 && r < 120) count.green += 1;
           else if (r > 220 && g > 150 && b < 100) count.amber += 1;
         }
-        const skeleton = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+        const skeleton = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
+        const bar = document.getElementById("gauge-bar");
+        const badge = document.getElementById("state-badge");
+        const bg = getComputedStyle(badge).backgroundColor;
         return {
-          badge: document.getElementById("state-badge").textContent,
+          badge: badge.textContent,
+          badgeColor:
+            bg === "rgb(76, 195, 106)"
+              ? "green"
+              : bg === "rgb(255, 179, 64)"
+                ? "amber"
+                : bg === "rgb(255, 92, 92)"
+                  ? "red"
+                  : bg,
           label: document.getElementById("needle-text").textContent,
-          aria: document.getElementById("gauge-svg").getAttribute("aria-label"),
           deg,
           zone: deg < 60 ? "green" : deg < 120 ? "amber" : "red",
           skeleton: skeleton[1] > 0 ? skeleton[0] : "none",
+          praise: !document.getElementById("gauge-praise").hidden,
+          bar: bar.hidden ? "none" : bar.classList.contains("warn") ? "amber" : "green",
+          fill: Number(bar.getAttribute("aria-valuenow")),
+          barText: bar.textContent.trim(),
+          banner: document.getElementById("banner").classList.contains("show")
+            ? document.getElementById("banner").textContent
+            : "",
         };
       });
-    const when = async (badge, ms) => {
+    const until = async (test, ms) => {
       const end = Date.now() + ms;
       while (Date.now() < end) {
         const g = await gauge();
-        if (g.badge === badge) return g;
-        await page.waitForTimeout(100);
+        if (test(g)) return g;
+        await page.waitForTimeout(50);
       }
       return gauge();
     };
+    const shot = (name) => page.screenshot({ path: path.join(outDir, `review-${width}-${name}.png`), fullPage: true });
     await page.waitForSelector("#gauge:visible", { timeout: 20000 });
-    const slouched = await when("sit up", 30000);
-    await page.waitForTimeout(500);
-    const held = await gauge();
+    const good = await until((g) => g.badge === "good posture" && g.praise && g.fill > 20, 30000);
     check(
-      "gauge agrees (#97): while slouching the label, needle and skeleton are all red",
-      [slouched, held].every((g) => g.label === "slouching" && g.zone === "red" && g.skeleton === "red"),
-      { slouched, held },
+      `gauge (${width} px, frame 04): good is green everywhere, with "Looking good" and a green fill`,
+      good.badgeColor === "green" &&
+        good.label === "upright" &&
+        good.zone === "green" &&
+        good.skeleton === "green" &&
+        good.praise &&
+        good.bar === "green" &&
+        good.barText === "",
+      good,
     );
-    await page.screenshot({ path: path.join(outDir, "review-97-slouching.png") });
-    const recovered = await when("good posture", 30000);
+    await shot("04-good");
+    const slipping = await until((g) => g.bar === "amber" && g.fill >= 30 && g.fill <= 85, 30000);
+    check(
+      `gauge (${width} px, frame 05): slipping is amber everywhere, with an amber fill and no "Looking good"`,
+      slipping.badgeColor === "amber" &&
+        slipping.label === "drifting" &&
+        slipping.zone === "amber" &&
+        slipping.skeleton === "amber" &&
+        !slipping.praise &&
+        slipping.barText === "" &&
+        slipping.banner === "",
+      slipping,
+    );
+    await shot("05-slipping");
+    const slouched = await until((g) => g.badge === "sit up" && g.bar === "none", 30000);
+    const fill = await page.evaluate(() => window.__fill);
+    check(
+      `gauge (${width} px): the amber fill is full when the chime plays`,
+      fill.warnSeen && fill.maxWarn === 100 && fill.atChime === 100,
+      fill,
+    );
+    check(
+      `gauge (${width} px, frame 06): slouching is red everywhere, one short cue, no fill`,
+      slouched.badgeColor === "red" &&
+        slouched.label === "slouching" &&
+        slouched.zone === "red" &&
+        slouched.skeleton === "red" &&
+        slouched.bar === "none" &&
+        !slouched.praise &&
+        /^(Head forward|Head tilted|Shoulders uneven|Leaning sideways|Sit up)$/.test(slouched.banner),
+      slouched,
+    );
+    await shot("06-slouched");
+    const recovered = await until((g) => g.badge === "good posture", 30000);
     await page.waitForTimeout(300);
     const after = await gauge();
     check(
-      "gauge agrees (#97): after recovery the label, needle and skeleton are all green",
+      `gauge (${width} px): after recovery the badge, label, needle and skeleton are all green together`,
       [recovered, after].every(
-        (g) => g.badge !== "good posture" || (g.label === "upright" && g.zone === "green" && g.skeleton === "green"),
-      ) && after.label === "upright",
+        (g) => g.label === "upright" && g.zone === "green" && g.skeleton === "green" && g.badgeColor === "green",
+      ),
       { recovered, after },
     );
-    await page.screenshot({ path: path.join(outDir, "review-97-recovered.png") });
-    check("gauge agrees (#97): no page errors", errors.length === 0, errors);
+    check(`gauge (${width} px): no page errors`, errors.length === 0, errors);
     await page.close();
   }
 
