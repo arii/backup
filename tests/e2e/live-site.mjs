@@ -1688,6 +1688,7 @@ try {
     });
     await page.goto(`${base}app/${bust}`);
     const before = externalRequests.length;
+    await page.click("#start-demo"); // Share is a post-start header control
     await page.click("#share-btn");
     const links = await page.evaluate(() =>
       Object.fromEntries(
@@ -1737,6 +1738,7 @@ try {
   {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo"); // Share is a post-start header control
     await page.click("#share-btn");
     await page.click("#share-card-btn");
     check(
@@ -1745,7 +1747,6 @@ try {
         (await page.evaluate(() => document.getElementById("share-card-wrap").hidden)),
     );
     await page.click("#share-close");
-    await page.click("#start-demo");
     await page.waitForTimeout(66000);
     await page.click("#share-btn");
     await page.click("#share-card-btn");
@@ -2212,10 +2213,14 @@ try {
       );
       await page.goto(url);
       await page.waitForTimeout(500);
+      check("share reachable: the choice persists across a reload", await shown(page, "#weekly-panel"));
       check(
-        "share reachable: the choice persists across a reload",
-        (await shown(page, "#share-btn")) && (await shown(page, "#weekly-panel")),
+        "share reachable: the header Share button stays hidden on the pre-start screen after a reload",
+        !(await shown(page, "#share-btn")),
       );
+      await page.click("#start-demo");
+      await page.waitForSelector("#share-btn:visible");
+      check("share reachable: Share is shown once tracking starts", await shown(page, "#share-btn"));
       await page.click("#share-weekly");
       await page.waitForSelector("#share-consent-dialog:visible");
       check(

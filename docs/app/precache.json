@@ -1,6 +1,6 @@
 {
-  "version": "fd1477d84f51d42e",
-  "totalBytes": 33431184,
+  "version": "84bc16b773405994",
+  "totalBytes": 33431195,
   "files": [
     {
       "url": "activity.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "index.html",
-      "size": 57101,
-      "sha256": "72548e2c546718e603d29793ba2876fd707f5e3852bf4370db157d1e1d666a9a"
+      "size": 57112,
+      "sha256": "c0ee3603e9b0f1ec13f97247449e29fa44905c8858e14a0a10b77a3a6fb7e192"
     },
     {
       "url": "loading.js",
