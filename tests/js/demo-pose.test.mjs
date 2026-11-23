@@ -1,0 +1,40 @@
+// Author: Ariel Anders
+// Copyright (c) 2026 Ariel Anders
+// SPDX-License-Identifier: MIT
+//
+// demo-pose.js: the scripted demo, replayed through the engine exactly as the app runs it.
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import { DEMO_CYCLE_S, demoPose } from "../../docs/app/demo-pose.js";
+import { gaugeView, ZONE_COLOR, zoneOfAngle } from "../../docs/app/mini-view.js";
+import { DEFAULTS, PostureEngine, State } from "../../docs/app/posture-core.js";
+
+test("the demo alternates good and slouch every cycle", () => {
+  const head = (t) => demoPose(t)[7].y;
+  assert.ok(head(DEMO_CYCLE_S + 1) > head(1), "the head drops in the slouch half");
+  assert.equal(head(2 * DEMO_CYCLE_S + 1).toFixed(3), head(1).toFixed(3));
+});
+
+test("demo replay at 15 fps: gauge, label and skeleton agree through slouch onset and recovery", () => {
+  const engine = new PostureEngine(DEFAULTS);
+  engine.setDriftBaselineEnabled(false); // as app.js does for the synthetic demo
+  const seen = new Set();
+  let prev = null;
+  let recoveries = 0;
+  for (let t = 0; t < 4 * DEMO_CYCLE_S; t += 1 / 15) {
+    const out = engine.process(demoPose(t), t);
+    const view = gaugeView(out.transition.state, out.result.kind === "scored", out.cue != null, out.needle);
+    const where = `t=${t.toFixed(2)} ${out.transition.state}`;
+    if (view.zone !== "none" && view.angle !== null) assert.equal(zoneOfAngle(view.angle), view.zone, where);
+    if (view.label === "slouching") assert.equal(view.color, ZONE_COLOR.bad, where);
+    if (view.zone === "good") assert.equal(view.color, ZONE_COLOR.good, where);
+    if (prev === State.BAD_CHIME || prev === State.BAD_VOICE) {
+      if (out.transition.state === State.GOOD) recoveries += 1;
+    }
+    prev = out.transition.state;
+    seen.add(view.zone);
+  }
+  assert.ok(seen.has("good") && seen.has("bad"), [...seen].join());
+  assert.ok(recoveries >= 1, "the replay covers a recovery");
+});

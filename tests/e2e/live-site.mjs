@@ -294,6 +294,76 @@ try {
     await page.close();
   }
 
+  // 2a. Issue #97: the needle, its label and the skeleton colour agree, while slouching and
+  // after recovery. Demo on a 4x clock, so a cycle (20 s good, 20 s slouch) takes 10 s.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      const realNow = performance.now.bind(performance);
+      const t0 = realNow();
+      performance.now = () => t0 + (realNow() - t0) * 4;
+    });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    const gauge = () =>
+      page.evaluate(() => {
+        const deg = Number(
+          /rotate\(([-\d.]+)/.exec(document.getElementById("needle-rotor").getAttribute("transform"))?.[1],
+        );
+        const cv = document.getElementById("overlay");
+        const px = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+        const count = { red: 0, green: 0, amber: 0 };
+        for (let k = 0; k < px.length; k += 16) {
+          if (px[k + 3] < 200) continue;
+          const [r, g, b] = [px[k], px[k + 1], px[k + 2]];
+          if (r > 220 && g < 120 && b < 120) count.red += 1;
+          else if (g > 160 && r < 120) count.green += 1;
+          else if (r > 220 && g > 150 && b < 100) count.amber += 1;
+        }
+        const skeleton = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+        return {
+          badge: document.getElementById("state-badge").textContent,
+          label: document.getElementById("needle-text").textContent,
+          aria: document.getElementById("gauge-svg").getAttribute("aria-label"),
+          deg,
+          zone: deg < 60 ? "green" : deg < 120 ? "amber" : "red",
+          skeleton: skeleton[1] > 0 ? skeleton[0] : "none",
+        };
+      });
+    const when = async (badge, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        const g = await gauge();
+        if (g.badge === badge) return g;
+        await page.waitForTimeout(100);
+      }
+      return gauge();
+    };
+    await page.waitForSelector("#gauge:visible", { timeout: 20000 });
+    const slouched = await when("sit up", 30000);
+    await page.waitForTimeout(500);
+    const held = await gauge();
+    check(
+      "gauge agrees (#97): while slouching the label, needle and skeleton are all red",
+      [slouched, held].every((g) => g.label === "slouching" && g.zone === "red" && g.skeleton === "red"),
+      { slouched, held },
+    );
+    await page.screenshot({ path: path.join(outDir, "review-97-slouching.png") });
+    const recovered = await when("good posture", 30000);
+    await page.waitForTimeout(300);
+    const after = await gauge();
+    check(
+      "gauge agrees (#97): after recovery the label, needle and skeleton are all green",
+      [recovered, after].every(
+        (g) => g.badge !== "good posture" || (g.label === "upright" && g.zone === "green" && g.skeleton === "green"),
+      ) && after.label === "upright",
+      { recovered, after },
+    );
+    await page.screenshot({ path: path.join(outDir, "review-97-recovered.png") });
+    check("gauge agrees (#97): no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
   // 2b. Breaks & prompts on an accelerated prompt clock.
   {
     const { page, errors } = await newPage(browser);

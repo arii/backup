@@ -26,7 +26,8 @@ import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
 import { PromptScheduler } from "./prompts.js";
-import { needleTransform } from "./mini-view.js";
+import { angleTransform, gaugeView, ZONE_COLOR } from "./mini-view.js";
+import { demoPose } from "./demo-pose.js";
 import {
   DIAGNOSIS_TEXT,
   Diagnosis,
@@ -137,7 +138,6 @@ const MODEL_URL = `${TASKS_VISION}/pose_landmarker_lite.task`;
 const MOVENET_DIR = `${TASKS_VISION}/movenet`;
 const VISIBLE_FPS = 15; // detection rate while the tab is visible
 const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
-const DEMO_CYCLE_S = 20; // synthetic demo: 20 s good, 20 s slouch
 const STORE = "posture-guard:v1";
 
 const $ = (id) => document.getElementById(id);
@@ -1743,7 +1743,6 @@ const STATE_LABELS = {
   [State.UNRELIABLE]: "tracking unsure",
 };
 
-const WIRE = { good: "#4cc36a", drift: "#ffb340", bad: "#ff5c5c", slate: "#8b95a3" };
 const SKELETON = [
   [7, 8],
   [7, 11],
@@ -1753,19 +1752,6 @@ const SKELETON = [
   [12, 24],
   [23, 24],
 ];
-
-function wireColor(state, result) {
-  if (state === State.BAD_CHIME || state === State.BAD_VOICE) return WIRE.bad;
-  if (result.kind !== "scored") return WIRE.slate;
-  const cfg = DEFAULTS.scoring;
-  if (
-    Math.abs(result.head_forward_deg) > cfg.head_forward_deg ||
-    Math.abs(result.head_tilt_deg) > cfg.head_tilt_deg ||
-    Math.abs(result.shoulder_level_deg) > cfg.shoulder_level_deg
-  )
-    return WIRE.drift;
-  return state === State.GOOD ? WIRE.good : WIRE.slate;
-}
 
 function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
   cv.width = cv.clientWidth;
@@ -1878,22 +1864,11 @@ function renderMetrics(result) {
   }
 }
 
-function renderNeedle(needle, transition, result, held) {
-  if (needle === null) return;
-  $("needle-rotor").setAttribute("transform", needleTransform(needle));
-  if (held) {
-    setGaugeLabel("posture paused");
-    return;
-  }
-  // The threshold needle averages all metrics, so a single-metric slouch
-  // sits mid-dial: the label follows the state machine, the needle shows how far.
-  const bad = transition.state === State.BAD_CHIME || transition.state === State.BAD_VOICE;
-  const label = bad
-    ? "slouching"
-    : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
-      ? "drifting"
-      : "upright";
-  setGaugeLabel(label); // one word; the cue itself is the banner on the video
+/** Needle, label and skeleton colour from one zone (mini-view.js), so they always agree (#97). */
+function renderNeedle(view, held) {
+  if (view.angle !== null) $("needle-rotor").setAttribute("transform", angleTransform(view.angle));
+  if (held) setGaugeLabel("posture paused");
+  else if (view.label) setGaugeLabel(view.label); // one word; the cue itself is the banner on the video
 }
 
 // The gauge is role="img", so screen readers read its aria-label, not the <text> inside.
@@ -1917,9 +1892,9 @@ function render(out, landmarks) {
   returnToMainOnStart();
   $("warnings").textContent = causeFor(result, landmarks);
   renderMetrics(result);
-  renderNeedle(needle, transition, result, held);
-  const wire = test || held ? WIRE.slate : wireColor(transition.state, result);
-  drawSkeleton(landmarks, wire);
+  const view = gaugeView(transition.state, result.kind === "scored", out.cue != null, needle);
+  renderNeedle(view, held);
+  drawSkeleton(landmarks, test || held ? ZONE_COLOR.none : view.color);
   renderTest();
   renderCalibration();
   updateFirstRunLive(result, landmarks);
@@ -1935,21 +1910,6 @@ let lastProcessed = 0;
 let lastVideoMs = -1;
 let fpsEma = 0;
 let lastFrameT = null;
-
-function demoPose(t) {
-  const slouch = Math.floor(t / DEMO_CYCLE_S) % 2 === 1;
-  const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.9 }));
-  const wobble = Math.sin(t * 1.7) * 0.003;
-  lm[11] = { x: 0.6 + wobble, y: 0.62, visibility: 0.99 }; // unmirrored: left shoulder on the right
-  lm[12] = { x: 0.4 + wobble, y: 0.62, visibility: 0.99 };
-  lm[23] = { x: 0.56, y: 0.95, visibility: 0.9 };
-  lm[24] = { x: 0.44, y: 0.95, visibility: 0.9 };
-  const ex = slouch ? -0.02 : 0,
-    ey = slouch ? 0.09 : 0;
-  lm[7] = { x: 0.54 + ex + wobble, y: 0.46 + ey, visibility: 0.99 };
-  lm[8] = { x: 0.46 + ex + wobble, y: 0.46 + ey, visibility: 0.99 };
-  return lm;
-}
 
 // -- pause ----------------------------------------------------------------------
 // Paused: no pose tracking, no reminders or praise, no stats, and the camera
