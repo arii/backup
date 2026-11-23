@@ -9,9 +9,9 @@ and it chimes. Keep slouching, and it tells you out loud exactly what is wrong a
 how to fix it. Everything runs on your computer; no video or landmark leaves it.
 
 **Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
-you have no camera). The first visit shows a short walkthrough (camera placement,
-what you will see and hear, and a safety notice). The *Help* button replays it, and
-*Not working?* checks framing, lighting and speed problems.
+you have no camera). The first visit shows one short welcome with the safety
+notice on demand. *Help* shows it again, and its *Not working?* button opens the
+setup check for framing, lighting and speed problems.
 
 ![The browser app in demo mode on a desktop screen](docs/assets/app-desktop.png)
 
@@ -41,8 +41,9 @@ Docs last verified: 2026-11-20.
 2. **Start the webcam** (or try the demo). Keep your head and shoulders in frame.
 3. **Get comfortable.** Optionally save your comfortable posture with a single
    three-second recording. There is no required slouch recording or settings tour.
-4. **Keep working.** Posture guidance stays simple. Detailed measurements and
-   session stats are collapsed; settings never appear just because time passes.
+4. **Keep working.** The main screen shows the live view, a posture needle and
+   one line of session stats. What to fix appears only while you slouch, and
+   settings never appear just because time passes.
 5. **Explore when ready.** Open *Explore more* for breathing and breaks, reminder
    preferences, or progress and offline tools. Your choices stay in this browser.
    *Show all settings* is still available, and *Help* has camera troubleshooting.
@@ -160,7 +161,7 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   in `docs/app/vendor/`, so no third-party server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
   hidden. Chimes play through Web Audio, the prompt through the browser's speech
-  synthesis, and *Notify when tab is hidden* adds desktop notifications.
+  synthesis, and *Notify in background* adds desktop notifications.
 - **Remembers you.** Calibration, settings, the camera you last used, custom sounds (under 1.5 MB)
   and daily good/slouch totals persist in `localStorage`.
 

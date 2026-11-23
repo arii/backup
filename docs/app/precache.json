@@ -1,6 +1,6 @@
 {
-  "version": "6ded00928c858b88",
-  "totalBytes": 33432332,
+  "version": "7459bf7ab70bc5e9",
+  "totalBytes": 33428129,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 136828,
-      "sha256": "55407f9a98360d6461d6e19ab29b61603750a48935a8ec80fabb0d839909dda7"
+      "size": 137385,
+      "sha256": "7b1b24a418746463d6a6fbf7aec16ce94964720618a9a0a774f793d53b864bc2"
     },
     {
       "url": "breaks.js",
@@ -24,8 +24,8 @@
     },
     {
       "url": "consent.js",
-      "size": 4036,
-      "sha256": "d730489d14b48c03683352095ec3fd4b3a0c785fab0cbc3e3669d8f73cb014c9"
+      "size": 3909,
+      "sha256": "cf7cf9b48739f4df10efb9ac5f6f978d6d09109b6269edf7d8f6b1976405ab98"
     },
     {
       "url": "consistency.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "index.html",
-      "size": 57112,
-      "sha256": "c0ee3603e9b0f1ec13f97247449e29fa44905c8858e14a0a10b77a3a6fb7e192"
+      "size": 52807,
+      "sha256": "089270ac7de329ed1998705b5ff2a16d00f2ad29d7aca0e70c87c65b00fab0cc"
     },
     {
       "url": "loading.js",
@@ -49,8 +49,8 @@
     },
     {
       "url": "mini-view.js",
-      "size": 1004,
-      "sha256": "2d91899c371de85af5e90c251342573b57755046f2f5b4a28ce934431b4e2290"
+      "size": 997,
+      "sha256": "2a94801ec6ab51c8061c6f101e65e49bb89955e72f2c73cfd25f6d4f6d60205c"
     },
     {
       "url": "movenet-adapter.js",
@@ -59,13 +59,13 @@
     },
     {
       "url": "offline.js",
-      "size": 3337,
-      "sha256": "b083173525beadd16aa15fe53261f2e6ed14ce8a4ae5c8db1607a134ad59b3b2"
+      "size": 3263,
+      "sha256": "8b2a5ffcfe875702255bf405b714d802c0a49fe216649567460ab79e6b65fdb2"
     },
     {
       "url": "onboarding.js",
-      "size": 12297,
-      "sha256": "e811b363c145ce3adf1774c409ac725ab5d94e65c27210228413de541037419b"
+      "size": 12289,
+      "sha256": "e74defe80642275a6348175112c7ed07e8788573cfa8e4485b44e5cacc2333ee"
     },
     {
       "url": "posture-core.js",
@@ -94,8 +94,8 @@
     },
     {
       "url": "reveal.js",
-      "size": 4320,
-      "sha256": "a6602dcd83f249c6f8e054a7f7a72d0714e58daabbefac3e3790860c9921404c"
+      "size": 4081,
+      "sha256": "076cd7bed2027c908fa5ad342eb3126fffcccef8170fc1fcf9b720958855ec35"
     },
     {
       "url": "settings.js",

@@ -44,7 +44,7 @@ export const SAFETY_POINTS = Object.freeze([
 ]);
 
 /** One sentence for the "Relax, don't brace" panel. */
-export const RELAX_SAFETY = "This is a gentle check, not a medical test. Stop if anything hurts.";
+export const RELAX_SAFETY = "A gentle check, not a medical test. Stop if anything hurts.";
 
 /** One short welcome. The full safety notice remains available on demand. */
 export const ONBOARDING_STEPS = Object.freeze([

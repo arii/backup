@@ -37,11 +37,9 @@ click          getUserMedia() ──────────────┐     
 ~0.3 s         video frames playing  ──> show mirrored video, card shrinks to a strip
                download done ──> step "Start the model" (elapsed counter)
                warm-up (blocks main thread, one paint first)
-first frame    stage 1: "This session", badge, fps
-10 s settled   stage 2: needle, what to fix, tiles, setup step 1 (framing)
-2 min          stage 3: reminders & sounds, calibration
-5 min          stage 4: breaks, wellness menu, relax, test
-next session   stage 5: progress, offline, share, sponsor
+first frame    stage 1: "This session", badge
+10 s settled   stage 2: needle, what to fix, Explore more, setup step 1 (framing)
+later          nothing more on its own: Explore more or Show all settings opens the rest
 ```
 The 10 s settle comes from the existing "settling in" badge logic (`app.js` around line
 1500): it ends when the state leaves NO_PERSON with a scored frame. `RevealStages` adds a
@@ -114,11 +112,11 @@ Out of scope).
 ## Reveal stages (`reveal.js`)
 ```js
 export const STAGES = Object.freeze({
-  idle: 0, tracking: 1, settled: 2, configured: 3, comfortable: 4, returning: 5,
+  idle: 0, tracking: 1, settled: 2, configured: 3, comfortable: 4, all: 5,
 });
-export const REVEAL = Object.freeze({ settle_s: 10, config_s: 120, comfortable_s: 300 });
+export const REVEAL = Object.freeze({ settle_s: 10, gap_s: 3, config_s: 120, comfortable_s: 300 });
 export class RevealStages {
-  constructor({ returning = false, revealAll = false, cfg = REVEAL } = {})
+  constructor({ revealAll = false, cfg = REVEAL } = {})
   /** frame: { scored: bool, state: "good"|"slouch"|..., paused, silentTest, practice }
    *  now: seconds (scaled by clockScale like pclock). Returns { stage, changed }. */
   update(frame, now)
@@ -130,29 +128,41 @@ Rules (properties, tested):
 - R2 no advance while `paused`, `silentTest` or `practice`; time does not accumulate then.
 - R3 settle: needs `settle_s` consecutive seconds of scored frames in state good or slouch.
   A gap longer than 3 s of unscored frames resets the hold (not the stage).
-- R4 `returning` jumps to stage 4 when settled. `revealAll` or `forceAll()` returns 5.
+- R4 `revealAll` or `forceAll()` returns 5 (`STAGES.all`). The `returning` and `seasoned`
+  jumps were removed in #86: since #81 the app caps the shown stage at 2, so they could
+  not take effect.
 - R5 `clockScale`: the app passes the scaled clock, same as `pclock`.
 
 Mapping stage to DOM (`data-stage` on the panel wrappers in `docs/app/index.html`):
 | Stage | Panels shown |
 |---|---|
-| 0 | stage, Start buttons, walkthrough, Help, "Not working?" (collapsed) |
-| 1 | + "This session" |
-| 2 | + posture needle (with tiles), setup step 1 |
-| 3 | + "Reminders & sounds" (collapsed `<details>`), "Calibrate to your desk" |
-| 4 | + "Relax, don't brace", "Breaks & prompts", wellness menu, "Learn the cues", "Test me" |
-| 5 | + "Your progress", "Offline mode", Share, Sponsor |
-Collapsed `<details>` also helps the checkbox count: each reminders group is inside a
-`<details>` closed by default, so even at stage 4 the visible checkboxes stay low until
-the user opens a group. Target is in Requirement 4.9.
+| 0 | stage, Start buttons, welcome, Help |
+| 1 | + "This session" (one line), badge, Pause |
+| 2 | + posture needle, "What to fix" (only while slouching or drifting), *Explore more*, setup step 1 |
+
+`currentStage()` in `app.js` returns `min(reveal.stage, 2)`, or 5 with `store.revealAll`.
+The `data-stage="3"`, `"4"` and `"5"` panels open only through:
+- *Explore more*: three buttons, each with a `data-explore` list of panel ids that is
+  added to `store.explored` (persisted). *Breathing & breaks*: `break-menu`, `relax-panel`.
+  *Adjust reminders*: `reminders-panel`, `calibration-panel`, `breaks-panel`.
+  *Progress & offline*: `progress-panel`, `silent-panel`, `offline-panel`, `weekly-panel`,
+  `share-btn`.
+- *Show all settings*: stage 5, every panel.
+- The setup cards and the first-run guide, which pin the panel they point at.
+
+There are no `<details>` groups in `<main>` (#90). The settings show flat, with short
+labels; the reasons behind them are one line each in Help ("Good to know"). The angle
+tiles show only during *Learn the cues*. The optional setup steps (style, voice, breaks,
+shoulders) are reached only from the header *Personalize* button. Targets are in
+Requirement 4.9 and 4.10.
 
 Show-all control: `<button id="reveal-all" class="link">Show all settings</button>` in the
 header row; text toggles to "Simplify the page". `store.revealAll` is persisted. Hidden
 panels use `hidden` so they leave the tab order. `renderPromptSettings()` and the other
 renderers write to hidden elements without effect, so no code change there.
 
-Announcement: `#reveal-note` (`role="status"`, visually quiet, 6 s) shows "Added: reminders
-and sounds" at each stage change.
+Announcement: none for stage changes (#90). `#reveal-note` (`role="status"`, visually
+quiet, 6 s) only confirms user actions such as "Showing all settings" or "Setup skipped".
 
 ## Setup sequence (progressive configuration, "skip all")
 Reuse `FIRST_RUN` (`app.js` `firstRun`, `#first-run`, `store.firstRunDone`). Today it is shown

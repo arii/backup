@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Ariel Anders
 // SPDX-License-Identifier: MIT
 //
-// Pure logic behind the compact live views (skeleton and needle) in the
-// practice and "Not working?" panels. Kept free of DOM access so it can be
+// Pure logic behind the compact live view (skeleton and needle) in the
+// Learn the cues practice panel. Kept free of DOM access so it can be
 // unit tested under node; app.js does the drawing.
 
 /** Needle value in [-1, 1] to an SVG rotate() transform about the dial centre (100, 100). */
@@ -14,7 +14,7 @@ export function needleTransform(needle) {
 /**
  * Which mini views to draw this frame. `needle === null` marks the silent
  * test, when the mini views stay frozen. Each view is drawn only while its
- * panel is open: `open` maps a view name ("practice", "setup") to a boolean.
+ * panel is open: `open` maps a view name (such as "practice") to a boolean.
  */
 export function miniViewsToDraw(names, open, needle) {
   if (needle === null || needle === undefined) return [];

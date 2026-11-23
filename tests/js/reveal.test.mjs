@@ -114,27 +114,13 @@ test("R2: time spent paused does not count toward stage 3", () => {
   assert.equal(r.stage, STAGES.settled);
 });
 
-test("R4: a returning user jumps to stage 4 at settle, not before", () => {
-  const r = new RevealStages({ returning: true });
-  run(r, WAIT, 0, 30);
-  assert.equal(r.stage, STAGES.tracking);
-  run(r, OK, 30, REVEAL.settle_s + 1);
-  assert.equal(r.stage, STAGES.comfortable);
-});
-
-test("R4: a seasoned returning user sees everything at settle", () => {
-  const r = new RevealStages({ returning: true, seasoned: true });
-  run(r, OK, 0, REVEAL.settle_s + 1);
-  assert.equal(r.stage, STAGES.returning);
-});
-
 test("R4: revealAll and forceAll give stage 5 and stay there", () => {
-  assert.equal(new RevealStages({ revealAll: true }).stage, STAGES.returning);
+  assert.equal(new RevealStages({ revealAll: true }).stage, STAGES.all);
   const r = new RevealStages();
   assert.equal(r.forceAll().changed, true);
   assert.equal(r.forceAll().changed, false);
   run(r, NONE, 0, 10);
-  assert.equal(r.stage, STAGES.returning);
+  assert.equal(r.stage, STAGES.all);
 });
 
 test("R5: a scaled clock (clockScale 600) reaches stage 4 in a few real seconds", () => {

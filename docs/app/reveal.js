@@ -7,14 +7,17 @@
 // already stops while paused, in a silent test or in practice and which `?clockScale`
 // speeds up, so the reveal timers follow the prompt timers.
 
-/** Stage numbers. Higher stages show more panels; a stage never goes back down. */
+/** Stage numbers. Higher stages show more panels; a stage never goes back down.
+ *  The app shows stages 0 to 2 on its own. Stages 3 and 4 are still computed from
+ *  tracked time, but app.js caps what it shows at settled: optional panels open only
+ *  from Explore more. Stage 5 is "Show all settings". */
 export const STAGES = Object.freeze({
   idle: 0, // before tracking: stage, Start buttons, walkthrough, Help
   tracking: 1, // first scored frame: "This session"
-  settled: 2, // posture is good or slouch for settle_s: needle, tiles
-  configured: 3, // config_s of tracking: reminders and calibration
-  comfortable: 4, // comfortable_s of tracking (the prompt quiet period): breaks, relax, test
-  returning: 5, // everything: a later session, or "Show all settings"
+  settled: 2, // posture is good or slouch for settle_s: needle, Explore more
+  configured: 3, // config_s of tracking: reminders and calibration (data-stage only)
+  comfortable: 4, // comfortable_s of tracking: breaks, relax, test (data-stage only)
+  all: 5, // everything: "Show all settings"
 });
 
 export const REVEAL = Object.freeze({
@@ -25,16 +28,10 @@ export const REVEAL = Object.freeze({
 });
 
 export class RevealStages {
-  /**
-   * @param {{returning?: boolean, seasoned?: boolean, revealAll?: boolean, cfg?: object}} [opts]
-   *   returning: this user finished a first run before, so settle jumps to stage 4.
-   *   seasoned: returning and at least two earlier sessions, so settle jumps to stage 5.
-   */
-  constructor({ returning = false, seasoned = false, revealAll = false, cfg = REVEAL } = {}) {
+  /** @param {{revealAll?: boolean, cfg?: object}} [opts] */
+  constructor({ revealAll = false, cfg = REVEAL } = {}) {
     this.cfg = cfg;
-    this.returning = returning;
-    this.seasoned = seasoned;
-    this.stage = revealAll ? STAGES.returning : STAGES.idle;
+    this.stage = revealAll ? STAGES.all : STAGES.idle;
     this.tracked = 0; // seconds of running tracking since the first scored frame
     this.settled = false;
     this._holdStart = null;
@@ -72,8 +69,8 @@ export class RevealStages {
 
   /** "Show all settings": everything, now. */
   forceAll() {
-    const changed = this.stage !== STAGES.returning;
-    this.stage = STAGES.returning;
+    const changed = this.stage !== STAGES.all;
+    this.stage = STAGES.all;
     return { stage: this.stage, changed };
   }
 
@@ -93,10 +90,8 @@ export class RevealStages {
   }
 
   _target() {
-    if (this.seasoned) return STAGES.returning;
-    let t = STAGES.settled;
-    if (this.tracked >= this.cfg.comfortable_s) t = STAGES.comfortable;
-    else if (this.tracked >= this.cfg.config_s) t = STAGES.configured;
-    return this.returning ? Math.max(t, STAGES.comfortable) : t;
+    if (this.tracked >= this.cfg.comfortable_s) return STAGES.comfortable;
+    if (this.tracked >= this.cfg.config_s) return STAGES.configured;
+    return STAGES.settled;
   }
 }

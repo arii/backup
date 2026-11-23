@@ -32,11 +32,15 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     with the scaled clock; persist `store.revealAll`.
   - Check at 320 px, in the demo, on the MoveNet fallback and after `stopCamera`.
   - Built in FEAT-003. Measured with `tests/e2e/measure-load.mjs`: at stage 2, 0 visible
-    checkboxes and 76 words below the stage (baseline 10 and about 820). The stage 5 "next
-    session" rule: `returning` jumps to stage 4 at settle, `seasoned` (returning with two or
-    more earlier sessions) jumps to stage 5. Settings groups are closed `<details data-group>`;
-    Show all settings opens them. e2e seeds `revealAll` and `setupDone` (task 8 seeds done for
-    `live-site.mjs`; `capture.mjs` still open).
+    checkboxes and 76 words below the stage (baseline 10 and about 820). e2e seeds `revealAll`
+    and `setupDone` (task 8 seeds done for `live-site.mjs`; `capture.mjs` still open).
+  - Changed by #81: automatic stages are 0 to 2 only. *Explore more* (three choices, stored in
+    `store.explored`) and *Show all settings* open the rest. #86 removed the unreachable
+    `returning`/`seasoned` jumps and the "Added: …" notes for stages 3 to 5.
+  - Changed by #90: no `<details>` in `<main>`; settings are flat with short labels, panel
+    explanations moved to Help, "Not working?" shows only when needed and has no mini view,
+    and the fix box is hidden while posture is good. e2e checks at most 25 words at stage 2
+    and 200 after *Explore more*, with no visible `summary`.
   - _Requirements: 3.1, 4, 11_
 - [x] 4. Progressive setup with "Skip all"
   - Extend `FIRST_RUN` with style, voice, breaks and shoulders steps; delay to stage 2;
@@ -45,7 +49,9 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     (skip all grants no consent, enables nothing off by default).
   - Update "Delete my data" to clear `store.setup`, `store.water`, `store.breathIntroShown`.
   - Built in FEAT-004. Steps: framing, calibrate (stage 2), style, voice (stage 3), breaks,
-    shoulders, done (stage 4). Cards drive the real controls (one write path). `skipAll`
+    shoulders, done (stage 4). Changed by #81: the automatic sequence is framing, calibrate
+    (good posture only) and done; style, voice, breaks and shoulders are `optional` and open
+    only from the header *Personalize* button. Cards drive the real controls (one write path). `skipAll`
     marks the open steps skipped so the header "Set up" button can reopen them. The privacy
     page lists setup progress and the water count (water arrives in task 7).
   - _Requirements: 5, 9.3_

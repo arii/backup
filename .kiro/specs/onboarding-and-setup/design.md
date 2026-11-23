@@ -54,14 +54,21 @@ target metric id (`head_forward`, `head_tilt`, `shoulder_level`, `trunk_lean`, f
 tile via the existing metric render path. "Next" is manual.
 
 ## Live mini view
-The stage is hidden behind the start overlay during onboarding and the needle panel
-sits in the other column, so instructions alone are hard to follow. The practice panel
-and the "Not working?" panel each hold a `.mini-view`: a 160x120 canvas (mirrored with
+The needle panel sits in the other column, so practice instructions alone are hard to
+follow. The practice panel holds a `.mini-view`: a 160x120 canvas (mirrored with
 CSS like the stage) and a small SVG gauge with the same arcs as the main needle.
 `renderMiniViews` in `app.js` runs from `render()`, reuses `drawSkeleton` (parameterised
 by canvas, context and scale) and the same `rotate((needle + 1) * 90)` transform. It
-draws only while its panel is visible and never during the silent test
+draws only while practice runs and never during the silent test
 (`body.testing .mini-view` is hidden and the needle value is withheld).
+The "Not working?" panel had a second mini view until #90 removed it: it copied the
+stage and the needle panel and was the "duplicate skeleton" users found confusing.
+
+## "Not working?" visibility
+`app.js` keeps a set of reasons (`setupWhy`): `start` (a slow hint, a failed or stopped
+start, no WebGL), `fixes` (the setup check has fixes), `asked` (Help → *Not working?*)
+and `practice` (the *Try a breath check* offer after Learn the cues). The panel is shown
+while the set is not empty. A successful start clears `start`.
 
 ## Correctness properties
 - **P1 persistence**: for any frame sequence where a fault lasts less than `persist_s`,

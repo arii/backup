@@ -42,9 +42,7 @@ export function withdrawConsent(store) {
 
 /** One line for the settings panel. */
 export function consentStatus(store) {
-  return hasConsent(store)
-    ? `Turned on ${store.consent.at.slice(0, 10)}. Shoulder and breathing features are available.`
-    : "Off. Breath check, Breathe with me, breathing moments and shoulder reminders need your OK first.";
+  return hasConsent(store) ? `On since ${store.consent.at.slice(0, 10)}.` : "Off. Needs your OK first.";
 }
 
 // -- Consent to share a weekly score by link (progress-review requirement 6.1). Separate

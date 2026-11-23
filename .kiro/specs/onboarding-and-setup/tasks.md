@@ -9,20 +9,25 @@ Unchecked items are **spec only**.
     Tests: `tests/js/onboarding.test.mjs` (each diagnosis, persistence delay, priority,
     NON_FINITE hold, ack versioning).
   - _Requirements: 1.6, 3_
-- [x] 2. Walkthrough card in `#start-overlay`
-  - Three steps, "I understand" writes `ackVersion` and `onboarded`. Start buttons keep
-    their ids.
+- [x] 2. Walkthrough card in `#start-overlay` (superseded by #81: one welcome card with the
+  safety notice on demand)
+  - "I understand" writes `ackVersion` and `onboarded`. Start buttons keep their ids.
   - _Requirements: 1, 7.1_
-- [x] 3. Help button and replay
+- [x] 3. Help button and dialog
+  - Welcome text, a "Good to know" list (the panel explanations moved there in #90),
+    *Learn the cues* and *Not working?*.
   - _Requirements: 2_
 - [x] 4. "Not working?" panel
-  - Checklist from `SetupCheck`, existing WebGL help and `#report-bug`.
+  - Checklist from `SetupCheck`, *Learn the cues*, *Show the intro again* and Report a bug.
+    Since #90 it shows only when there is something to fix, a start step is slow or
+    failed, or the user asks for it in Help.
   - _Requirements: 4_
 - [x] 5. "Learn the cues" practice mode
   - Silent gating shared with the retention test.
   - _Requirements: 5_
-- [x] 5a. Live mini skeleton and needle in the practice and "Not working?" panels
+- [x] 5a. Live mini skeleton and needle in the practice panel
   - `renderMiniViews`, `.mini-view`; e2e asserts the canvas is drawn and the needle moves in the demo.
+    The "Not working?" copy was removed in #90.
   - _Requirements: 5a_
 - [x] 6. Accessibility pass
   - Labels, focus states, `aria-live`, Escape handling, 375 px, reduced motion.

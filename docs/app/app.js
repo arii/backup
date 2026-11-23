@@ -113,7 +113,6 @@ import {
 import {
   completeStep,
   nextSetupStep,
-  ONBOARDING_VERSION,
   reopenSetupStep,
   SETUP_STEPS,
   setupProgress,
@@ -425,7 +424,7 @@ function refreshVoices() {
   pick.value = sel;
   const best = voices[0];
   $("voice-note").textContent = sel.startsWith(KOKORO)
-    ? "Recorded natural voice (Kokoro). A custom spoken prompt uses your browser's voice."
+    ? "Recorded natural voice (Kokoro)."
     : !voices.length
       ? "No voice available in this browser."
       : best && voiceScore(best, lang) <= 0
@@ -1639,9 +1638,10 @@ function renderTest() {
         : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`,
     );
   } else {
-    parts.push("No silent tests yet. Take one now for a baseline, then again after a few days of coaching.");
+    parts.push("No silent tests yet.");
   }
-  if (coached.good + coached.bad > 0) parts.push(`With coaching: <b>${pctOf(coached)}%</b> good`);
+  // The coached figure is a comparison, so it waits for a first silent test.
+  if (tests.length && coached.good + coached.bad > 0) parts.push(`With coaching: <b>${pctOf(coached)}%</b> good`);
   $("test-compare").innerHTML = parts.join(" &middot; ");
 }
 
@@ -1733,9 +1733,6 @@ function renderStats() {
   $("good-bar").style.width = `${pct ?? 0}%`;
   $("best-streak").textContent = mmss(session.best);
   $("reminder-count").textContent = String(reminderCount);
-  $("breaks-count").textContent = String(breaksTakenToday());
-  const day = store.days[todayKey()];
-  $("today").textContent = day ? `${mmss(day.good)} good, ${mmss(day.bad)} slouched` : "nothing tracked yet";
 }
 
 // -- rendering ----------------------------------------------------------------
@@ -1827,7 +1824,7 @@ function causeFor(result, landmarks) {
 }
 
 /** The "what to fix" box: shown while a reminder is active or a metric is past
- *  its threshold; quiet (and green) when posture is good. */
+ *  its threshold. Hidden while posture is good: the needle label already says so. */
 function renderFix(state, result, cue, hold, heldLabel = "") {
   const box = $("fix-box");
   const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
@@ -1845,9 +1842,8 @@ function renderFix(state, result, cue, hold, heldLabel = "") {
     title = "Almost there";
     cls = "active"; // the hold bar shows how long is left
   } else if (state === State.GOOD) {
-    title = "Looking good";
-    how = "Stay soft: shoulders heavy, breathing easy.";
-    cls = "ok";
+    title = "";
+    cls = "quiet";
   } else {
     title = "What to fix shows up here";
   }
@@ -1881,15 +1877,15 @@ function renderHold(hold) {
   bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
 }
 
-// Compact live views inside the practice and setup panels, so the skeleton and
-// needle sit next to the instructions. Hidden and skipped during the silent test.
-const MINI_VIEWS = ["practice", "setup"].map((pre) => {
+// Compact live view inside the practice panel, so the skeleton and needle sit
+// next to the instructions. Hidden and skipped during the silent test.
+const MINI_VIEWS = ["practice"].map((pre) => {
   const cv = $(`${pre}-mini-canvas`);
   return { pre, cv, c: cv.getContext("2d"), rotor: $(`${pre}-needle-rotor`), root: $(`${pre}-mini`) };
 });
 
 function renderMiniViews(landmarks, color, needle) {
-  const open = { practice: !!practice, setup: $("setup-panel").open };
+  const open = { practice: !!practice };
   const draw = new Set(
     miniViewsToDraw(
       MINI_VIEWS.map((m) => m.pre),
@@ -2097,23 +2093,12 @@ document.addEventListener("keydown", (e) => {
 // they leave the tab order). RevealStages (reveal.js) decides the stage from tracking
 // time on the prompt clock, so ?clockScale speeds it up too. A stage never goes back
 // down internally; only the first two stages are automatic. Optional panels need
-// an explicit choice, even on repeat visits. Every element stays in the
-// DOM, so settings renderers and tests keep working on hidden panels.
+// an explicit choice (Explore more or Show all settings), even on repeat visits.
+// Every element stays in the DOM, so settings renderers and tests keep working on
+// hidden panels. Stages are not announced: the panels appearing is the news.
 
-const REVEAL_ADDED = {
-  1: "this session",
-  2: "posture needle",
-  3: "reminders and sounds, calibration",
-  4: "breaks, breathing, silent test",
-  5: "progress, offline mode, share",
-};
-const reveal = (() => {
-  const returning = Number(store.onboarded) >= ONBOARDING_VERSION && !!store.firstRunDone;
-  const sessions = Number(store.usage?.sessions) || 0;
-  return new RevealStages({ returning, seasoned: returning && sessions >= 2 });
-})();
+const reveal = new RevealStages();
 const pinned = new Set(); // panels opened by hand (e.g. the first-run guide points at the test): never hidden again
-let shownStage = 0;
 let revealNoteTimer = null;
 
 function revealNote(text) {
@@ -2127,7 +2112,7 @@ function revealNote(text) {
 
 function currentStage() {
   // Time and repeat visits never opt someone into a more complicated workspace.
-  return store.revealAll ? STAGES.returning : Math.min(reveal.stage, STAGES.settled);
+  return store.revealAll ? STAGES.all : Math.min(reveal.stage, STAGES.settled);
 }
 
 function applyReveal() {
@@ -2151,7 +2136,7 @@ function pinPanel(id) {
 
 function revealStep(out) {
   const scored = out.result.kind === "scored";
-  const { stage, changed } = reveal.update(
+  const { changed } = reveal.update(
     {
       scored,
       present: scored && out.transition.state !== State.NO_PERSON,
@@ -2161,20 +2146,13 @@ function revealStep(out) {
     },
     pclock,
   );
-  if (!changed) return;
-  applyReveal();
-  if (store.revealAll || stage > STAGES.settled) return;
-  const added = [];
-  for (let s = shownStage + 1; s <= stage; s++) added.push(REVEAL_ADDED[s]);
-  shownStage = stage;
-  if (added.length) revealNote(`Added: ${added.join(", ")}`);
+  if (changed) applyReveal();
 }
 
 function setRevealAll(on) {
   store.revealAll = on;
   save();
   applyReveal();
-  for (const d of document.querySelectorAll("details[data-group], details.panel[data-stage]")) d.open = on;
   revealNote(on ? "Showing all settings" : "Page simplified");
 }
 $("reveal-all").addEventListener("click", () => setRevealAll(!store.revealAll));
@@ -2185,7 +2163,6 @@ for (const button of document.querySelectorAll("[data-explore]")) {
     save();
     applyReveal();
     const panel = $(ids[0]);
-    if (panel.tagName === "DETAILS") panel.open = true;
     panel.scrollIntoView({ block: "nearest" });
     panel.tabIndex = -1;
     panel.focus({ preventScroll: true });
@@ -2334,9 +2311,18 @@ function webglCanvas() {
   return null;
 }
 
-/** "Not working?" stays out of sight until tracking starts, fails or loads slowly. */
+// "Not working?" is shown only while something calls for it: a slow or failed start
+// ("start"), a fix from the setup check ("fixes"), the user asking for it in Help
+// ("asked"), or the message after Learn the cues ("practice"). Tracking that looks
+// good shows none of these, so the panel stays out of the way.
+const setupWhy = new Set();
+function setSetupReason(why, on) {
+  if (on) setupWhy.add(why);
+  else setupWhy.delete(why);
+  $("setup-panel").hidden = setupWhy.size === 0;
+}
 function showSetupPanel() {
-  $("setup-panel").hidden = false;
+  setSetupReason("start", true);
 }
 
 function showWebGLHelp(show) {
@@ -2578,7 +2564,7 @@ let loopsStarted = false;
 function begin(source) {
   $("source").textContent = source;
   document.body.classList.remove("pre-start"); // status, Pause and Show all settings appear now
-  showSetupPanel();
+  setSetupReason("start", false); // started: a slow or failed earlier attempt no longer applies
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
   $("lowpower-note").style.display = lowAccuracy ? "block" : "none";
@@ -2591,7 +2577,6 @@ function begin(source) {
   renderSetupButton();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
-  revealNote("Added: status, Pause, Not working? help, Show all settings");
   recordSession(store, Date.now());
   save();
   resetPromptSession();
@@ -3046,9 +3031,9 @@ $("intro-again").addEventListener("click", () => {
 });
 
 // -- onboarding, safety notice and help -----------------------------------------
-// First run: a three-step card in the start overlay (how it works, what you will
-// see and hear, safety notice). The Start buttons stay hidden until the notice is
-// acknowledged (store.ackVersion). Help replays it any time. Text lives in
+// First run: one welcome card in the start overlay, with the full safety notice on
+// demand. The Start buttons stay hidden until the notice is acknowledged
+// (store.ackVersion). Help shows the welcome again any time. Text lives in
 // onboarding.js; see .kiro/specs/onboarding-and-setup.
 
 const LAST_STEP = ONBOARDING_STEPS.length - 1;
@@ -3105,10 +3090,26 @@ showStartControls();
 // First visit: start keyboard focus on the card, so Tab reaches Next before the header controls.
 if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 
+// Explanations that used to sit in the panels (issue #90). The panels keep their
+// controls; the reasons behind them are one line each here.
+const HELP_NOTES = Object.freeze([
+  `Reminder after ${DEFAULTS.state.bad_sustain_s} s of slouching, voice ${DEFAULTS.state.voice_delay_s} s later. ` +
+    "Praise comes when you recover, then less often the longer you hold it.",
+  "Break prompts come one at a time: none in the first 5 minutes, at most one every 10 minutes, none while paused or testing.",
+  "Leaving the camera for 2 minutes or more counts as a break and is not scored.",
+  "Chime only still speaks the breath-check lines. Silent mutes everything.",
+  "Light coaching plays a chime before any voice and praises only at milestones. Test me shows whether the habit sticks.",
+  "Test me is a silent check with no sounds, banners, needle or hints, so it measures your own habit. " +
+    "Take one for a baseline, then again after a few days of coaching.",
+  "A custom spoken prompt uses your browser's voice, not the recorded one.",
+  "Progress is stored only in this browser and counted by your local day.",
+  "The offline copy downloads only when you ask and holds app files, never video. Remove offline copy or Delete my data deletes it.",
+]);
+
 function openHelp() {
   const body = $("help-body");
   body.replaceChildren();
-  for (const step of ONBOARDING_STEPS) {
+  for (const step of [...ONBOARDING_STEPS, { title: "Good to know", points: HELP_NOTES }]) {
     const h = document.createElement("h3");
     h.textContent = step.title;
     const ul = document.createElement("ul");
@@ -3122,10 +3123,9 @@ $("help-btn").addEventListener("click", openHelp);
 $("help-close").addEventListener("click", () => $("help-dialog").close());
 $("help-notworking").addEventListener("click", () => {
   $("help-dialog").close();
-  showSetupPanel();
-  $("setup-panel").open = true;
+  setSetupReason("asked", true);
   $("setup-panel").scrollIntoView({ block: "nearest" });
-  $("setup-panel").querySelector("summary").focus();
+  $("setup-title").focus();
 });
 $("help-practice").addEventListener("click", () => {
   const msg = startPractice();
@@ -3165,7 +3165,7 @@ function renderSetup({ diagnosis, fixes }) {
   status.textContent = DIAGNOSIS_TEXT[diagnosis];
   status.className = diagnosis === Diagnosis.OK ? "ok" : diagnosis === Diagnosis.CHECKING ? "" : "fault";
   fillList($("setup-fixes"), fixes);
-  if (fixes.length) $("setup-panel").open = true;
+  setSetupReason("fixes", fixes.length > 0);
 }
 
 // -- learn the cues (practice) ---------------------------------------------------------
@@ -3253,6 +3253,7 @@ $("practice-next").addEventListener("click", () => {
     stopPractice();
     $("practice-msg").textContent = "Practice finished. Want to try a breath check next?";
     $("practice-breath").hidden = false;
+    setSetupReason("practice", true); // the offer lives in this panel
     return;
   }
   practice.i += 1;
@@ -3265,6 +3266,7 @@ $("practice-stop").addEventListener("click", () => {
 $("practice-breath").addEventListener("click", () => {
   $("practice-breath").hidden = true;
   $("practice-msg").textContent = "";
+  setSetupReason("practice", false);
   startBreathCheck();
 });
 
@@ -3279,9 +3281,7 @@ const minutesText = (s) =>
 function renderProgress() {
   lastProgressRender = Date.now();
   const s = summarize(store, Date.now());
-  $("progress-empty").textContent = s.empty
-    ? "Nothing tracked yet. Your progress will appear after your first session."
-    : "";
+  $("progress-empty").textContent = s.empty ? "Nothing tracked yet." : "";
   const days = $("progress-days");
   days.hidden = s.empty;
   days.replaceChildren(
@@ -3443,7 +3443,7 @@ function renderPeer(week) {
   $("share-weekly").checked = on;
   $("share-weekly-status").textContent = on
     ? `On since ${store.shareConsent.at.slice(0, 10)}. Find it under Your progress. Untick to switch off.`
-    : "Off. Nothing is shared and the share section stays hidden.";
+    : "Off. Nothing is shared.";
   if (!on) return;
   if (document.activeElement !== $("peer-nickname")) $("peer-nickname").value = store.shareNickname || "";
   const rec = currentPeerRecord(week, $("peer-nickname").value);

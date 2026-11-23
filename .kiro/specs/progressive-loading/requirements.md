@@ -113,26 +113,25 @@ becomes useful.
 #### Acceptance Criteria
 1. THE App SHALL define reveal stages in a pure module `docs/app/reveal.js` (injected clock, no DOM, tested):
    - **Stage 0, before tracking:** stage, Start buttons, walkthrough, Help.
-   - **Stage 1, tracking running** (first scored frame): "This session" summary, state badge, fps, Pause.
-   - **Stage 2, settled** (state is good or slouch, not "settling in", for 10 s of scored frames): posture needle, "What to fix" box, tiles, and the setup steps of Requirement 5.
-   - **Stage 3, 2 minutes of tracking with no setup error:** "Reminders & sounds" and "Calibrate to your desk".
-   - **Stage 4, 5 minutes (the prompt quiet period ends) or on the first prompt:** "Breaks & prompts", "Relax, don't brace", the wellness menu, "Test me".
-   - **Stage 5, after first session ends or on the second visit:** "Your progress", "Offline mode", Share, Sponsor card.
-2. A returning user (`store.onboarded >= ONBOARDING_VERSION` and `store.firstRunDone`) SHALL jump to Stage 4 at settle and see all panels from the next visit's second session.
+   - **Stage 1, tracking running** (first scored frame): "This session" (one line: good % and best streak, plus the reminder count), state badge, Pause.
+   - **Stage 2, settled** (state is good or slouch, not "settling in", for 10 s of scored frames): posture needle, "What to fix" box (only while there is something to fix), *Explore more*, and the setup steps of Requirement 5.
+   - Stages 0 to 2 are the only automatic stages. Changed by #81: `RevealStages` still computes stages 3 and 4 from tracked time, but `currentStage()` in `app.js` caps what is shown at stage 2, so time alone never opens configuration or optional tools. Stage 5 means "everything" and is reached only through "Show all settings".
+2. *Explore more* (`#explore-panel`, shown from stage 2) SHALL offer three buttons directly in the panel, with no disclosure: *Breathing & breaks* (wellness menu, "Relax your shoulders"), *Adjust reminders* ("Reminders & sounds", "Your comfortable posture", "Breaks & prompts") and *Progress & offline* ("Your progress", "Test me", "Offline mode", "Share my weekly score", the header Share button). A choice SHALL be stored in `store.explored` (panel ids) and SHALL survive a reload. (Replaces the returning-user jumps to stage 4 and 5, removed in #81 and #86.)
 3. THE page SHALL include a persistent "Show all settings" button. Pressing it SHALL reveal everything, set `store.revealAll = true`, and be reversible ("Simplify the page").
 4. Hidden panels SHALL use the `hidden` attribute (out of the tab order and the accessibility tree), not just CSS opacity.
-5. WHEN a stage reveals, THE App SHALL announce it once in a `role="status"` line (for example, "Added: reminders and sounds") and SHALL NOT move focus, except when the user pressed the control that triggered it.
+5. WHEN a stage reveals, THE App SHALL NOT announce it in `#reveal-note` and SHALL NOT move focus, except when the user pressed the control that triggered it. (Changed by #90: the "Added: …" note was removed. `#reveal-note` still confirms user actions such as "Showing all settings".)
 6. A panel the user opened by hand (Help, "Not working?", Show all settings) SHALL stay revealed for the session. Reveals SHALL never hide something already shown during the session.
 7. IF the user pauses, switches to a silent test, or tracking stops (`stopCamera`), THEN the stage SHALL not go backward, and SHALL not advance during a pause or test.
 8. THE ids of all existing controls SHALL NOT change (`#start-camera`, `#start-demo`, `#test-start`, `#breath-check`, and the e2e ids). Hidden controls SHALL still exist in the DOM so `setTrackingControls`, `renderPromptSettings` and the e2e script keep working.
 9. THE settings checkbox count visible at the end of Stage 2 SHALL be at most 2, and visible words below the stage at most 150. (Baseline: 10 and about 840.)
+10. THE main screen (`<main>`) SHALL have no `<details>`/`<summary>` outside the start overlay. Each panel SHALL have a heading, its controls with labels of at most 8 words, and at most one status or safety line of at most 12 words; exercise safety lines (stop if it hurts, stop if dizzy) stay, one line each. Explanations go to the Help dialog. In the staged demo while posture is good, at most 25 visible words below the stage at stage 2, and at most 200 after all three *Explore more* choices, the guide card excluded. (Added by #90.)
 
 ### Requirement 5: Progressive configuration with "skip all"
 **User Story:** As a user, I want to set things up one small step at a time, and skip
 all of it if I want.
 
 #### Acceptance Criteria
-1. THE App SHALL extend the existing first-run guide (`FIRST_RUN`, `#first-run`) into a "Set up as you go" sequence. Each step is one card with one idea, shown after its reveal stage: (1) framing check (built), (2) calibrate good and slouch (built), (3) reminder style (Chime + voice, Chime only, Silent; and "say what to fix"), (4) sound pack and voice, (5) breaks: eye, move, stretch, water, (6) shoulder and breathing features (the consent step, Requirement 6).
+1. THE App SHALL extend the existing first-run guide (`FIRST_RUN`, `#first-run`) into a "Set up as you go" sequence (`SETUP_STEPS` in `onboarding.js`). The automatic sequence, from stage 2, has three cards: (1) *Get comfortable* (framing check), (2) "Save my comfortable posture" (good posture only, no slouch recording), (3) *You're ready*. The steps (4) reminder style, (5) sound pack and voice, (6) breaks and (7) shoulder and breathing features (the consent step, Requirement 6) are `optional: true`: they never open on their own and are reached only from the header *Personalize* button (`#setup-btn`). (Changed by #81; before, six steps opened by stage.)
 2. EVERY card SHALL have **Skip this step** and a persistent **Skip all, use defaults** button. Skip all SHALL set `store.setupDone = true`, close the sequence, keep the defaults in `settings.js`, and SHALL NOT enable anything that is off by default (breathing moments, spoken praise, water reminders) and SHALL NOT record consent.
 3. A skipped step SHALL be marked skipped, not done, and SHALL be available from a "Set up" button in the header (next to Help) and under "Show all settings".
 4. Steps SHALL appear only while posture is good or settling, never during a posture reminder, pause, silent test or practice. The sequence waits, it does not queue behind the prompt scheduler.

@@ -393,7 +393,7 @@ try {
         t: performance.now() / 1000,
         banner: document.getElementById("banner").classList.contains("show"),
         count: Number(document.getElementById("reminder-count").textContent),
-        today: document.getElementById("today").textContent,
+        today: JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").days || {}),
         badge: document.getElementById("state-badge").textContent,
         fixActive: document.getElementById("fix-box").classList.contains("active"),
       }));
@@ -897,8 +897,10 @@ try {
       bannerLive: document.getElementById("banner").getAttribute("aria-live"),
       badLabel: document.querySelector('label[for="bad-file"]')?.textContent,
       goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
-      mode: /Chime only still speaks/.test(document.getElementById("mode-note").textContent),
     }));
+    await page.click("#help-btn");
+    pre.mode = /Chime only still speaks/.test(await page.textContent("#help-body"));
+    await page.click("#help-close");
     check(
       "controls: breath check and record buttons are disabled before start, with a tooltip",
       pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip),
@@ -906,7 +908,7 @@ try {
     );
     check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
     check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
-    check("chime-only note explains breath lines", pre.mode, pre);
+    check("chime-only note explains breath lines (in Help)", pre.mode, pre);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
     const post = await page.evaluate(() => ({
@@ -954,7 +956,8 @@ try {
       flag: JSON.parse(localStorage.getItem("posture-guard:v1")).firstRunDone === true,
     }));
     check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
-    await page.click("#setup-panel summary");
+    await page.click("#help-btn");
+    await page.click("#help-notworking");
     await page.click("#intro-again");
     check(
       "first run: Show the intro again reopens it",
@@ -1003,22 +1006,30 @@ try {
       timeout: 20000,
     });
     check("not working: the demo reports that tracking looks good", true);
-    await page.click("#setup-panel summary");
     await page.waitForTimeout(500);
-    const sm = await page.evaluate(() => {
-      const cv = document.getElementById("setup-mini-canvas");
-      return {
-        w: cv.clientWidth,
-        rotor: !!document.getElementById("setup-needle-rotor"),
-        ink: cv.width
-          ? cv
-              .getContext("2d")
-              .getImageData(0, 0, cv.width, cv.height)
-              .data.some((v, k) => k % 4 === 3 && v > 0)
-          : false,
-      };
-    });
-    check("not working: the panel shows a live mini skeleton and needle", sm.w > 0 && sm.rotor && sm.ink, sm);
+    const sm = await page.evaluate(() => ({
+      hidden: document.getElementById("setup-panel").hidden,
+      mini: document.querySelectorAll("#setup-panel .mini-view").length,
+      cameraTip: /arm.s length|Light in front/i.test(document.getElementById("setup-panel").textContent),
+    }));
+    check(
+      "not working: hidden while tracking looks good, with no mini view or camera tips",
+      sm.hidden && sm.mini === 0 && !sm.cameraTip,
+      sm,
+    );
+    await page.click("#help-btn");
+    await page.click("#help-notworking");
+    const asked = await page.evaluate(() => ({
+      shown: !document.getElementById("setup-panel").hidden,
+      focus: document.activeElement?.id,
+      actions: ["practice-start", "intro-again"].every((id) => !!document.getElementById(id).offsetParent),
+      bug: !!document.querySelector("#setup-panel .report-bug-link"),
+    }));
+    check(
+      "not working: Help shows it with Learn the cues, Show the intro again and Report a bug",
+      asked.shown && asked.focus === "setup-title" && asked.actions && asked.bug,
+      asked,
+    );
     await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
     check("not working: no page errors", errors.length === 0, errors);
     await page.close();
@@ -1079,13 +1090,13 @@ try {
     await page.click("#start-demo");
     await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
     const hold = await page.evaluate(() => ({
-      cls: document.getElementById("hold-bar").className,
-      text: document.getElementById("hold-text").textContent,
-      width: document.getElementById("hold-fill").style.width,
+      badge: document.getElementById("state-badge").textContent,
+      fixShown: !!document.getElementById("fix-box").offsetParent,
+      needle: document.getElementById("needle-text").textContent,
     }));
     check(
-      "hold bar fills toward the next praise",
-      hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0,
+      "coaching area while good: the needle and its label only, no fix-box or hold-bar text",
+      hold.badge === "good posture" && !hold.fixShown && /upright|drifting/.test(hold.needle),
       hold,
     );
     await page
@@ -2074,7 +2085,7 @@ try {
         timeout: 8000,
       });
       const note = await page.locator("#reveal-note").textContent();
-      check("staged reveal: stage 2 is announced once in #reveal-note", /Added: .*posture needle/.test(note), note);
+      check("staged reveal: stages are not announced in #reveal-note", !/Added/.test(note), note);
       check(
         "staged reveal: stage 2 does not show reminders yet",
         !(await shown(page, "#breaks-panel")) && !(await shown(page, "#progress-panel")),
@@ -2087,6 +2098,63 @@ try {
       check("staged reveal: at most 150 visible words below the stage at stage 2", d2.words <= 150, d2);
       await page.screenshot({ path: path.join(outDir, "reveal-stage2.png") });
       check("staged reveal: no errors through stage 2", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Issue #90: a text-light main screen. No disclosure arrows in <main>, and word caps
+    // below the stage (the guide card excluded, "Not working?" included), measured while
+    // the demo holds good posture.
+    {
+      const { page, errors } = await newPage(browser, {
+        staged: true,
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+      });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForSelector("#explore-panel:visible");
+      const light = () =>
+        page.evaluate(() => {
+          const vis = (e) => {
+            const r = e.getBoundingClientRect();
+            const st = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+          };
+          let words = 0;
+          let text = "";
+          const walker = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+          for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+            const p = t.parentElement;
+            if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || p.closest(".stage, #first-run") || !vis(p)) continue;
+            words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+            text += ` ${t.textContent.trim()}`;
+          }
+          return {
+            words,
+            summaries: [...document.querySelectorAll("main summary")].filter(vis).length,
+            text: text.replace(/\s+/g, " ").trim(),
+          };
+        });
+      const whileGood = async () => {
+        await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+          timeout: 60000,
+          polling: 50,
+        });
+        return light();
+      };
+      const d = await whileGood();
+      check("text-light: default screen has no disclosure arrows in <main>", d.summaries === 0, d);
+      check("text-light: default screen has at most 25 words below the stage", d.words <= 25, d);
+      for (const sel of [
+        '[data-explore^="break-menu"]',
+        '[data-explore^="reminders-panel"]',
+        '[data-explore^="progress-panel"]',
+      ])
+        await page.click(sel);
+      const e = await whileGood();
+      check("text-light: after Explore more, no disclosure arrows in <main>", e.summaries === 0, e);
+      check("text-light: after Explore more, at most 200 words below the stage", e.words <= 200, e);
+      await page.screenshot({ path: path.join(outDir, "text-light-explored.png"), fullPage: true });
+      check("text-light: no page errors", errors.length === 0, errors);
       await page.close();
     }
 
@@ -2121,7 +2189,6 @@ try {
           !(await shown(page, "#progress-panel")) &&
           !(await shown(page, "#reminders-panel")),
       );
-      await page.locator("#explore-panel summary").click();
       await page.click('[data-explore="break-menu relax-panel"]');
       check(
         "progressive onboarding: breathing and breaks open only when requested",
@@ -2156,8 +2223,8 @@ try {
       await page.goto(`${base}app/${bust}`);
       await page.click("#start-demo");
       check(
-        "staged reveal: after start, Show all settings and Not working? are offered",
-        (await shown(page, "#reveal-all")) && (await shown(page, "#setup-panel")),
+        "staged reveal: after start, Show all settings is offered and Not working? stays hidden",
+        (await shown(page, "#reveal-all")) && !(await shown(page, "#setup-panel")),
       );
       await page.click("#reveal-all");
       const all = await page.evaluate(() => ({
@@ -2165,14 +2232,14 @@ try {
         stored: JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll,
         label: document.getElementById("reveal-all").textContent.trim(),
         pressed: document.getElementById("reveal-all").getAttribute("aria-pressed"),
-        groupsOpen: [...document.querySelectorAll("details[data-group]")].every((d) => d.open),
+        noDetails: document.querySelectorAll("main details:not(#onboarding details)").length === 0,
       }));
       check(
         "staged reveal: Show all settings reveals every panel and persists",
         all.hiddenLeft === 0 && all.stored === true && all.label === "Simplify the page" && all.pressed === "true",
         all,
       );
-      check("staged reveal: Show all settings opens the settings groups", all.groupsOpen, all);
+      check("staged reveal: Show all settings leaves no settings behind a disclosure", all.noDetails, all);
       await page.setViewportSize({ width: 320, height: 640 });
       check(
         "staged reveal: no horizontal scroll at 320 px with everything shown",
@@ -2200,7 +2267,6 @@ try {
       check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
       await page.click("#start-demo");
       await page.waitForSelector("#explore-panel:visible");
-      await page.locator("#explore-panel summary").click();
       await page.click('[data-explore="reminders-panel calibration-panel breaks-panel"]');
       await page.waitForSelector("#breaks-panel:visible");
       check("staged reveal: no horizontal scroll at 320 px after exploring reminders", await fits());
@@ -2224,7 +2290,6 @@ try {
         "share reachable: Share and the weekly score stay hidden before Explore, even at a high clockScale",
         !(await shown(page, "#share-btn")) && !(await shown(page, "#weekly-panel")),
       );
-      await page.locator("#explore-panel summary").click();
       await page.click('[data-explore^="progress-panel"]');
       check(
         "share reachable: Progress & offline shows the header Share button and the weekly score panel",
