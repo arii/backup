@@ -2064,6 +2064,7 @@ function setSettingsOpen(open) {
   document.body.classList.toggle("settings-open", open);
   $("settings-btn").setAttribute("aria-expanded", String(open));
   if (open) {
+    lastUserAction = -Infinity; // only starts made from inside Settings count, not the ones before it
     renderProgress();
     window.scrollTo(0, 0);
     $("settings-title").focus();
