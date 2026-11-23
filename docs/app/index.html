@@ -49,8 +49,9 @@
   #settings-view { max-width: 1280px; margin: 0 auto; padding: 16px 20px; }
   .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .settings-head h2 { margin: 0; font-size: 20px; }
-  .settings-grid { columns: 2 340px; column-gap: 16px; }
-  .settings-grid > .panel { break-inside: avoid; }
+  /* A grid, not CSS columns: column balancing moved whole sections around whenever a
+     status line changed length (for example during a breath check). */
+  .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr)); gap: 0 16px; align-items: start; }
   .gauge { margin-bottom: 16px; }
   #session-line { margin-top: 12px; }
   body.practice-done #practice-panel { display: block; }
@@ -137,7 +138,7 @@
   .sound-row select { min-width: 0; padding: 5px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
   input[type=text] { width: 100%; padding: 7px 9px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
   .sound-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: center; margin-top: 8px; font-size: 14px; }
-  .sound-row input[type=file] { font-size: 12px; color: var(--muted); }
+  .sound-row input[type=file] { font-size: 12px; color: var(--muted); min-width: 0; }
   .score-bar { height: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin-top: 6px; }
   .score-bar div { height: 100%; width: 0; background: var(--good); transition: width 0.4s; }
   button:focus-visible, a:focus-visible, summary:focus-visible, select:focus-visible, input:focus-visible, #onboarding h3:focus-visible { outline: 2px solid #9ec5ff; outline-offset: 2px; }
