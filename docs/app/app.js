@@ -25,7 +25,7 @@ import { LoadSteps, downloadAll, nextPaint } from "./loading.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
-import { PromptScheduler } from "./prompts.js";
+import { PROMPTS, PromptScheduler } from "./prompts.js";
 import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
 import {
   DIAGNOSIS_TEXT,
@@ -3095,8 +3095,9 @@ if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 const HELP_NOTES = Object.freeze([
   `Reminder after ${DEFAULTS.state.bad_sustain_s} s of slouching, voice ${DEFAULTS.state.voice_delay_s} s later. ` +
     "Praise comes when you recover, then less often the longer you hold it.",
-  "Break prompts come one at a time: none in the first 5 minutes, at most one every 10 minutes, none while paused or testing.",
-  "Leaving the camera for 2 minutes or more counts as a break and is not scored.",
+  `Break prompts come one at a time: none in the first ${PROMPTS.first_quiet_s / 60} minutes, ` +
+    `at most one every ${PROMPTS.global_gap_s / 60} minutes, none while paused or testing.`,
+  `Leaving the camera for ${BREAKS.away_reset_s / 60} minutes or more counts as a break and is not scored.`,
   "Chime only still speaks the breath-check lines. Silent mutes everything.",
   "Light coaching plays a chime before any voice and praises only at milestones. Test me shows whether the habit sticks.",
   "Test me is a silent check with no sounds, banners, needle or hints, so it measures your own habit. " +
@@ -3127,6 +3128,15 @@ $("help-notworking").addEventListener("click", () => {
   $("setup-panel").scrollIntoView({ block: "nearest" });
   $("setup-title").focus();
 });
+// "Hide" puts away what the user opened by hand; a live fault or start problem keeps it shown.
+$("setup-close").addEventListener("click", () => {
+  setSetupReason("asked", false);
+  setSetupReason("practice", false);
+  $("practice-breath").hidden = true;
+  $("practice-msg").textContent = "";
+  if (!$("setup-panel").hidden) return;
+  $("help-btn").focus();
+});
 $("help-practice").addEventListener("click", () => {
   const msg = startPractice();
   $("help-msg").textContent = msg;
@@ -3150,7 +3160,8 @@ $("about-link").addEventListener("click", (e) => {
 $("about-close").addEventListener("click", () => $("about-dialog").close());
 // A slow camera, download or start also brings up the "Not working?" help.
 new MutationObserver(() => {
-  if ($("load-hint").textContent) showSetupPanel();
+  // Only while starting: a hint left over after tracking began is not a reason to show it.
+  if ($("load-hint").textContent && !loopsStarted) showSetupPanel();
 }).observe($("load-hint"), { childList: true, characterData: true, subtree: true });
 
 // -- setup check ("Not working?") ----------------------------------------------------
@@ -3190,6 +3201,7 @@ function startPractice() {
   if (practice) return "";
   if (!activity.start(ACTIVITY.PRACTICE, clockS())) return "Finish the current activity first.";
   $("practice-breath").hidden = true;
+  setSetupReason("practice", false); // a new practice replaces the old breath-check offer
   breath.cancel();
   stopSpeech();
   $("banner").classList.remove("show");

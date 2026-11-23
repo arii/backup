@@ -1030,6 +1030,36 @@ try {
       asked.shown && asked.focus === "setup-title" && asked.actions && asked.bug,
       asked,
     );
+    await page.click("#setup-close");
+    check(
+      "not working: Hide puts it away again while tracking looks good",
+      await page.evaluate(() => document.getElementById("setup-panel").hidden),
+    );
+    check("not working: no page errors while tracking", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 2d2. Not working? shows itself when the camera cannot start.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () =>
+        Promise.reject(Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }));
+    });
+    await page.goto(`${base}app/${bust}`);
+    check(
+      "not working: hidden before anything starts",
+      await page.evaluate(() => document.getElementById("setup-panel").hidden),
+    );
+    await page.click("#start-camera");
+    await page.waitForFunction(() => document.getElementById("start-error").textContent !== "", null, {
+      timeout: 30000,
+    });
+    check(
+      "not working: a blocked camera shows it",
+      await page.evaluate(() => !document.getElementById("setup-panel").hidden),
+    );
+    check("not working (blocked camera): no page errors", errors.length === 0, errors);
     await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
     check("not working: no page errors", errors.length === 0, errors);
     await page.close();
@@ -2129,17 +2159,20 @@ try {
             text += ` ${t.textContent.trim()}`;
           }
           return {
+            good: document.getElementById("state-badge").textContent === "good posture",
             words,
             summaries: [...document.querySelectorAll("main summary")].filter(vis).length,
             text: text.replace(/\s+/g, " ").trim(),
           };
         });
+      // Badge and words are read in the same evaluate, so a slouch cannot slip in between.
       const whileGood = async () => {
-        await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
-          timeout: 60000,
-          polling: 50,
-        });
-        return light();
+        for (let i = 0; i < 600; i++) {
+          const r = await light();
+          if (r.good) return r;
+          await page.waitForTimeout(100);
+        }
+        return { good: false };
       };
       const d = await whileGood();
       check("text-light: default screen has no disclosure arrows in <main>", d.summaries === 0, d);

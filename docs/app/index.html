@@ -104,10 +104,8 @@
   .fix.quiet { display: none; }
   .fix { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
   .fix.active { border-color: var(--warn); }
-  .fix.ok { border-color: var(--good); }
   .fix .fix-title { font-weight: 700; font-size: 16px; }
   .fix.active .fix-title { color: var(--warn); }
-  .fix.ok .fix-title { color: var(--good); }
   .fix .fix-how { color: var(--text); font-size: 14px; margin-top: 2px; }
   .fix .fix-how:empty { display: none; }
   /* Fill-on-hold bar: sweeps left to right while a posture is held. */
@@ -162,6 +160,8 @@
   details.panel[open] summary { margin-bottom: 8px; }
   details.group { margin-top: 10px; }
   details.group summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px 8px; font-weight: 400; }
+  .btn-row button.link { flex: 0 0 auto; }
   #reveal-all, #first-run-skip-all { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px 8px; }
   #reveal-note { color: var(--muted); font-size: 13px; }
   #reveal-note:empty { display: none; }
@@ -430,6 +430,7 @@
         <button class="secondary" id="practice-breath" hidden>Try a breath check</button>
         <button class="secondary" id="intro-again">Show the intro again</button>
         <a class="report-bug-link" href="https://github.com/arii/posture-guard/issues/new" target="_blank" rel="noopener" style="align-self:center;padding:3px 0">Report a bug</a>
+        <button class="link" id="setup-close">Hide</button>
       </div>
       <div class="note" id="practice-msg" aria-live="polite"></div>
     </section>
@@ -488,7 +489,7 @@
       <div class="stat">shoulders <b id="relax-shoulders">-</b></div>
       <div class="note" id="relax-status"></div>
       <div class="note" id="relax-safety">A gentle check, not a medical test. Stop if anything hurts.</div>
-      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Shoulder and breath-check reminders</label>
+      <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="relax-reminders" checked> Shoulder and breath-check reminders (asks first)</label>
     </div>
     <div class="panel coaching" id="breaks-panel" data-stage="4" hidden>
       <h2>Breaks &amp; prompts</h2>
@@ -509,7 +510,7 @@
         <option value="60">Every 60 minutes</option>
         <option value="90">Every 90 minutes</option>
       </select></div>
-      <label class="note" for="jaw-minutes" style="display:block;margin-top:6px">Jaw check</label>
+      <label class="note" for="jaw-minutes" style="display:block;margin-top:6px">Jaw check (reminder only)</label>
       <div class="modes"><select id="jaw-minutes">
         <option value="0" selected>Off</option>
         <option value="30">Every 30 minutes</option>
@@ -545,8 +546,8 @@
     <div class="panel" id="calibration-panel" data-stage="3" hidden>
       <h2>Your comfortable posture</h2>
       <div class="btn-row">
-        <button id="calib-good" disabled title="Start the webcam or demo first">Record good posture</button>
-        <button id="calib-bad" disabled title="Start the webcam or demo first">Record slouch posture</button>
+        <button id="calib-good" disabled title="Start the webcam or demo first">Record good</button>
+        <button id="calib-bad" disabled title="Start the webcam or demo first">Record slouch</button>
         <button id="calib-reset" class="secondary">Reset</button>
       </div>
       <div class="note" id="calib-status"></div>
