@@ -392,6 +392,7 @@ try {
     check(
       `gauge (${width} px, frame 05): slipping is amber everywhere, with an amber fill and no "Looking good"`,
       slipping.badgeColor === "amber" &&
+        slipping.badge === "slipping" &&
         slipping.label === "drifting" &&
         slipping.zone === "amber" &&
         slipping.skeleton === "amber" &&
@@ -1463,6 +1464,43 @@ try {
         seen,
       );
       check("upright person gets no reminder", seen.reminders === "0", seen);
+      // #97: on the webcam too, good posture shows a green skeleton, needle zone and label.
+      await page
+        .waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+          timeout: 20000,
+        })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+      const cam = await page.evaluate(() => {
+        const cv = document.getElementById("overlay");
+        const px = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+        let green = 0;
+        let other = 0;
+        for (let k = 0; k < px.length; k += 16) {
+          if (px[k + 3] < 200) continue;
+          if (px[k + 1] > 160 && px[k] < 120) green += 1;
+          else other += 1;
+        }
+        const deg = Number(
+          /rotate\(([-\d.]+)/.exec(document.getElementById("needle-rotor").getAttribute("transform"))?.[1],
+        );
+        return {
+          badge: document.getElementById("state-badge").textContent,
+          label: document.getElementById("needle-text").textContent,
+          deg,
+          green,
+          other,
+        };
+      });
+      check(
+        "webcam (#97): good posture shows a green skeleton, an upright label and a needle in green",
+        cam.badge === "good posture" &&
+          cam.label === "upright" &&
+          cam.deg < 60 &&
+          cam.green > 0 &&
+          cam.green >= cam.other,
+        cam,
+      );
     }
     check("webcam mode has no errors", errors.length === 0, errors);
     await page.close();

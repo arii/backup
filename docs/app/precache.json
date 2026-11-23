@@ -1,5 +1,5 @@
 {
-  "version": "59ceb9a335f28f74",
+  "version": "0a585c6c29407323",
   "totalBytes": 33426217,
   "files": [
     {
@@ -10,7 +10,7 @@
     {
       "url": "app.js",
       "size": 133967,
-      "sha256": "c6397516bde7f177946f4f4e8dc4d60db1edd01e209696f7baf699c8d11c8f07"
+      "sha256": "59f86c8fd376206e98fb200bc404135fd4f4b6bcee55fc0e5590b27bf3a660b5"
     },
     {
       "url": "breaks.js",

@@ -1836,7 +1836,7 @@ function renderBadge(transition, result, held, label, zone) {
       : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
   if (transition.state === State.GOOD && zone === "drift") {
-    badge.textContent = "drifting"; // amber with the needle and skeleton (frame 05, #98)
+    badge.textContent = "slipping"; // amber with the needle and skeleton (frame 05, #98)
     badge.className = "badge drift";
   }
   const settling = !test && !practice && !held && badge.textContent === "settling in";
