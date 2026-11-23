@@ -63,8 +63,9 @@ const DONE_INTRO =
   "Leave this tab open while you work. Pause any time. Move often and sit comfortably, not rigidly. " +
   "Breaks, sounds and progress are optional, under Settings. Help has Learn the cues and Not working?";
 
-/** The "Set up as you go" sequence. `stage` is the reveal stage (reveal.js) from which the card may
- *  appear on its own. Every choice can be changed later in the matching settings panel. */
+/** The first-session sequence. `stage` is the reveal stage (reveal.js) from which the card may
+ *  appear on its own. The optional style, voice, breaks and shoulders cards were replaced by
+ *  one unlock card per new Settings row (#96, storyboard v3 frame 07). */
 export const SETUP_STEPS = Object.freeze([
   {
     key: "framing",
@@ -80,36 +81,6 @@ export const SETUP_STEPS = Object.freeze([
       "Relax your shoulders and sit naturally. Save this position so reminders fit you. No need to pose perfectly.",
   },
   { key: "done", stage: 2, title: "You’re ready", intro: DONE_INTRO },
-  {
-    key: "style",
-    stage: 3,
-    optional: true,
-    title: "Reminder style",
-    intro: "Choose how BackUp tells you. You can change this under Reminders & sounds.",
-  },
-  {
-    key: "voice",
-    stage: 3,
-    optional: true,
-    title: "Voice and sounds",
-    intro: "Pick a voice and a sound pack, and listen to them. You can change this under Reminders & sounds.",
-  },
-  {
-    key: "breaks",
-    stage: 4,
-    optional: true,
-    title: "Breaks",
-    intro: "Short breaks are part of good posture. You can change this under Breaks & prompts.",
-  },
-  {
-    key: "shoulders",
-    stage: 4,
-    optional: true,
-    title: "Shoulders and breathing",
-    intro:
-      "BackUp can notice shoulders creeping up and offer a breath check. These features stay off until you agree " +
-      "to what they look at, and you can withdraw that any time in Settings, under Shoulders & breathing.",
-  },
 ]);
 
 const stepKeys = SETUP_STEPS.map((s) => s.key);

@@ -168,7 +168,7 @@ test("nextSetupStep waits for the reveal stage of each step", () => {
   assert.equal(nextSetupStep(store, 2), "done");
   completeStep(store, "done");
   assert.equal(nextSetupStep(store, 5), null, "settings never become automatic setup tasks");
-  assert.equal(reopenSetupStep(store), "style", "optional personalization remains reachable");
+  assert.equal(reopenSetupStep(store), null, "nothing optional is left in the sequence (#96)");
 });
 
 test("a skipped step is not offered again on its own but stays reachable", () => {
@@ -234,6 +234,6 @@ test("setupProgress ignores junk in the store", () => {
     skipped: ["framing"],
   });
   const store = {};
-  viewSetupStep(store, "style");
-  assert.equal(setupProgress(store).step, "style");
+  viewSetupStep(store, "done");
+  assert.equal(setupProgress(store).step, "done");
 });

@@ -8,6 +8,8 @@ say why in plain language and show the fix. This spec extends Requirement 8 (bro
 app) of `.kiro/specs/posture-guard/` and depends on `.kiro/specs/safety-and-disclaimers/`
 for the safety notice text.
 
+The #98 PRD (storyboard v3) is the source for the main screen, onboarding, Settings and landing page; where this spec disagrees, the PRD wins.
+
 Scope marker: untagged items are built. Items tagged
 **(spec only)** are designed and not built.
 
@@ -27,7 +29,7 @@ does and that it is safe to try before the camera turns on.
 7. THE ids `#start-camera`, `#start-demo`, `#test-start` and `#breath-check` SHALL NOT change.
 
 ### Requirement 2: Help
-1. THE App SHALL show a "Help" button in the header that opens the Help dialog (`#help-dialog`). It SHALL show the welcome text (with the short safety line) and the buttons *Learn the cues* and *Not working?*, and nothing else. (#92 removed the "Good to know" list that #90 had added: removed explanations are deleted, not moved.)
+1. THE App SHALL show a "Help" button in the header that opens the Help dialog (`#help-dialog`). It SHALL show the welcome text (with the short safety line) and the buttons *Learn the cues* and *Not working?*, and nothing else. Help is also the last row in Settings (#96). (#92 removed the "Good to know" list that #90 had added: removed explanations are deleted, not moved.)
 2. Opening Help SHALL NOT clear `store.ackVersion` and SHALL NOT interrupt a running session.
 
 ### Requirement 3: Setup check

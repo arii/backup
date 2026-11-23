@@ -16,7 +16,6 @@ import {
   PRAISE,
   RECOVERY_PRAISE,
   RELAX_LINES,
-  TEST_LINE,
   VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio, SHOULDER_OFF_REASON, shoulderChecksOn } from "./relax.js";
@@ -40,19 +39,7 @@ import {
   SetupCheck,
   shouldShowOnboarding,
 } from "./onboarding.js";
-import { consistencyScore } from "./consistency.js";
-import {
-  applyImport,
-  dayKeyFor,
-  exportJson,
-  IMPORT_MAX_BYTES,
-  migrateStore,
-  parseImport,
-  previewImport,
-  summarize,
-  summarizeWeeks,
-  tallyDay,
-} from "./progress.js";
+import { dayKeyFor, exportJson, migrateStore, summarize, tallyDay } from "./progress.js";
 import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText, toolSafety } from "./wellness.js";
 import {
   NEEDS_TRACKING_TIP,
@@ -64,35 +51,16 @@ import {
 } from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
 import {
-  META_URL,
-  CACHE_PREFIX,
-  cacheNameFor,
-  isOfflineReady,
-  offlineMessage,
-  offlineState,
-  progressPercent,
-} from "./offline.js";
-import {
   CONSENT_CHECKBOX,
   CONSENT_POINTS,
   CONSENT_TITLE,
-  consentStatus,
   hasConsent,
-  hasShareConsent,
   recordConsent,
-  recordShareConsent,
-  SHARE_CONSENT_CHECKBOX,
-  SHARE_CONSENT_POINTS,
-  SHARE_CONSENT_TITLE,
   withdrawConsent,
-  withdrawShareConsent,
 } from "./consent.js";
 import {
   SHARE_TEXT,
   cardAltText,
-  cleanNickname,
-  peerLink,
-  peerRecord,
   readPeerLink,
   drawScoreCard,
   nativeSharePayload,
@@ -114,22 +82,22 @@ import {
 import {
   completeStep,
   nextSetupStep,
-  reopenSetupStep,
   SETUP_STEPS,
   setupProgress,
   skipAll,
   skipStep,
   viewSetupStep,
 } from "./onboarding.js";
-import { RevealStages, STAGES } from "./reveal.js";
 import {
-  FeedbackPolicy,
-  MILESTONE_TEXT,
-  tabTitleFor,
-  normalizeLevel,
-  recordAnnoyance,
-  shouldSuggestLight,
-} from "./feedback.js";
+  nextUnlockCard,
+  RevealStages,
+  STAGES,
+  trackedDays,
+  trackedSecondsFromDays,
+  unlockLevel,
+  visibleRows,
+} from "./reveal.js";
+import { FeedbackPolicy, MILESTONE_TEXT, tabTitleFor, normalizeLevel, recordAnnoyance } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
@@ -203,78 +171,14 @@ const BREAK_STATES = new Set([ACTIVITY.EYE_BREAK, ACTIVITY.DEMO]);
 const canBegin = (replaceBreaks = false) =>
   activity.current === ACTIVITY.TRACKING || (replaceBreaks && BREAK_STATES.has(activity.current));
 const MODE_RANK = { chime_and_voice: 2, chime_only: 1, silent: 0 };
-document.querySelectorAll("input[name=mode]").forEach((el) => {
-  el.checked = el.value === settings.mode;
-  el.addEventListener("change", () => {
-    const quieter = MODE_RANK[el.value] < MODE_RANK[settings.mode];
-    settings.mode = el.value;
-    store.mode = el.value;
-    save();
-    if (quieter) noteAnnoyance(); // muting counts toward the Light suggestion
-  });
-});
-$("sound-pack").value = settings.soundPack;
-$("sound-pack").addEventListener("change", (e) => {
-  settings.soundPack = SOUND_PACKS[e.target.value] ? e.target.value : "clean";
-  store.soundPack = settings.soundPack;
-  save();
-  playBad(); // a preview of the new pack's reminder
-});
-$("specific-cues").checked = settings.specificCues;
-$("specific-cues").addEventListener("change", (e) => {
-  settings.specificCues = e.target.checked;
-  store.specificCues = settings.specificCues;
-  save();
-});
-$("spoken-praise").checked = settings.spokenPraise;
-$("spoken-praise").addEventListener("change", (e) => {
-  settings.spokenPraise = e.target.checked;
-  store.spokenPraise = settings.spokenPraise;
-  save();
-});
-$("voice-text").value = settings.voiceText;
-$("voice-text").addEventListener("change", (e) => {
-  settings.voiceText = e.target.value.trim() || DEFAULT_PROMPT;
-  store.voiceText = settings.voiceText;
-  save();
-});
-
 settings.coachingLevel = normalizeLevel(store.coachingLevel);
 const policy = new FeedbackPolicy(settings.coachingLevel);
-$("coaching-level").value = settings.coachingLevel;
-$("coaching-level").addEventListener("change", (e) => {
-  settings.coachingLevel = normalizeLevel(e.target.value);
-  policy.setLevel(settings.coachingLevel);
-  store.coachingLevel = settings.coachingLevel;
-  save();
-  renderLightSuggest();
-});
-
-// Repeated dismissals or mutes: suggest Light once, never switch on our own (feedback-design 7.4).
-function renderLightSuggest() {
-  const show = shouldSuggestLight({
-    level: settings.coachingLevel,
-    log: store.annoyLog,
-    declinedAtMs: store.lightSuggestDeclinedAt,
-    nowMs: Date.now(),
-  });
-  $("light-suggest").hidden = !show;
-}
+// Muting counts toward the Light suggestion (feedback-design 7.4); Light is now a fixed default
+// for whoever already chose it, so the log is kept but no suggestion is shown (#98 v3).
 function noteAnnoyance() {
   store.annoyLog = recordAnnoyance(store.annoyLog, Date.now());
   save();
-  renderLightSuggest();
 }
-$("light-suggest-yes").addEventListener("click", () => {
-  $("coaching-level").value = "light";
-  $("coaching-level").dispatchEvent(new Event("change"));
-});
-$("light-suggest-no").addEventListener("click", () => {
-  store.lightSuggestDeclinedAt = Date.now();
-  save();
-  renderLightSuggest();
-});
-renderLightSuggest();
 
 function allowed(nudge) {
   if (settings.mode === "silent") return false;
@@ -416,30 +320,11 @@ function refreshVoices() {
           .slice()
           .sort((a, b) => voiceScore(b, lang) - voiceScore(a, lang))
       : [];
-  const pick = $("voice-pick");
-  pick.replaceChildren();
-  for (const id of kokoroVoices()) pick.add(new Option(VOICES[id], KOKORO + id));
-  for (const v of voices) pick.add(new Option(`System: ${v.name} (${v.lang})`, v.name));
-  const sel = selectedVoice();
-  pick.value = sel;
-  const best = voices[0];
-  $("voice-note").textContent = sel.startsWith(KOKORO)
-    ? "Recorded natural voice (Kokoro)."
-    : !voices.length
-      ? "No voice available in this browser."
-      : best && voiceScore(best, lang) <= 0
-        ? "Only basic system voices are installed here, so they may sound robotic. Pick a natural voice above."
-        : `Using ${(chosenVoice() || best).name}.`;
 }
 if ("speechSynthesis" in window) {
   refreshVoices();
   window.speechSynthesis.addEventListener?.("voiceschanged", refreshVoices);
 }
-$("voice-pick").addEventListener("change", (e) => {
-  store.voiceName = e.target.value;
-  save();
-  refreshVoices();
-});
 
 function loadClip(url) {
   if (!clipCache.has(url)) {
@@ -508,67 +393,6 @@ const nextPraise = () => PRAISE[praiseIndex++ % PRAISE.length];
 let recoveryIndex = 0;
 const nextRecovery = () => RECOVERY_PRAISE[recoveryIndex++ % RECOVERY_PRAISE.length];
 
-async function decodeFile(file) {
-  const ac = ensureAudio();
-  return ac.decodeAudioData(await file.arrayBuffer());
-}
-
-async function restoreSound(kind) {
-  const dataUrl = store[`${kind}Sound`];
-  if (!dataUrl) return;
-  try {
-    // Decode the base64 payload directly: fetch(data:) is blocked by connect-src 'self'.
-    const bin = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    custom[kind] = await ensureAudio().decodeAudioData(bytes.buffer);
-  } catch {
-    delete store[`${kind}Sound`];
-    save();
-  }
-}
-
-for (const kind of ["bad", "good"]) {
-  $(`${kind}-file`).addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      custom[kind] = await decodeFile(file);
-      if (file.size < 1_500_000) {
-        // small enough to keep across reloads
-        store[`${kind}Sound`] = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(file);
-        });
-        save();
-      }
-    } catch (err) {
-      showError(`could not decode ${file.name}: ${err.message || err}`);
-    }
-  });
-}
-$("test-bad").addEventListener("click", () => playBad());
-$("test-voice").addEventListener("click", () => {
-  ensureAudio();
-  speak(TEST_LINE);
-});
-$("test-good").addEventListener("click", () => playGood());
-$("clear-sounds").addEventListener("click", () => {
-  custom.bad = custom.good = null;
-  delete store.badSound;
-  delete store.goodSound;
-  save();
-  $("bad-file").value = "";
-  $("good-file").value = "";
-});
-
-let notifyEnabled = false;
-$("notify").addEventListener("click", async () => {
-  if (!("Notification" in window)) return showError("notifications are not supported here");
-  notifyEnabled = (await Notification.requestPermission()) === "granted";
-  $("notify").textContent = notifyEnabled ? "Notifications on" : "Notifications blocked";
-});
-
 const BANNERS = {
   [Nudge.POSITIVE_CHIME]: "Nice posture!",
   [Nudge.RECOVERY]: "Back to good posture",
@@ -588,9 +412,9 @@ function reminderText(nudge, cue) {
 let episode = 0; // counts slouch episodes, for the coaching policy
 let lastBad = false;
 
-function showReminderNote(on) {
-  $("reminder-note").classList.toggle("show", on);
-}
+// The hourly reminder cap (feedback-design) still applies; its note went with the
+// Reminders & sounds panel (#98 v3), so there is nothing to show.
+function showReminderNote() {}
 
 function fire(nudge, cue) {
   const reminder = nudge === Nudge.CHIME || nudge === Nudge.VOICE;
@@ -634,33 +458,18 @@ function fire(nudge, cue) {
       );
     }
   }
-  if (notifyEnabled && document.hidden && reminder) {
-    new Notification("BackUp", { body: text, silent: true });
-  }
 }
 
 // -- calibration UI -----------------------------------------------------------
 
-$("calib-good").addEventListener("click", () => engine.calibration.start("good"));
-$("calib-bad").addEventListener("click", () => engine.calibration.start("bad"));
-$("calib-reset").addEventListener("click", () => {
-  engine.calibration.reset();
-  delete store.calibration;
-  save();
-});
-
+// "Save my posture again" (Settings) records the good posture; the first-run card does the
+// same. While it records, and once it is saved, a short line shows on the video.
+let calibWasActive = false;
 function renderCalibration() {
   const c = engine.calibration.status;
-  $("calib-error").textContent = c.error || "";
-  if (c.active) {
-    $("calib-status").textContent =
-      `Recording ${c.active === "bad" ? "slouch" : "good"} posture... hold still (${c.remaining_s.toFixed(1)} s)`;
-  } else if (c.good || c.bad) {
-    $("calib-status").textContent =
-      `good: ${c.good ? c.good_samples + " frames" : "not recorded"} \u00b7 slouch: ` +
-      `${c.bad ? c.bad_samples + " frames" : "not recorded"}` +
-      (c.calibrated ? " \u00b7 needle calibrated" : "");
-  }
+  if (c.active && !calibWasActive && !firstRun.open) showRelaxBanner("Hold still");
+  if (!c.active && calibWasActive && !firstRun.open) showRelaxBanner(c.error ? "Try again" : "Posture saved");
+  calibWasActive = !!c.active;
   if (engine.calibration.version !== savedCalVersion) {
     savedCalVersion = engine.calibration.version;
     if (c.good || c.bad) {
@@ -688,11 +497,6 @@ store.days = store.days || {};
 // itself does not need it.
 
 let consentThen = null; // runs after the user agrees
-function renderConsentStatus() {
-  $("consent-status").textContent = consentStatus(store);
-  $("consent-withdraw").hidden = !hasConsent(store);
-  $("consent-open").hidden = hasConsent(store);
-}
 /** True when consent exists. Otherwise opens the consent dialog and runs `then` after the user agrees. */
 function requireConsent(then) {
   if (hasConsent(store)) return true;
@@ -718,8 +522,7 @@ $("consent-agree").addEventListener("click", () => {
   recordConsent(store);
   save();
   $("consent-dialog").close();
-  renderConsentStatus();
-  renderPromptSettings();
+  renderRows();
   const then = consentThen;
   consentThen = null;
   if (then) then();
@@ -727,13 +530,13 @@ $("consent-agree").addEventListener("click", () => {
 $("consent-cancel").addEventListener("click", () => {
   consentThen = null;
   $("consent-dialog").close();
-  renderPromptSettings();
+  renderRows();
 });
 $("consent-dialog").addEventListener("close", () => {
-  if (!hasConsent(store)) renderPromptSettings();
+  if (!hasConsent(store)) renderRows();
 });
-$("consent-open").addEventListener("click", () => requireConsent(null));
-$("consent-withdraw").addEventListener("click", () => {
+/** Settings → Shoulders & breathing off: withdraw the OK and stop anything that uses it. */
+function withdrawShoulders() {
   withdrawConsent(store);
   save();
   guide.cancel();
@@ -741,9 +544,8 @@ $("consent-withdraw").addEventListener("click", () => {
   activity.stop(ACTIVITY.BREATH_CHECK, clockS(), "cancelled");
   if (card) hideCard();
   prompts.dismiss(pclock, "done");
-  renderConsentStatus();
-  renderPromptSettings();
-});
+  renderRows();
+}
 
 const bracing = new BracingMonitor();
 const breath = new BreathCheck();
@@ -768,17 +570,21 @@ function showRelaxBanner(text) {
   bannerTimer = setTimeout(() => banner.classList.remove("show", "relax"), 6000);
 }
 
-const VERDICT_TEXT = {
-  rose: "Shoulders rose on the breath in: you were bracing. Let them hang and breathe into your belly.",
-  held: "Shoulders dropped when you let go: you were holding them up. That lower spot is where they belong.",
-  relaxed: "Relaxed and stacked. Your shoulders stayed put through the breath.",
-  unclear: "Couldn't see your shoulders clearly. Face the camera and try again.",
+// The exercise safety line goes on the video with the check itself (Settings no longer has a panel for it).
+const RELAX_SAFETY_SHORT = RELAX_SAFETY.slice(RELAX_SAFETY.indexOf("Stop"));
+
+// One short line on the video after a breath check; the voice says the full verdict.
+const VERDICT_SHORT = {
+  rose: "Let your shoulders drop",
+  held: "That lower spot is right",
+  relaxed: "Relaxed and stacked",
+  unclear: "Couldn't see your shoulders",
 };
 
 function startBreathCheck() {
   if (!loopsStarted || !canBegin()) return;
   if (!shoulderChecksOn(lowAccuracy)) {
-    $("relax-status").textContent = SHOULDER_OFF_REASON; // the fallback model has no reliable shoulder signal
+    showRelaxBanner(SHOULDER_OFF_REASON); // the fallback model has no reliable shoulder signal
     return;
   }
   if (!requireConsent(startBreathCheck)) return;
@@ -791,15 +597,13 @@ function runBreathCheck() {
   if (!activity.start(ACTIVITY.BREATH_CHECK, clockS())) return;
   goodSinceBreath = 0;
   breath.start(performance.now() / 1000, bracing.value);
-  $("relax-status").textContent = "Breathe in slowly...";
   sayRelax(RELAX_LINES.inhale);
-  showRelaxBanner("Breath check: slow, deep breath in");
+  showRelaxBanner(`Breathe in slowly. ${RELAX_SAFETY_SHORT}`);
 }
 
 function relaxStep(landmarks, state, now) {
   if (!shoulderChecksOn(lowAccuracy)) {
     relaxLastT = null;
-    $("relax-shoulders").textContent = "off on the simpler model";
     return;
   }
   if (inMode()) {
@@ -808,7 +612,6 @@ function relaxStep(landmarks, state, now) {
   }
   if (!hasConsent(store)) {
     relaxLastT = null;
-    $("relax-shoulders").textContent = "off until you opt in";
     return;
   }
   const ratio = neckRatio(landmarks);
@@ -829,65 +632,54 @@ function relaxStep(landmarks, state, now) {
   if (breath.active) {
     const step = breath.update(bracing.value, now);
     if (step === "exhale") {
-      $("relax-status").textContent = "Breathe out and let your shoulders drop...";
       sayRelax(RELAX_LINES.exhale);
       showRelaxBanner("Breathe out, let your shoulders drop");
     } else if (step) {
       activity.stop(ACTIVITY.BREATH_CHECK, now, "completed");
       if (step.kind !== "unclear" && step.kind !== "rose") bracing.pinRelaxed(step.relaxed);
-      $("relax-status").textContent = VERDICT_TEXT[step.kind];
       sayRelax(RELAX_LINES[step.kind]);
-      $("banner").classList.remove("show", "relax");
+      showRelaxBanner(VERDICT_SHORT[step.kind]); // the voice says the full verdict
     }
   } else if (good && settings.relaxReminders && relaxLastT !== null) {
     goodSinceBreath += Math.min(1, Math.max(0, now - relaxLastT));
     if (goodSinceBreath >= AUTO_BREATH_S) prompts.enqueue("breath", pclock); // the scheduler decides when
   }
   relaxLastT = now;
-  const ref = bracing.reference;
-  const v = bracing.value;
-  $("relax-shoulders").textContent =
-    ref === null || v === null ? "learning your relaxed shoulders..." : v < ref * 0.88 ? "creeping up" : "relaxed";
 }
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
-const NEEDS_TRACKING = [
-  "breath-check",
-  "breathe-with-me",
-  "break-stretch",
-  "break-eye",
-  "break-move",
-  "break-water",
-  "calib-good",
-  "calib-bad",
-];
-const READY_TITLE = {
-  "breath-check": "Breathe in: if your shoulders rise, you are bracing",
-  "breathe-with-me": "One minute of easy breathing, then a breath check",
-};
+// Settings rows that start something need frames from the camera or the demo.
+const NEEDS_TRACKING = ["row-posture", "row-break"];
 function setTrackingControls(on) {
   for (const id of NEEDS_TRACKING) {
     const el = $(id);
     el.disabled = !on;
     if (!on) el.title = NEEDS_TRACKING_TIP;
-    else if (id === "breath-check" && !shoulderChecksOn(lowAccuracy)) el.title = SHOULDER_OFF_REASON;
-    else if (READY_TITLE[id]) el.title = READY_TITLE[id];
     else el.removeAttribute("title");
   }
 }
 
-$("breath-check").addEventListener("click", startBreathCheck);
-$("relax-reminders").addEventListener("change", (e) => {
-  const on = e.target.checked;
+/** Settings → Shoulders & breathing on: ask first (consent dialog), then turn on the
+ *  shoulder reminders and the automatic breath check. */
+function setShoulders(on) {
+  if (!on) {
+    settings.relaxReminders = false;
+    store.relaxReminders = false;
+    withdrawShoulders();
+    return;
+  }
   const apply = () => {
-    settings.relaxReminders = on;
-    store.relaxReminders = on;
+    settings.relaxReminders = true;
+    store.relaxReminders = true;
     save();
-    renderPromptSettings();
+    renderRows();
   };
-  if (on && !requireConsent(apply)) return;
+  if (!requireConsent(apply)) {
+    renderRows(); // the switch stays off until the user agrees
+    return;
+  }
   apply();
-});
+}
 
 // -- breaks and prompts ---------------------------------------------------------
 // Everything that is not a posture reminder goes through one PromptScheduler
@@ -939,79 +731,27 @@ let plast = null;
 let pstreak = 0; // good-posture streak on the prompt clock
 let card = null; // the prompt on screen: { id, text, t, finished }
 
-function renderPromptSettings() {
-  $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
-  $("move-minutes").value = String(dismissed.move ? 0 : settings.moveBreakMinutes);
-  $("stretch-minutes").value = String(dismissed.stretch ? 0 : settings.stretchMinutes);
-  $("water-minutes").value = String(dismissed.water ? 0 : settings.waterMinutes);
-  $("jaw-minutes").value = String(dismissed.jaw ? 0 : settings.jawMinutes);
-  $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && hasConsent(store);
-  $("relax-reminders").checked = settings.relaxReminders && hasConsent(store);
-  $("breathe-cues").checked = settings.breatheCues;
-  $("prompts-reset").hidden = !Object.keys(dismissed).length;
+// Break reminders (Settings, from 2 min): one switch for the eye and move reminders. The
+// intervals, stretch, water, jaw and breathing-moment options are fixed defaults (#98 v3).
+function breakRemindersOn() {
+  return settings.eyeBreaks || settings.moveBreakMinutes > 0;
 }
-function savePromptSettings() {
+function setBreakReminders(on) {
+  settings.eyeBreaks = on;
+  settings.moveBreakMinutes = on ? store.lastMoveMinutes || 60 : 0;
+  if (!on && breaks.moveMinutes > 0) store.lastMoveMinutes = breaks.moveMinutes;
+  if (on) {
+    delete dismissed.eye;
+    delete dismissed.move;
+  }
+  breaks.setEyeBreaks(settings.eyeBreaks);
+  breaks.setMoveMinutes(settings.moveBreakMinutes);
   store.eyeBreaks = settings.eyeBreaks;
   store.moveBreakMinutes = settings.moveBreakMinutes;
-  store.stretchMinutes = settings.stretchMinutes;
-  store.waterMinutes = settings.waterMinutes;
-  store.jawMinutes = settings.jawMinutes;
-  store.breathingMoments = settings.breathingMoments;
-  store.breatheCues = settings.breatheCues;
   store.promptsDismissed = { ...dismissed };
   save();
-  renderPromptSettings();
+  renderRows();
 }
-$("eye-breaks").addEventListener("change", (e) => {
-  settings.eyeBreaks = e.target.checked;
-  if (e.target.checked) delete dismissed.eye;
-  breaks.setEyeBreaks(settings.eyeBreaks);
-  savePromptSettings();
-});
-$("move-minutes").addEventListener("change", (e) => {
-  breaks.setMoveMinutes(e.target.value);
-  settings.moveBreakMinutes = breaks.moveMinutes;
-  if (settings.moveBreakMinutes > 0) delete dismissed.move;
-  savePromptSettings();
-});
-$("stretch-minutes").addEventListener("change", (e) => {
-  breaks.setStretchMinutes(e.target.value);
-  settings.stretchMinutes = breaks.stretchMinutes;
-  if (settings.stretchMinutes > 0) delete dismissed.stretch;
-  savePromptSettings();
-});
-$("water-minutes").addEventListener("change", (e) => {
-  breaks.setWaterMinutes(e.target.value);
-  settings.waterMinutes = breaks.waterMinutes;
-  if (settings.waterMinutes > 0) delete dismissed.water;
-  savePromptSettings();
-});
-$("jaw-minutes").addEventListener("change", (e) => {
-  breaks.setJawMinutes(e.target.value);
-  settings.jawMinutes = breaks.jawMinutes;
-  if (settings.jawMinutes > 0) delete dismissed.jaw;
-  savePromptSettings();
-});
-$("breathing-moments").addEventListener("change", (e) => {
-  const on = e.target.checked;
-  const apply = () => {
-    settings.breathingMoments = on;
-    if (on) delete dismissed.breathing;
-    savePromptSettings();
-  };
-  if (on && !requireConsent(apply)) return; // asks first; renderPromptSettings resets the box if declined
-  apply();
-});
-$("breathe-cues").addEventListener("change", (e) => {
-  settings.breatheCues = e.target.checked;
-  savePromptSettings();
-});
-$("prompts-reset").addEventListener("click", () => {
-  for (const k of Object.keys(dismissed)) delete dismissed[k];
-  savePromptSettings();
-});
-renderPromptSettings();
-renderConsentStatus();
 
 function breaksTakenToday() {
   const b = store.breaksToday;
@@ -1334,7 +1074,6 @@ $("prompt-never").addEventListener("click", () => {
   noteAnnoyance();
   endCard("never");
 });
-$("breathe-with-me").addEventListener("click", startGuide);
 
 // -- "Take a break" menu: guided demos and the water count -----------------------
 // Demos are text steps with a small outline, 10 to 20 s, no camera analysis.
@@ -1417,12 +1156,12 @@ function drank() {
   breaks.taken("water");
   save();
   renderProgress();
-  $("break-menu-note").textContent = `Added. ${n} ${n === 1 ? "drink" : "drinks"} today.`;
+  showRelaxBanner(`${n} ${n === 1 ? "drink" : "drinks"} today`);
   endCard("done");
 }
 
-for (const kind of ["stretch", "eye", "move", "water"])
-  $(`break-${kind}`).addEventListener("click", () => openBreak(kind));
+/** Settings → Take a break now, and the header break button: stand up and move (#98 v3). */
+const takeBreakNow = () => openBreak("move");
 
 // -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
 // A small non-modal card under the main screen, never over the video. Gating is in sponsor.js; the
@@ -1487,7 +1226,6 @@ function openShare() {
   renderShareLinks();
   $("share-dialog").showModal();
 }
-$("share-btn").addEventListener("click", openShare);
 $("share-native").addEventListener("click", async () => {
   try {
     await navigator.share(nativeSharePayload(shareUrl(location.href)));
@@ -1560,95 +1298,9 @@ function resetPromptSession() {
   plast = null;
 }
 
-// -- silent test ("Test me") ---------------------------------------------------
-// A retention test in motor-learning terms: same tracking and state machine,
-// but every cue is withheld (no sounds, speech, banners, needle, hold bar or
-// live score), so the score reflects the habit rather than the reminders.
-// Results are kept per test; coached time keeps feeding store.days.
-
+// The silent test ("Test me") has no entry point since #98 v3: it is not a Settings row.
+// Results already in store.tests are still exported. activity.js keeps the state.
 store.tests = store.tests || [];
-let test = null; // { minutes, elapsed, good, bad } while a test runs
-
-function startTest() {
-  if (test) return finishTest(true);
-  if (practice) stopPractice();
-  if (!activity.start(ACTIVITY.SILENT_TEST, clockS())) {
-    $("test-status").textContent = "Resume tracking first.";
-    return;
-  }
-  test = { minutes: Number($("test-minutes").value) || 10, elapsed: 0, good: 0, bad: 0 };
-  breath.cancel();
-  cancelPrompts();
-  stopSpeech();
-  document.body.classList.add("testing");
-  $("banner").classList.remove("show");
-  $("test-start").textContent = "Stop test";
-  $("test-progress-wrap").style.display = "";
-  renderTest();
-}
-
-function finishTest(stoppedEarly) {
-  const t = test;
-  test = null;
-  activity.stop(ACTIVITY.SILENT_TEST, clockS(), stoppedEarly ? "cancelled" : "completed");
-  document.body.classList.remove("testing");
-  $("test-start").textContent = "Start silent test";
-  $("test-progress-wrap").style.display = "none";
-  const tracked = t.good + t.bad;
-  if (!stoppedEarly && tracked >= 30) {
-    store.tests.push({
-      at: new Date().toISOString(),
-      minutes: t.minutes,
-      good: Math.round(t.good),
-      bad: Math.round(t.bad),
-    });
-    store.tests = store.tests.slice(-50);
-    save();
-    $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
-    renderProgress();
-    playGood();
-  } else {
-    $("test-status").textContent = stoppedEarly
-      ? "Test stopped, not saved."
-      : "Not enough tracked time to score; not saved.";
-  }
-  renderTest();
-}
-
-const pctOf = (r) => (r.good + r.bad > 0 ? Math.round((100 * r.good) / (r.good + r.bad)) : null);
-
-function renderTest() {
-  if (test) {
-    const left = Math.max(0, test.minutes * 60 - test.elapsed);
-    $("test-status").textContent = `Silent test running: ${mmss(left)} left. Sit and work as usual.`;
-    $("test-progress").style.width = `${Math.min(100, (100 * test.elapsed) / (test.minutes * 60)).toFixed(1)}%`;
-  }
-  const tests = store.tests;
-  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), {
-    good: 0,
-    bad: 0,
-  });
-  const parts = [];
-  if (tests.length) {
-    const first = tests[0],
-      last = tests[tests.length - 1];
-    parts.push(
-      tests.length === 1
-        ? `Silent test: <b>${pctOf(last)}%</b> good`
-        : `Silent tests: first <b>${pctOf(first)}%</b> &rarr; latest <b>${pctOf(last)}%</b> (${tests.length} tests)`,
-    );
-  } else {
-    parts.push("No silent tests yet.");
-  }
-  // The coached figure is a comparison, so it waits for a first silent test.
-  if (tests.length && coached.good + coached.bad > 0) parts.push(`With coaching: <b>${pctOf(coached)}%</b> good`);
-  $("test-compare").innerHTML = parts.join(" &middot; ");
-}
-
-$("test-start").addEventListener("click", () => {
-  ensureAudio();
-  startTest();
-});
 
 const DAY_SAVE_S = 15;
 let lastDaySave = 0;
@@ -1669,13 +1321,6 @@ function fireMilestone(minute) {
     const line = nextPraise();
     setTimeout(() => speak(line), custom.good ? 400 : 850);
   }
-}
-
-/** Silent test time: counted to the test only, never to the daily totals. */
-function accountTest(state, dt) {
-  test.elapsed += dt;
-  if (state === State.GOOD) test.good += dt;
-  else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
 }
 
 /** Coached time: session, daily totals and the coaching policy. */
@@ -1706,19 +1351,13 @@ function accountDay(state, now, dt) {
   } // keep daily totals across reloads
 }
 
-/** Route the frame's time by the activity: "day" tallies, "test" feeds the silent test,
+/** Route the frame's time by the activity: "day" tallies,
  *  "none" (practice, the eye break, demos, the breathing guide) records nothing and
  *  leaves the streak where it is. */
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
     const route = rules().score;
-    if (route === "test") {
-      accountTest(state, dt);
-      session.lastT = now;
-      if (test.elapsed >= test.minutes * 60) finishTest(false);
-      return;
-    }
     if (route === "day") accountDay(state, now, dt);
   }
   session.lastT = now;
@@ -1840,16 +1479,12 @@ function renderBadge(transition, result, held, label, zone) {
     badge.textContent = "slipping"; // amber with the needle and skeleton (frame 05, #98)
     badge.className = "badge drift";
   }
-  const settling = !test && !practice && !held && badge.textContent === "settling in";
+  const settling = !practice && !held && badge.textContent === "settling in";
   $("settling-note").hidden = !settling;
   badge.title = settling ? $("settling-note").textContent : "";
   if (held) {
     badge.textContent = label;
     badge.className = "badge activity";
-  }
-  if (test) {
-    badge.textContent = "silent test";
-    badge.className = "badge testing";
   }
   if (practice) {
     badge.textContent = "practice";
@@ -1925,7 +1560,6 @@ function render(out, landmarks) {
   if (practice) renderPractice(result);
   const view = gaugeView(transition.state, result.kind === "scored", out.cue != null, needle);
   renderBadge(transition, result, held, label, view.zone);
-  returnToMainOnStart();
   $("warnings").textContent = causeFor(result, landmarks);
   renderMetrics(result);
   renderNeedle(view, held);
@@ -1938,11 +1572,10 @@ function render(out, landmarks) {
   }
   renderGaugeStatus(
     view.zone,
-    held || activity.inGrace(clockS()) || !!test || !!practice ? null : out.hold,
+    held || activity.inGrace(clockS()) || !!practice ? null : out.hold,
     out.transition.nudge,
   );
-  drawSkeleton(landmarks, test || held ? ZONE_COLOR.none : view.color);
-  renderTest();
+  drawSkeleton(landmarks, held ? ZONE_COLOR.none : view.color);
   renderCalibration();
   updateFirstRunLive(result, landmarks);
   renderStats();
@@ -1986,7 +1619,7 @@ function setPaused(on) {
     badge.textContent = "paused";
     badge.className = "badge paused";
     syncTabTitle();
-    $("fps").textContent = "-";
+    document.body.dataset.fps = "-";
   } else {
     engine.restart();
     bracing.reset();
@@ -2002,21 +1635,9 @@ function setPaused(on) {
 }
 
 $("pause").addEventListener("click", () => setPaused(!isPaused()));
-// WCAG 2.1.4: the single-key shortcut can be turned off.
+// The P shortcut is a fixed default since #98 v3 (store.pauseShortcut is still honoured).
 const PAUSE_TITLE = "Pause tracking and all sounds";
-function renderPauseShortcut() {
-  $("pause-shortcut").checked = settings.pauseShortcut;
-  $("pause").title = settings.pauseShortcut
-    ? `${PAUSE_TITLE} (shortcut: P, can be turned off under Reminders & sounds)`
-    : PAUSE_TITLE;
-}
-renderPauseShortcut();
-$("pause-shortcut").addEventListener("change", (e) => {
-  settings.pauseShortcut = e.target.checked;
-  store.pauseShortcut = settings.pauseShortcut;
-  save();
-  renderPauseShortcut();
-});
+$("pause").title = settings.pauseShortcut ? `${PAUSE_TITLE} (shortcut: P)` : PAUSE_TITLE;
 document.addEventListener("keydown", (e) => {
   if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!isPaused());
 });
@@ -2058,64 +1679,159 @@ function revealStep(out) {
     pclock,
   );
   if (changed) applyReveal();
+  store.trackedS = trackedTotalS(); // saved with the next save(): unlocks survive reloads
+  const level = currentUnlockLevel();
+  if (level !== shownUnlockLevel) {
+    shownUnlockLevel = level;
+    renderRows();
+  }
+  unlockStep();
 }
 
 applyReveal();
 
-// -- settings view -------------------------------------------------------------------
-// Settings replaces the main screen until Done (issue #92): the main screen keeps only
-// the camera, the gauge and the session line. Tracking keeps running underneath.
+// -- settings side panel and unlocks (#96, storyboard v3 frames 07 to 12) --------------
+// Settings is one grouped list in a side panel over the dimmed main screen. Rows unlock as
+// the app is used (unlockLevel in reveal.js, from the stored tracked time and days); each new
+// row gets one card on the main screen, at most one per session, and the gear gets a dot until
+// Settings is opened. Tracking keeps running while the panel is open.
+const sessionStartTrackedS = store.trackedS ?? trackedSecondsFromDays(store.days);
+function trackedTotalS() {
+  return sessionStartTrackedS + reveal.tracked;
+}
+function currentUnlockLevel() {
+  return unlockLevel({ trackedS: trackedTotalS(), days: trackedDays(store.days) });
+}
+function rowsShown() {
+  return visibleRows(currentUnlockLevel(), !!store.revealAll);
+}
+if (!store.rowsSeen) store.rowsSeen = [...visibleRows(0, false)];
+let shownUnlockLevel = -1;
+
+const MODE_FOR = (chime, sayFix) => (!chime ? "silent" : sayFix ? "chime_and_voice" : "chime_only");
+function setMode(mode) {
+  if (MODE_RANK[mode] < MODE_RANK[settings.mode]) noteAnnoyance(); // muting counts toward the Light suggestion
+  settings.mode = mode;
+  store.mode = mode;
+  save();
+  renderRows();
+}
+
+/** Show the unlocked rows, mark the new ones, and set every switch from the settings. */
+function renderRows() {
+  const shown = new Set(rowsShown());
+  for (const row of document.querySelectorAll("#settings-list [data-row]")) {
+    const key = row.dataset.row;
+    row.hidden = !shown.has(key);
+    row.classList.toggle("new", shown.has(key) && !store.rowsSeen.includes(key));
+  }
+  for (const group of document.querySelectorAll("#settings-list .row-group")) {
+    group.hidden = ![...group.querySelectorAll("[data-row]")].some((r) => !r.hidden);
+  }
+  $("row-chime").checked = settings.mode !== "silent";
+  $("row-sayfix").checked = settings.mode === "chime_and_voice";
+  $("row-breaks").checked = breakRemindersOn();
+  $("row-shoulders").checked = settings.relaxReminders && hasConsent(store);
+  $("settings-dot").hidden = [...shown].every((k) => store.rowsSeen.includes(k));
+  $("sound-btn")?.setAttribute("aria-pressed", String(settings.mode === "silent"));
+}
+
 function setSettingsOpen(open) {
   if (open === !$("settings-view").hidden) return;
+  if (!open) {
+    // Closing marks what was on show as seen: the green rows and the dot go.
+    store.rowsSeen = [...new Set([...store.rowsSeen, ...rowsShown()])];
+    save();
+  }
+  showWeek(false);
   $("settings-view").hidden = !open;
-  document.body.classList.toggle("settings-open", open);
+  $("settings-scrim").hidden = !open;
   $("settings-btn").setAttribute("aria-expanded", String(open));
-  if (open) {
-    lastUserAction = -Infinity; // only starts made from inside Settings count, not the ones before it
+  renderRows();
+  if (open) $("settings-title").focus();
+  else $("settings-btn").focus({ preventScroll: true });
+}
+function showWeek(on) {
+  $("week-view").hidden = !on;
+  $("settings-list").hidden = on;
+  if (on) {
     renderProgress();
-    window.scrollTo(0, 0);
-    $("settings-title").focus();
-  } else {
-    $("settings-btn").focus({ preventScroll: true });
+    $("week-title").focus();
   }
 }
 $("settings-btn").addEventListener("click", () => setSettingsOpen($("settings-view").hidden));
 $("settings-close").addEventListener("click", () => setSettingsOpen(false));
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("settings-view").hidden && !document.querySelector("dialog[open]"))
-    setSettingsOpen(false);
+$("settings-scrim").addEventListener("click", () => setSettingsOpen(false));
+$("week-close").addEventListener("click", () => {
+  showWeek(false);
+  $("row-week").focus();
 });
-// Something the user starts from Settings (a break, a breath check or guide, possibly after
-// a consent dialog, a recording, a silent test, practice or a setup card) brings them back
-// to the main screen, once, when it starts. Refused starts keep Settings open, so the
-// message next to the control stays readable. A prompt that starts on its own, with no
-// recent user action, does not pull the user out of Settings. Called every frame.
-const USER_START_S = 3; // a start within this long after a click or key counts as the user's
-let mainBusy = false;
-let lastUserAction = -Infinity;
-for (const type of ["click", "keydown"]) {
-  document.addEventListener(
-    type,
-    (e) => {
-      // Opening Settings itself is not a start.
-      if (!e.target.closest?.("#settings-btn")) lastUserAction = performance.now();
-    },
-    true,
-  );
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || $("settings-view").hidden || document.querySelector("dialog[open]")) return;
+  if (!$("week-view").hidden) {
+    showWeek(false);
+    $("row-week").focus();
+  } else setSettingsOpen(false);
+});
+$("row-chime").addEventListener("change", (e) => setMode(MODE_FOR(e.target.checked, $("row-sayfix").checked)));
+$("row-sayfix").addEventListener("change", (e) =>
+  setMode(MODE_FOR(e.target.checked || $("row-chime").checked, e.target.checked)),
+);
+$("row-breaks").addEventListener("change", (e) => setBreakReminders(e.target.checked));
+$("row-shoulders").addEventListener("change", (e) => setShoulders(e.target.checked));
+$("row-posture").addEventListener("click", () => {
+  setSettingsOpen(false);
+  engine.calibration.start("good");
+});
+$("row-break").addEventListener("click", () => {
+  setSettingsOpen(false);
+  takeBreakNow();
+});
+$("row-week").addEventListener("click", () => showWeek(true));
+$("row-help").addEventListener("click", () => {
+  setSettingsOpen(false);
+  openHelp();
+});
+
+// The unlock card (frame 07): one line, one switch (or an arrow for My week), x. One per session,
+// and x or using it means it is not shown again. The row stays in Settings either way.
+const UNLOCK_CARD_TITLE = { breaks: "Break reminders", shoulders: "Shoulders & breathing", week: "My week" };
+let unlockShownThisSession = false;
+let unlockCardKey = null;
+function finishUnlockCard() {
+  if (!unlockCardKey) return;
+  store.unlockCardsDone = [...new Set([...(store.unlockCardsDone || []), unlockCardKey])];
+  save();
+  unlockCardKey = null;
+  $("unlock-card").hidden = true;
 }
-function returnToMainOnStart() {
-  const busy =
-    !!card ||
-    !!sponsorCard ||
-    breath.active ||
-    guide.active ||
-    !!test ||
-    !!practice ||
-    firstRun.open ||
-    !!engine.calibration.status.active;
-  if (busy && !mainBusy && performance.now() - lastUserAction < USER_START_S * 1000) setSettingsOpen(false);
-  mainBusy = busy;
+function unlockStep() {
+  if (unlockShownThisSession || firstRun.open || !loopsStarted || !rules().setupCards) return;
+  const key = nextUnlockCard(currentUnlockLevel(), store.unlockCardsDone || []);
+  if (!key) return;
+  unlockShownThisSession = true;
+  unlockCardKey = key;
+  $("unlock-title").textContent = UNLOCK_CARD_TITLE[key];
+  const sw = $("unlock-switch");
+  sw.hidden = key === "week";
+  $("unlock-open").hidden = key !== "week";
+  sw.checked = key === "breaks" ? breakRemindersOn() : settings.relaxReminders && hasConsent(store);
+  $("unlock-card").hidden = false;
+  renderRows();
 }
+$("unlock-switch").addEventListener("change", (e) => {
+  const key = unlockCardKey;
+  finishUnlockCard();
+  if (key === "breaks") setBreakReminders(e.target.checked);
+  else if (key === "shoulders") setShoulders(e.target.checked);
+});
+$("unlock-open").addEventListener("click", () => {
+  finishUnlockCard();
+  setSettingsOpen(true);
+  showWeek(true);
+});
+$("unlock-close").addEventListener("click", finishUnlockCard);
+renderRows();
 
 let wasHeld = false; // the previous frame was scored by hold()
 let settleUntil = -Infinity; // after a held run the restarted engine reads NO_PERSON until posture is clear
@@ -2194,7 +1910,7 @@ function step() {
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
-    $("fps").textContent = fpsEma.toFixed(0);
+    document.body.dataset.fps = fpsEma.toFixed(0);
   }
   lastFrameT = now;
   if (!document.hidden) {
@@ -2451,7 +2167,7 @@ function bugReportUrl() {
     `- Browser: ${navigator.userAgent}`,
     `- Language: ${navigator.language} | Screen: ${screen.width}x${screen.height} @${devicePixelRatio}x`,
     `- WebGL: ${webglInfo()}`,
-    `- Source: ${$("source").textContent} | State: ${$("state-badge").textContent} | fps: ${$("fps").textContent} | paused: ${isPaused()}`,
+    `- Source: ${document.body.dataset.source || "-"} | State: ${$("state-badge").textContent} | fps: ${document.body.dataset.fps || "-"} | paused: ${isPaused()}`,
     `- Mode: ${settings.mode} | specific cues: ${settings.specificCues} | spoken praise: ${settings.spokenPraise}`,
     `- Voice: ${selectedVoice() || "none"}${v ? ` | system fallback ${v.name} (${v.lang})` : ""} | ${voices.length} system voices | clips ${clipManifest ? "loaded" : "missing"}`,
     `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
@@ -2507,25 +2223,20 @@ function stopCamera(err) {
 let loopsStarted = false;
 
 function begin(source) {
-  $("source").textContent = source;
+  document.body.dataset.source = source; // the bug report reads it; not shown (#98 v3)
   document.body.classList.remove("pre-start"); // status, Pause and Settings appear now
   setSetupReason("start", false); // started: a slow or failed earlier attempt no longer applies
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
   $("lowpower-note").style.display = lowAccuracy ? "block" : "none";
-  restoreSound("bad");
-  restoreSound("good");
   $("pause").disabled = false;
-  $("test-start").disabled = false;
   setTrackingControls(true);
   $("state-badge").focus(); // the Start button is gone: move focus to the status badge
-  renderSetupButton();
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
   recordSession(store, Date.now());
   save();
   resetPromptSession();
-  renderSetupButton();
   requestAnimationFrame(visibleLoop);
   startHiddenTicker();
 }
@@ -2698,126 +2409,9 @@ function firstRunButton(label, onClick, secondary = true) {
   return b;
 }
 
-/** A labelled control for a setup card. */
-function setupRow(text, control) {
-  const l = document.createElement("label");
-  l.className = "note";
-  l.style.display = "block";
-  l.append(control, ` ${text}`);
-  return l;
-}
-
-/** A select that copies the options of a real settings control and drives it (same element, same change
- *  handler), so each setting has one write path and nothing is stored twice. */
-function mirrorSelect(src, id, label) {
-  const el = document.createElement("select");
-  for (const o of src.options) el.add(new Option(o.text, o.value));
-  el.id = id;
-  el.setAttribute("aria-label", label);
-  el.value = src.value;
-  el.addEventListener("change", () => {
-    src.value = el.value;
-    src.dispatchEvent(new Event("change"));
-  });
-  return el;
-}
-
-/** A checkbox that drives a real settings checkbox. A box that asks for consent is put back if the user declines. */
-function mirrorCheck(src, id) {
-  const el = document.createElement("input");
-  el.type = "checkbox";
-  el.id = id;
-  el.checked = src.checked;
-  el.addEventListener("change", () => {
-    src.checked = el.checked;
-    src.dispatchEvent(new Event("change"));
-    $("consent-dialog").addEventListener(
-      "close",
-      () => {
-        el.checked = src.checked;
-      },
-      { once: true },
-    );
-  });
-  return el;
-}
-
-function sampleButtons(...which) {
-  const all = {
-    reminder: () => {
-      ensureAudio();
-      playBad();
-    },
-    praise: () => {
-      ensureAudio();
-      playGood();
-    },
-    voice: () => {
-      ensureAudio();
-      speak(TEST_LINE);
-    },
-  };
-  const labels = { reminder: "Play the reminder", praise: "Play the praise chime", voice: "Play a voice sample" };
-  const row = document.createElement("div");
-  row.className = "btn-row";
-  row.append(...which.map((k) => firstRunButton(labels[k], all[k])));
-  return row;
-}
-
-function setupControls(key) {
-  if (key === "style") {
-    const mode = document.createElement("select");
-    mode.id = "coach-style";
-    mode.setAttribute("aria-label", "Reminder style");
-    mode.add(new Option("Chime + voice", "chime_and_voice"));
-    mode.add(new Option("Chime only", "chime_only"));
-    mode.add(new Option("Silent", "silent"));
-    mode.value = settings.mode;
-    mode.addEventListener("change", () => {
-      const radio = document.querySelector(`input[name=mode][value=${mode.value}]`);
-      radio.checked = true;
-      radio.dispatchEvent(new Event("change"));
-    });
-    const level = mirrorSelect($("coaching-level"), "coach-level", "Coaching level");
-    return [
-      setupRow("Reminder style", mode),
-      setupRow("Coaching level", level),
-      setupRow("Say what to fix", mirrorCheck($("specific-cues"), "coach-cues")),
-      sampleButtons("reminder", "praise"),
-    ];
-  }
-  if (key === "voice") {
-    const voice = mirrorSelect($("voice-pick"), "coach-voice", "Voice");
-    const pack = mirrorSelect($("sound-pack"), "coach-pack", "Sound pack");
-    return [setupRow("Voice", voice), setupRow("Sound pack", pack), sampleButtons("reminder", "praise", "voice")];
-  }
-  if (key === "breaks") {
-    return [
-      setupRow("Eye break every 20 minutes", mirrorCheck($("eye-breaks"), "coach-eye")),
-      setupRow("Stand up and move", mirrorSelect($("move-minutes"), "coach-move", "Stand up and move")),
-      setupRow("Stretch reminder", mirrorSelect($("stretch-minutes"), "coach-stretch", "Stretch reminder")),
-      setupRow("Water reminder", mirrorSelect($("water-minutes"), "coach-water", "Water reminder")),
-      setupRow("Face and jaw check", mirrorSelect($("jaw-minutes"), "coach-jaw", "Face and jaw check")),
-    ];
-  }
-  if (key === "shoulders") {
-    return [
-      setupRow(
-        "Shoulder-creep reminders and a breath check (asks for your OK first)",
-        mirrorCheck($("relax-reminders"), "coach-relax"),
-      ),
-      setupRow(
-        "Occasional breathing moments (asks for your OK first)",
-        mirrorCheck($("breathing-moments"), "coach-moments"),
-      ),
-    ];
-  }
-  return [];
-}
-
 function renderFirstRun() {
   const step = SETUP_STEPS[firstRun.step];
-  const steps = firstRun.manual ? SETUP_STEPS : SETUP_STEPS.filter((s) => !s.optional);
+  const steps = SETUP_STEPS;
   $("first-run-count").textContent = `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
   $("first-run-heading").textContent = step.title;
   const body = $("first-run-body");
@@ -2840,10 +2434,6 @@ function renderFirstRun() {
     row.className = "btn-row";
     row.append(firstRunButton("Save my comfortable posture", () => engine.calibration.start("good"), false));
     parts.push(row, firstRunLive);
-  } else if (step.key === "done") {
-    // The first success is the end of setup, not another list of tasks.
-  } else {
-    parts.push(...setupControls(step.key));
   }
   body.replaceChildren(...parts);
   const last = (!firstRun.manual && step.key === "done") || firstRun.step === SETUP_STEPS.length - 1;
@@ -2851,11 +2441,6 @@ function renderFirstRun() {
   $("first-run-next").textContent = last ? "Keep working" : "Continue";
   $("first-run-next").disabled = false;
   $("first-run-skip").hidden = last;
-}
-
-function renderSetupButton() {
-  $("setup-btn").hidden = !loopsStarted || firstRun.open || !reopenSetupStep(store);
-  $("personalize-panel").hidden = $("setup-btn").hidden;
 }
 
 function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
@@ -2866,7 +2451,6 @@ function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
   save();
   $("first-run").hidden = false;
   renderFirstRun();
-  renderSetupButton();
 }
 
 function closeFirstRun() {
@@ -2877,7 +2461,6 @@ function closeFirstRun() {
     store.firstRunDone = true;
     save();
   }
-  renderSetupButton();
 }
 
 /** After a card is done or skipped: the next one, or close. Returns true when a card is showing. */
@@ -2959,12 +2542,6 @@ $("first-run-skip-all").addEventListener("click", () => {
   save();
   closeFirstRun();
   $("state-badge").focus();
-});
-$("setup-btn").addEventListener("click", () => {
-  setSettingsOpen(false); // first, so focus can go to the card heading
-  openFirstRun(reopenSetupStep(store), true);
-  $("first-run").scrollIntoView({ block: "nearest" });
-  focusFirstRunHeading();
 });
 $("intro-again").addEventListener("click", () => {
   if (!loopsStarted) {
@@ -3079,7 +2656,6 @@ $("help-practice").addEventListener("click", () => {
 });
 
 fillList($("safety-list"), SAFETY_POINTS);
-$("relax-safety").textContent = RELAX_SAFETY;
 $("safety-link").addEventListener("click", (e) => {
   e.preventDefault();
   $("safety-dialog").showModal();
@@ -3128,7 +2704,6 @@ function renderPracticeStep() {
 function startPractice() {
   if (!loopsStarted) return "Start the webcam or the demo first, then you can practise the cues.";
   if (isPaused()) return "Resume tracking first.";
-  if (test) return "Stop the silent test first.";
   if (practice) return "";
   if (!activity.start(ACTIVITY.PRACTICE, clockS())) return "Finish the current activity first.";
   $("practice-breath").hidden = true;
@@ -3227,239 +2802,40 @@ $("practice-breath").addEventListener("click", () => {
 // is in progress.js. No streaks, no ranking; see .kiro/specs/progress-review.
 
 let lastProgressRender = 0;
-const minutesText = (s) =>
-  s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.round(s / 60)} min`;
 
+// My week (frame 12): seven bars, today last, from progress.js. Nothing else.
 function renderProgress() {
   lastProgressRender = Date.now();
   const s = summarize(store, Date.now());
-  $("progress-empty").textContent = s.empty ? "Nothing tracked yet." : "";
-  const days = $("progress-days");
-  days.hidden = s.empty;
-  days.replaceChildren(
+  $("progress-days").replaceChildren(
     ...s.days.map((d) => {
-      const row = document.createElement("div");
-      row.className = "day-row";
-      row.setAttribute("role", "listitem");
-      const label = document.createElement("span");
-      label.textContent = new Date(`${d.date}T00:00:00Z`).toLocaleDateString(undefined, {
-        weekday: "short",
-        timeZone: "UTC",
-      });
-      const bar = document.createElement("div");
-      bar.className = "score-bar";
+      const col = document.createElement("div");
+      col.className = "week-bar";
+      col.setAttribute("role", "listitem");
+      const track = document.createElement("div");
+      track.className = "track";
       const fill = document.createElement("div");
-      fill.style.width = `${d.pct ?? 0}%`;
-      bar.append(fill);
-      const text = document.createElement("span");
-      text.textContent = d.pct === null ? "no data" : `${d.pct}% \u00b7 ${minutesText(d.good_s)} good`;
-      if (d.pct !== null && d.best_s >= 60) text.textContent += ` \u00b7 best run ${mmss(d.best_s)}`;
-      if (d.pct === null) text.className = "nodata";
-      row.setAttribute("aria-label", `${d.date}: ${text.textContent}`);
-      row.append(label, bar, text);
-      return row;
+      fill.style.height = `${d.pct ?? 0}%`;
+      track.append(fill);
+      const label = document.createElement("span");
+      const date = new Date(`${d.date}T00:00:00Z`);
+      label.textContent = date.toLocaleDateString(undefined, { weekday: "narrow", timeZone: "UTC" });
+      col.setAttribute(
+        "aria-label",
+        `${date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" })}: ${d.pct === null ? "no data" : `${d.pct}% good`}`,
+      );
+      col.append(track, label);
+      return col;
     }),
   );
-  const relaxedDays = s.days.filter((d) => d.relaxed_pct !== null);
-  const braces = s.days.reduce((a, d) => a + d.brace_events, 0);
-  $("progress-best").textContent = relaxedDays.length
-    ? `Shoulders relaxed over the last 7 days: ${Math.round(relaxedDays.reduce((a, d) => a + d.relaxed_pct, 0) / relaxedDays.length)}% of tracked time, ${braces} bracing reminder${braces === 1 ? "" : "s"}.`
-    : "";
-  renderShareWeek();
-  $("progress-total").textContent = s.empty
-    ? ""
-    : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
-  const parts = [];
-  if (s.tests.length)
-    parts.push(`Silent tests, oldest to newest: ${s.tests.map((t) => `${t.pct}%`).join(" \u2192 ")}.`);
-  else if (!s.empty) parts.push("No silent tests yet. Take one for a baseline.");
-  if (s.coached_pct_7d !== null) parts.push(`With coaching over the last 7 days: ${s.coached_pct_7d}%.`);
-  $("progress-tests").textContent = parts.join(" ");
-  $("progress-water").textContent = s.water_7d
-    ? `Water you logged: ${s.water_today} today, ${s.water_7d} in the last 7 days.`
-    : "";
-  const suggest = s.try_light && settings.coachingLevel !== "light";
-  $("progress-suggest").textContent = suggest
-    ? "Your latest silent score is at least as good as your coached score. You could try light coaching."
-    : "";
-  $("progress-light").hidden = !suggest;
 }
 
-function renderShareWeek() {
-  const weeks = summarizeWeeks(store, Date.now());
-  renderPeer(weeks[weeks.length - 1]); // the share record uses this week; the page shows days only
-}
-
-// -- import ------------------------------------------------------------------------------
-let pendingImport = null;
-$("progress-import").addEventListener("click", () => $("progress-import-file").click());
-$("progress-import-file").addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  e.target.value = "";
-  if (!file) return;
-  if (file.size > IMPORT_MAX_BYTES) {
-    $("progress-msg").textContent = "Not imported: the file is larger than 1 MB.";
-    return;
-  }
-  let parsed;
-  try {
-    parsed = parseImport(await file.text());
-  } catch {
-    parsed = { ok: false, error: "The file could not be read." };
-  }
-  if (!parsed.ok) {
-    $("progress-msg").textContent = `Not imported: ${parsed.error}`;
-    return;
-  }
-  pendingImport = parsed;
-  const p = previewImport(parsed);
-  $("import-preview").textContent =
-    p.days || p.tests
-      ? `${p.days} day${p.days === 1 ? "" : "s"}${p.first ? ` (${p.first} to ${p.last})` : ""}, ${minutesText(p.good_s)} of good posture, ${p.tests} silent test${p.tests === 1 ? "" : "s"}.`
-      : "The file has no days or tests.";
-  $("import-dialog").showModal();
-});
-function finishImport(mode) {
-  if (pendingImport) {
-    applyImport(store, pendingImport, mode);
-    save();
-    $("progress-msg").textContent =
-      mode === "replace" ? "Replaced your progress with the file." : "Merged the file into your progress.";
-    renderProgress();
-  }
-  pendingImport = null;
-  $("import-dialog").close();
-}
-$("import-merge").addEventListener("click", () => finishImport("merge"));
-$("import-replace").addEventListener("click", () => finishImport("replace"));
-$("import-cancel").addEventListener("click", () => {
-  pendingImport = null;
-  $("import-dialog").close();
-});
-
-// -- share my weekly score (peer link, no server, opt-in) ---------------------------------
-// Nothing is sent. The record is packed into a link the user copies. See consent.js, share.js.
-const appBaseUrl = () => {
-  const u = new URL(location.href);
-  u.search = "";
-  u.hash = "";
-  return u.href;
-};
-function currentPeerRecord(week, nickname) {
-  if (!week) return null;
-  return peerRecord({
-    nickname,
-    week: week.week,
-    tracked_s: week.tracked_s,
-    score: consistencyScore(week),
-    breaks: week.breaks,
-  });
-}
-function renderPeer(week) {
-  const on = hasShareConsent(store);
-  $("peer-section").hidden = !on;
-  $("share-weekly").checked = on;
-  $("share-weekly-status").textContent = on
-    ? `On since ${store.shareConsent.at.slice(0, 10)}. Find it under Your progress. Untick to switch off.`
-    : "Off. Nothing is shared.";
-  if (!on) return;
-  if (document.activeElement !== $("peer-nickname")) $("peer-nickname").value = store.shareNickname || "";
-  const rec = currentPeerRecord(week, $("peer-nickname").value);
-  $("peer-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
-}
-$("peer-nickname").addEventListener("input", () => renderPeer(summarizeWeeks(store, Date.now()).at(-1)));
-$("peer-create").addEventListener("click", () => {
-  const week = summarizeWeeks(store, Date.now()).at(-1);
-  const nick = cleanNickname($("peer-nickname").value);
-  const rec = currentPeerRecord(week, nick);
-  if (!rec) {
-    $("peer-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
-    return;
-  }
-  store.shareNickname = nick;
-  save();
-  $("peer-link").value = peerLink(rec, appBaseUrl());
-  $("peer-link").hidden = false;
-  $("peer-copy").hidden = false;
-  $("peer-msg").textContent = "Link created. It holds only the record above. Copy it and send it yourself.";
-});
-$("peer-copy").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText($("peer-link").value);
-    $("peer-msg").textContent = "Copied.";
-  } catch {
-    $("peer-link").select();
-    $("peer-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
-  }
-});
 function showPeer(rec) {
   $("peer-view-body").textContent =
     `${rec.nickname}, ${rec.week}: ${rec.tracked_minutes} tracked minutes, consistency score ${rec.consistency_score} out of 100, ${rec.breaks_taken} breaks taken.`;
   $("peer-view-dialog").showModal();
 }
-$("peer-view").addEventListener("click", () => {
-  const rec = readPeerLink($("peer-paste").value);
-  if (!rec) {
-    $("peer-msg").textContent = "That is not a BackUp share link.";
-    return;
-  }
-  $("peer-msg").textContent = "";
-  showPeer(rec);
-});
 $("peer-view-close").addEventListener("click", () => $("peer-view-dialog").close());
-
-$("share-weekly").addEventListener("change", (e) => {
-  if (!e.target.checked) {
-    withdrawShareConsent(store);
-    save();
-    renderProgress();
-    return;
-  }
-  e.target.checked = false; // stays off until the dialog is agreed
-  $("share-consent-nick").value = store.shareNickname || "";
-  $("share-consent-check").checked = false;
-  $("share-consent-agree").disabled = true;
-  $("share-consent-msg").textContent = "";
-  renderShareConsentPreview();
-  $("share-consent-dialog").showModal();
-});
-function renderShareConsentPreview() {
-  const rec = currentPeerRecord(summarizeWeeks(store, Date.now()).at(-1), $("share-consent-nick").value);
-  $("share-consent-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
-}
-$("share-consent-title").textContent = SHARE_CONSENT_TITLE;
-$("share-consent-label").append(SHARE_CONSENT_CHECKBOX);
-$("share-consent-list").replaceChildren(
-  ...SHARE_CONSENT_POINTS.map((t) => {
-    const li = document.createElement("li");
-    li.textContent = t;
-    return li;
-  }),
-);
-$("share-consent-nick").addEventListener("input", renderShareConsentPreview);
-$("share-consent-check").addEventListener("change", (e) => {
-  $("share-consent-agree").disabled = !e.target.checked;
-});
-$("share-consent-agree").addEventListener("click", () => {
-  const nick = cleanNickname($("share-consent-nick").value);
-  if (!nick) {
-    $("share-consent-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
-    return;
-  }
-  recordShareConsent(store);
-  store.shareNickname = nick;
-  save();
-  $("share-consent-dialog").close();
-  renderProgress();
-});
-$("share-consent-cancel").addEventListener("click", () => $("share-consent-dialog").close());
-
-$("progress-light").addEventListener("click", () => {
-  $("coaching-level").value = "light";
-  $("coaching-level").dispatchEvent(new Event("change"));
-  renderProgress();
-  $("progress-msg").textContent = "Switched to light coaching. Change it back under Reminders & sounds.";
-});
 
 $("progress-export").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([exportJson(store)], { type: "application/json" }));
@@ -3468,7 +2844,6 @@ $("progress-export").addEventListener("click", () => {
   a.download = "posture-guard-progress.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  $("progress-msg").textContent = "Exported your daily totals and silent tests.";
 });
 
 $("progress-delete").addEventListener("click", () => {
@@ -3483,29 +2858,9 @@ $("progress-delete").addEventListener("click", () => {
   removeOfflineCopy().finally(() => location.reload());
 });
 
-// ---- Offline mode (opt-in; sw.js caches the files listed in precache.json) ----
+// ---- Offline copy: no longer offered (#98 v3). A copy made before is still removed by
+// Delete my data, and sw.js keeps serving it until then.
 const offlineSupported = "serviceWorker" in navigator && "caches" in window;
-const offline = {
-  downloading: false,
-  error: false,
-  percent: 0,
-  totalBytes: 0,
-  ready: false,
-  registered: false,
-  stale: false,
-};
-
-function renderOffline() {
-  const state = offlineState({ supported: offlineSupported, ...offline });
-  $("offline-status").textContent = offlineMessage(state, offline);
-  $("offline-enable").hidden = !offlineSupported || state === "ready" || state === "downloading";
-  $("offline-enable").textContent =
-    state === "update-available" ? "Update offline copy" : state === "error" ? "Try again" : "Make available offline";
-  $("offline-remove").hidden = !offlineSupported || !(offline.registered || offline.ready);
-  $("offline-bar").hidden = state !== "downloading";
-  $("offline-fill").style.width = `${offline.percent}%`;
-}
-
 async function removeOfflineCopy() {
   if (!offlineSupported) return;
   try {
@@ -3516,114 +2871,8 @@ async function removeOfflineCopy() {
   }
 }
 
-async function refreshOffline() {
-  if (!offlineSupported) return renderOffline();
-  try {
-    offline.registered = !!(await navigator.serviceWorker.getRegistration());
-    // precache.json always comes from the network; skip it when offline.
-    let pre = null;
-    if (navigator.onLine) pre = await (await fetch("./precache.json", { cache: "no-cache" })).json();
-    // Prefer the cache for the current release, else any complete older one (then stale).
-    let cache = null,
-      meta = null;
-    const names = (await caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX)); // caches.open would create an empty one
-    if (pre) names.sort((a, b) => (b === cacheNameFor(pre.version)) - (a === cacheNameFor(pre.version)));
-    for (const k of names) {
-      const c = await caches.open(k);
-      const res = await c.match(META_URL);
-      const m = res ? await res.json().catch(() => null) : null;
-      if (m) {
-        cache = c;
-        meta = m;
-        break;
-      }
-    }
-    if (!pre && meta)
-      pre = {
-        version: meta.version,
-        totalBytes: offline.totalBytes,
-        files: Object.keys(meta.hashes).map((url) => ({ url })),
-      };
-    if (!pre) throw new Error("offline and nothing cached");
-    offline.totalBytes = pre.totalBytes;
-    const base = new URL("./", location.href).href;
-    const cached = cache
-      ? (await cache.keys()).map((r) => (r.url.startsWith(base) ? r.url.slice(base.length) : r.url))
-      : [];
-    offline.ready = isOfflineReady(pre, cached, meta?.version);
-    offline.stale = offline.registered && !offline.ready;
-  } catch {
-    // Offline and not cached, or precache.json unreadable: keep whatever we knew.
-  }
-  renderOffline();
-}
-
-if (offlineSupported) {
-  navigator.serviceWorker.addEventListener("message", (e) => {
-    const m = e.data || {};
-    if (m.type === "offline-progress") {
-      offline.downloading = true;
-      offline.error = false;
-      offline.totalBytes = m.totalBytes || offline.totalBytes;
-      offline.percent = m.percent;
-      renderOffline();
-    } else if (m.type === "offline-ready") {
-      offline.downloading = false;
-      offline.percent = 100;
-      refreshOffline();
-    } else if (m.type === "offline-error") {
-      offline.downloading = false;
-      offline.error = true;
-      renderOffline();
-    }
-  });
-}
-
-$("offline-enable").addEventListener("click", async () => {
-  offline.downloading = true;
-  offline.error = false;
-  offline.percent = progressPercent(0, 1);
-  renderOffline();
-  try {
-    const reg = await navigator.serviceWorker.register("./sw.js");
-    await reg.update(); // picks up a newer sw.js; no-op when already current
-    const sw = reg.installing || reg.waiting;
-    if (sw) {
-      await new Promise((resolve, reject) => {
-        const check = () => {
-          if (sw.state === "activated") resolve();
-          else if (sw.state === "redundant") reject(new Error("install failed"));
-          else return false;
-          return true;
-        };
-        if (!check()) sw.addEventListener("statechange", check); // it may already be done
-      });
-    }
-    offline.downloading = false;
-  } catch {
-    offline.downloading = false;
-    offline.error = true;
-  }
-  await refreshOffline();
-});
-
-$("offline-remove").addEventListener("click", async () => {
-  await removeOfflineCopy();
-  offline.ready = false;
-  offline.registered = false;
-  offline.stale = false;
-  offline.error = false;
-  offline.downloading = false;
-  await refreshOffline();
-  $("offline-status").textContent = "Offline copy removed. The app needs a network connection again.";
-});
-
-renderOffline();
-refreshOffline();
-
 renderCalibration();
 renderStats();
-renderTest();
 renderProgress();
 if (location.hash.startsWith("#peer=")) {
   // A friend's share link: show it once, keep nothing.

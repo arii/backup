@@ -44,10 +44,11 @@ Docs last verified: 2026-11-20.
 4. **Keep working.** The main screen shows only the live view, a posture gauge
    and one session line. When you slouch, the cue appears once, as a banner on
    the video.
-5. **Settings when you want them.** *Settings* in the header opens one screen
-   with breaks and breathing, reminders and sounds, calibration, the silent test,
-   progress, offline mode and sharing. *Done* takes you back. *Help* has
-   *Learn the cues* and *Not working?* for camera troubleshooting.
+5. **Settings grow as you use it.** *Settings* opens a short list in a side panel:
+   *Chime*, *Say what to fix*, *Save my posture again*, *Take a break now* and *Help*.
+   After 2 minutes *Break reminders* joins, after 5 minutes *Shoulders & breathing*,
+   and on your second day *My week*. Each new row is offered once as a small card.
+   *Help* has *Learn the cues* and *Not working?* for camera troubleshooting.
 
 Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboarding-and-setup/requirements.md).
 
@@ -150,36 +151,33 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   The needle shows no score number, only a one-word label.
 - **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
   speech synthesis as a fallback.
-- **Share.** The Share dialog has plain links (no third-party scripts) and a
-  *Share your score* PNG card drawn in the tab from this session's good-posture
-  percentage and best streak. It never contains a camera frame.
-- **Silent *Test me*, breath check and relax reminder, hold-to-fill progress bar,
-  pause, and *Report a bug*** (a public GitHub issue, so keep private details out).
+- **Share.** The sponsor card's *Share instead* opens plain links (no third-party
+  scripts) and a *Share your score* PNG card drawn in the tab from this session's
+  good-posture percentage and best streak. It never contains a camera frame.
+- **Breath check and relax reminder, hold-to-fill bars, pause, and *Report a bug***
+  (a public GitHub issue, so keep private details out).
 
 - **Everything in the tab.** MediaPipe Pose Landmarker and the scoring, reminder
   state machine, posture needle and calibration (`docs/app/posture-core.js`). The model and its WASM runtime are self-hosted
   in `docs/app/vendor/`, so no third-party server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
-  hidden. Chimes play through Web Audio, the prompt through the browser's speech
-  synthesis, and *Notify in background* adds desktop notifications.
-- **Remembers you.** Calibration, settings, the camera you last used, custom sounds (under 1.5 MB)
-  and daily good/slouch totals persist in `localStorage`.
+  hidden. Chimes play through Web Audio and the prompt through recorded clips or the
+  browser's speech synthesis.
+- **Remembers you.** Calibration, settings, the camera you last used and daily
+  good/slouch totals persist in `localStorage`.
 
 GitHub Pages serves `docs/` from `main`, so the live app updates on every merge.
 
-### Offline mode (opt-in)
+### Offline copy (no longer offered)
 
-Select **Make available offline** in the app's Offline mode section. The browser
-downloads about 32 MB (app code, the MediaPipe runtime and pose model, the no-WebGL fallback model, voice clips)
-and the app then says "Offline mode is ready. You can disconnect Wi-Fi now."
-Nothing is downloaded for offline use until you select the button. Like any website, your browser
+Earlier versions had a **Make available offline** button. Since the Settings list was
+cut to eight rows (#96) it is not offered, and nothing installs a service worker.
+A copy made before stays until **Delete my data** (in *My week*) or clearing this
+site's data. Like any website, your browser
 may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video.
 The landing page may start fetching the model when you point at, focus or press its link to the app
 (never on load, and not on Save-Data or slow connections). Video is never stored, with or
-without offline mode; the cache holds only the app's own files. To remove it, use
-**Remove offline copy** or **Delete my data**, or clear this site's data in your
-browser. To check it works, turn on Offline in your browser's DevTools Network tab
-and reload.
+without an offline copy; the cache holds only the app's own files.
 
 For contributors: `docs/app/precache.json` lists every file the worker caches, and
 `docs/app/sw.js` carries its version. After changing anything under `docs/app/`,
@@ -196,16 +194,11 @@ In short:
   person. No shaming wording, no punishing sounds, no streak-loss messages.
 - Praise is opt-in and earned. Milestone praise (banner and chime, spoken only if
   spoken praise is on) fires once at 5, 15, 30 and 60 continuous good minutes.
-- Frequent feedback can help now and hurt retention, so there is a *Coaching level*:
-  **Standard** (the original behavior) or **Light** (banner and chime first, voice only
-  after a second reminder episode, praise only at milestones). Light swaps voice for a
-  chime and drops timed praise. It never produces more reminders than Standard, and it
-  does not reduce them.
-- *Test me* is a silent retention test, the measure of learning, separate from the
-  coached score. The progress panel suggests trying Light coaching when your latest
-  silent score is at least your coached score.
-- A per-hour reminder cap (30) limits alarm fatigue, with a visible note when it
-  applies. Nothing is spoken during pause or the silent test. During the eye break and the guided stretch, move, water and jaw breaks, posture coaching is suspended (no cues, reminders or praise, and that time is not counted as slouching), and it stays off for 10 seconds after the break ends.
+- Frequent feedback can help now and hurt retention. The code keeps a **Light** coaching
+  level (banner and chime first, voice only after a second reminder episode, praise only
+  at milestones) and a silent *Test me* retention test, but since #96 neither is a
+  setting: Standard coaching is the fixed default and the test has no entry point.
+- A per-hour reminder cap (30) limits alarm fatigue. Nothing is spoken during pause or the silent test. During the eye break and the guided stretch, move, water and jaw breaks, posture coaching is suspended (no cues, reminders or praise, and that time is not counted as slouching), and it stays off for 10 seconds after the break ends.
 
 How sure are we? Sources were checked in two tiers. **Verified** means the abstract
 or page text was read and supports the claim. **Metadata only** means the citation

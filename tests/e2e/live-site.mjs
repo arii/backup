@@ -170,27 +170,35 @@ async function newPage(
 // does the same around any action on a control inside #settings-view, so the checks
 // can keep naming controls directly and the main screen is back afterwards.
 function useSettings(page) {
-  const inClosedSettings = (sel) =>
+  // Returns "closed" (Settings must open), "week" (open, but My week must show), or "" (as is).
+  const needs = (sel) =>
     page
       .evaluate((s) => {
         const e = document.querySelector(s);
-        return !!e && !!e.closest("#settings-view") && document.getElementById("settings-view").hidden;
+        if (!e?.closest("#settings-view")) return "";
+        if (document.getElementById("settings-view").hidden) return "closed";
+        return e.closest("#week-view") && document.getElementById("week-view").hidden ? "week" : "";
       }, sel)
-      .catch(() => false);
+      .catch(() => "");
   for (const name of ["click", "check", "uncheck", "selectOption", "fill", "setInputFiles"]) {
     const orig = page[name].bind(page);
     page[name] = async (sel, ...rest) => {
-      if (typeof sel !== "string" || !(await inClosedSettings(sel))) return orig(sel, ...rest);
-      // Before tracking the header button is not shown yet; the view itself still works.
-      await page.evaluate(() => document.getElementById("settings-btn").click());
+      const need = typeof sel === "string" ? await needs(sel) : "";
+      if (!need) return orig(sel, ...rest);
+      // Before tracking the header button is not shown yet; the panel itself still works.
+      await page.evaluate((s) => {
+        if (document.getElementById("settings-view").hidden) document.getElementById("settings-btn").click();
+        if (document.querySelector(s)?.closest("#week-view")) document.getElementById("row-week").click();
+      }, sel);
       try {
         return await orig(sel, ...rest);
       } finally {
-        // Done, unless the action opened a dialog: the check answers it first, as a user would.
-        await page.evaluate(() => {
-          if (document.querySelector("dialog[open]")) return;
-          if (!document.getElementById("settings-view").hidden) document.getElementById("settings-close").click();
-        });
+        // Close what the wrapper opened, unless the action opened a dialog (the check answers it first).
+        if (need === "closed")
+          await page.evaluate(() => {
+            if (document.querySelector("dialog[open]")) return;
+            if (!document.getElementById("settings-view").hidden) document.getElementById("settings-close").click();
+          });
       }
     };
   }
@@ -199,7 +207,7 @@ function useSettings(page) {
 const ui = (page) =>
   page.evaluate(() => ({
     badge: document.getElementById("state-badge").textContent,
-    source: document.getElementById("source").textContent,
+    source: document.body.dataset.source || "-",
     warning: document.getElementById("warnings").textContent,
     needle: document.getElementById("needle-text").textContent,
     reminders: document.getElementById("reminder-count").textContent,
@@ -526,37 +534,16 @@ try {
         (await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show"))),
     );
     await page.click("#pause");
-    // Silent test: nothing shows either.
-    await page.click("#test-start");
-    const beforeTest = (await shownIds()).length;
-    await page.waitForTimeout(3000);
-    check(
-      "prompts: none during a silent test",
-      (await shownIds()).length === beforeTest &&
-        (await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show"))),
-    );
-    await page.click("#test-start");
-    // Breaks & prompts panel toggles persist.
-    await page.uncheck("#eye-breaks");
-    await page.selectOption("#move-minutes", "45");
-    await page.check("#breathing-moments");
-    await page.check("#breathe-cues");
+    // Settings → Break reminders (one switch since #96) turns the eye and move reminders off, and persists.
+    await page.uncheck("#row-breaks");
     await page.reload();
     const panel = await page.evaluate(() => ({
-      eye: document.getElementById("eye-breaks").checked,
-      move: document.getElementById("move-minutes").value,
-      moments: document.getElementById("breathing-moments").checked,
-      cues: document.getElementById("breathe-cues").checked,
+      on: document.getElementById("row-breaks").checked,
       stored: JSON.parse(localStorage.getItem("posture-guard:v1")),
     }));
     check(
-      "prompts: Breaks & prompts settings persist across a reload",
-      !panel.eye &&
-        panel.move === "45" &&
-        panel.moments &&
-        panel.cues &&
-        panel.stored.eyeBreaks === false &&
-        panel.stored.moveBreakMinutes === 45,
+      "prompts: the Break reminders switch persists across a reload",
+      !panel.on && panel.stored.eyeBreaks === false && panel.stored.moveBreakMinutes === 0,
       panel,
     );
     await page.screenshot({ path: path.join(outDir, "breaks-panel.png"), fullPage: true });
@@ -564,7 +551,7 @@ try {
     await page.close();
   }
 
-  // 4a2. Activity states: during the eye break the demo slouches (it slouches for
+  // 4a2. Activity states: during a break (Settings → Take a break now) the demo slouches (it slouches for
   // 20 s of every 40 s of page time) and nothing may coach: no banner, no reminder
   // count, no fix box, no day tally. Stopping the break starts a grace window with
   // no reminder; a reminder comes back after it while the slouch continues.
@@ -572,7 +559,7 @@ try {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
-    await page.waitForFunction(() => !document.getElementById("break-eye").disabled, null, { timeout: 15000 });
+    await page.waitForFunction(() => !document.getElementById("row-break").disabled, null, { timeout: 15000 });
     const snap = () =>
       page.evaluate(() => ({
         t: performance.now() / 1000,
@@ -594,7 +581,7 @@ try {
       { timeout: 120000, polling: 50 },
     );
     const before = await snap();
-    await page.evaluate(() => document.getElementById("break-eye").click());
+    await page.evaluate(() => document.getElementById("row-break").click());
     const samples = [];
     while (phase((await snap()).t) < 25) {
       samples.push(await snap());
@@ -602,7 +589,7 @@ try {
     }
     const during = samples.filter((s) => phase(s.t) > 22);
     check(
-      "activity: eye break while the demo slouches shows no banner, reminder or day tally",
+      "activity: a break while the demo slouches shows no banner, reminder or day tally",
       during.length > 8 && during.every((s) => !s.banner && s.count === before.count && s.today === before.today),
       {
         before,
@@ -610,8 +597,8 @@ try {
       },
     );
     check(
-      "activity: the badge reads 'Eye break, posture paused' during the break",
-      during.every((s) => /Eye break, posture paused/.test(s.badge)),
+      "activity: the badge reads 'Break, posture paused' during the break",
+      during.every((s) => /Break, posture paused/.test(s.badge)),
       during[0],
     );
     await page.click("#prompt-notnow"); // Stop: ends the break, grace begins (10 s)
@@ -627,7 +614,7 @@ try {
     );
     check(
       "activity: the badge no longer says the break is on once it is stopped",
-      !/Eye break/.test((await snap()).badge),
+      !/Break, posture/.test((await snap()).badge),
     );
     // The slouch phase ends at phase 40 s; the reminder the engine raised during
     // grace is delivered when grace ends (phase about 35 s).
@@ -641,7 +628,7 @@ try {
     check("activity: a reminder comes back after the grace window while the slouch continues", resumed, await snap());
     // A reminder banner on screen when a break starts is taken down at once.
     const bannerUp = (await snap()).banner;
-    await page.evaluate(() => document.getElementById("break-eye").click());
+    await page.evaluate(() => document.getElementById("row-break").click());
     const bannerGone = await page
       .waitForFunction(() => !document.getElementById("banner").classList.contains("show"), null, {
         timeout: 1500,
@@ -651,11 +638,11 @@ try {
       .catch(() => false);
     check("activity: a reminder banner is taken down when a break starts", bannerUp && bannerGone, { bannerUp });
     // Refused and interrupting actions during the break.
-    await page.evaluate(() => document.getElementById("breath-check").click());
+    await page.evaluate(() => document.getElementById("practice-breath").click());
     await page.waitForTimeout(500);
     check(
-      "activity: a breath check is refused during an eye break",
-      /Eye break, posture paused/.test((await snap()).badge),
+      "activity: a breath check is refused during a break",
+      /Break, posture paused/.test((await snap()).badge),
       await snap(),
     );
     await page.click("#pause");
@@ -666,7 +653,7 @@ try {
     check(
       "activity: pausing during a break ends it, and resuming does not bring it back",
       /paused/i.test(pausedBadge) &&
-        !/Eye break/.test(afterPause.badge) &&
+        !/Break, posture/.test(afterPause.badge) &&
         (await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show"))),
       { pausedBadge, afterPause },
     );
@@ -799,7 +786,7 @@ try {
     await page.click("#settings-btn"); // every setting is one click away in Settings
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
-    await page.click("#settings-close");
+    await page.click("#settings-scrim", { position: { x: 20, y: 300 } }); // tapping the dimmed screen closes it
     check("first run: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -829,19 +816,16 @@ try {
     });
     await page.goto(`${base}app/${bust}`);
     const prog = await page.evaluate(() => ({
-      rows: document.querySelectorAll("#progress-days .day-row").length,
-      text: document.getElementById("progress-days").textContent,
-      tests: document.getElementById("progress-tests").textContent,
-      suggest: document.getElementById("progress-suggest").textContent,
+      bars: [...document.querySelectorAll("#progress-days .week-bar")].map((b) => b.getAttribute("aria-label")),
+      heights: [...document.querySelectorAll("#progress-days .week-bar .track div")].map((d) => d.style.height),
       overflow: document.documentElement.scrollWidth > window.innerWidth,
     }));
     check(
-      "progress: 7 days from store.days, test trend, and a light-coaching suggestion",
-      prog.rows === 7 &&
-        /75%/.test(prog.text) &&
-        /50%/.test(prog.text) &&
-        /80%/.test(prog.tests) &&
-        /light coaching/.test(prog.suggest),
+      "My week (frame 12): 7 bars from store.days, today last and empty",
+      prog.bars.length === 7 &&
+        prog.heights.includes("75%") &&
+        prog.heights.includes("50%") &&
+        prog.heights[6] === "0%",
       prog,
     );
     check("375 px: no horizontal overflow on the start screen", !prog.overflow, prog);
@@ -912,123 +896,13 @@ try {
       exported.schema === 2 && !!exported.days && !("calibration" in exported),
       Object.keys(exported),
     );
-    // Your progress shows the last 7 days only (#92); import (progress-review task 7).
-    const weeks = await page.evaluate(() => ({
-      days: document.querySelectorAll("#progress-days .day-row").length,
-      weeks: document.querySelectorAll("#progress-weeks").length,
-    }));
-    check("progress: the last 7 days only, no weekly rows", weeks.days === 7 && weeks.weeks === 0, weeks);
-    await page.setInputFiles("#progress-import-file", {
-      name: "bad.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: -5, bad: 0 } } })),
-    });
-    await page.waitForFunction(() => /Not imported/.test(document.getElementById("progress-msg").textContent), null, {
-      timeout: 5000,
-    });
     check(
-      "import: a file with a negative value is rejected and nothing changes",
-      !(await page.evaluate(() => localStorage.getItem("posture-guard:v1").includes("2020-01-06"))),
-    );
-    await page.setInputFiles("#progress-import-file", {
-      name: "good.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: 600, bad: 60 } } })),
-    });
-    await page.waitForSelector("#import-dialog[open]");
-    check(
-      "a11y: import dialog takes focus and Escape cancels without importing",
-      (await page.evaluate(() => document.getElementById("import-dialog").contains(document.activeElement))) &&
-        (await (async () => {
-          await page.keyboard.press("Escape");
-          return page.evaluate(
-            () =>
-              !document.getElementById("import-dialog").open &&
-              !localStorage.getItem("posture-guard:v1").includes("2020-01-06"),
-          );
-        })()),
-    );
-    await page.setInputFiles("#progress-import-file", {
-      name: "good.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ days: { "2020-01-06": { good: 600, bad: 60 } } })),
-    });
-    await page.waitForSelector("#import-dialog[open]");
-    check(
-      "import: preview shows the counts",
-      /1 day/.test(await page.textContent("#import-preview")),
-      await page.textContent("#import-preview"),
-    );
-    await page.click("#import-merge");
-    const imported = await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).days["2020-01-06"]);
-    check("import: merge adds the day", imported && imported.good === 600, imported);
-    // Share my weekly score (tasks 9, 10): hidden until consent, link carries only the six fields.
-    check(
-      "share weekly: off by default and the section is hidden",
-      !(await page.isChecked("#share-weekly")) &&
-        (await page.evaluate(() => document.getElementById("peer-section").hidden)),
-    );
-    await page.evaluate(() => document.getElementById("share-weekly").click());
-    await page.waitForSelector("#share-consent-dialog[open]");
-    check(
-      "a11y: share consent dialog takes focus, has a name, and Escape leaves consent off",
-      await (async () => {
-        const inside = await page.evaluate(() => {
-          const d = document.getElementById("share-consent-dialog");
-          return (
-            d.contains(document.activeElement) && document.getElementById("share-consent-title").textContent.length > 0
-          );
-        });
-        await page.keyboard.press("Escape");
-        const off = await page.evaluate(
-          () =>
-            !document.getElementById("share-consent-dialog").open &&
-            !JSON.parse(localStorage.getItem("posture-guard:v1")).shareConsent,
-        );
-        await page.evaluate(() => document.getElementById("share-weekly").click());
-        await page.waitForSelector("#share-consent-dialog[open]");
-        return inside && off;
-      })(),
-    );
-    check(
-      "share weekly: the dialog lists the exact record",
-      /"consistency_score"/.test(await page.textContent("#share-consent-preview")) ||
-        /Choose a nickname/.test(await page.textContent("#share-consent-preview")),
-    );
-    await page.fill("#share-consent-nick", "Ari");
-    check(
-      "share weekly: preview has exactly the documented keys",
+      "My week: Export and Delete my data are its only controls",
       await page.evaluate(
         () =>
-          Object.keys(JSON.parse(document.getElementById("share-consent-preview").textContent)).join() ===
-          "schema,week,nickname,tracked_minutes,consistency_score,breaks_taken",
+          [...document.querySelectorAll("#week-view button")].map((b) => b.id).join() ===
+          "week-close,progress-export,progress-delete",
       ),
-    );
-    check("share weekly: Share stays disabled until the box is ticked", await page.isDisabled("#share-consent-agree"));
-    await page.check("#share-consent-check");
-    await page.click("#share-consent-agree");
-    check(
-      "share weekly: after consent the section shows",
-      await page.evaluate(() => !document.getElementById("peer-section").hidden),
-    );
-    await page.click("#peer-create");
-    const link = await page.inputValue("#peer-link");
-    check(
-      "share weekly: the link keeps the record in the fragment",
-      /#peer=[A-Za-z0-9_-]+$/.test(link) && !link.includes("?"),
-      link,
-    );
-    await page.fill("#peer-paste", link);
-    await page.click("#peer-view");
-    check(
-      "share weekly: pasting the link shows the friend's week",
-      /Ari/.test(await page.textContent("#peer-view-body")),
-    );
-    await page.click("#peer-view-close");
-    await page.evaluate(() => document.getElementById("share-weekly").click());
-    check(
-      "share weekly: switching off removes consent",
-      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).shareConsent),
     );
     page.once("dialog", (d) => d.accept());
     await page.click("#progress-delete");
@@ -1065,35 +939,30 @@ try {
       startW,
     );
     const pre = await page.evaluate(() => ({
-      breath: document.getElementById("breath-check").disabled,
-      good: document.getElementById("calib-good").disabled,
-      bad: document.getElementById("calib-bad").disabled,
-      tip: document.getElementById("calib-good").title,
+      good: document.getElementById("row-posture").disabled,
+      brk: document.getElementById("row-break").disabled,
+      tip: document.getElementById("row-posture").title,
       bannerRole: document.getElementById("banner").getAttribute("role"),
       bannerLive: document.getElementById("banner").getAttribute("aria-live"),
-      badLabel: document.querySelector('label[for="bad-file"]')?.textContent,
-      goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
     }));
     check(
-      "controls: breath check and record buttons are disabled before start, with a tooltip",
-      pre.breath && pre.good && pre.bad && /Start the webcam or demo first/.test(pre.tip),
+      "controls: Save my posture again and Take a break now are disabled before start, with a tooltip",
+      pre.good && pre.brk && /Start the webcam or demo first/.test(pre.tip),
       pre,
     );
     check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
-    check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
     // The guide waits for tracking to settle (stage 2, about 10 s of clear posture).
     await page.waitForSelector("#first-run:visible", { timeout: 20000 }).catch(() => {});
     const post = await page.evaluate(() => ({
-      breath: document.getElementById("breath-check").disabled,
-      good: document.getElementById("calib-good").disabled,
-      bad: document.getElementById("calib-bad").disabled,
+      good: document.getElementById("row-posture").disabled,
+      brk: document.getElementById("row-break").disabled,
       focus: document.activeElement?.id,
       guide: !document.getElementById("first-run").hidden,
       framing: document.querySelector("#first-run-body .framing")?.textContent,
     }));
-    check("controls: enabled after the demo starts", !post.breath && !post.good && !post.bad, post);
+    check("controls: enabled after the demo starts", !post.good && !post.brk, post);
     check("a11y: focus moves to the status badge after Start", post.focus === "state-badge", post);
     check(
       "first run: the guide card appears after Start with live framing",
@@ -1142,23 +1011,15 @@ try {
     const dashW = await noScroll();
     await page.screenshot({ path: path.join(outDir, "app-320-dashboard.png"), fullPage: true });
     check("reflow: no horizontal scroll at 320 px on the dashboard", dashW.scrollWidth <= dashW.innerWidth, dashW);
-    // P shortcut: pauses by default, ignored once turned off, and the choice is stored.
+    // P shortcut: a fixed default since #96 (on), still read from store.pauseShortcut.
     await page.click("#first-run-skip");
     await page.keyboard.press("p");
     check("shortcut: P pauses by default", (await page.textContent("#pause")) === "Resume");
     await page.keyboard.press("p");
-    await page.check("#pause-shortcut", { force: true });
-    await page.uncheck("#pause-shortcut", { force: true });
-    await page.locator("body").press("p");
-    check("shortcut: P does nothing once turned off", (await page.textContent("#pause")) === "Pause");
-    check(
-      "shortcut: the setting is stored",
-      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).pauseShortcut)) === false,
-    );
     // Reduced motion: no transitions on the hold bar, score bar or banner.
     await page.emulateMedia({ reducedMotion: "reduce" });
     const motion = await page.evaluate(() =>
-      ["prompt-fill", "banner", "test-progress"].map(
+      ["prompt-fill", "banner", "gauge-fill"].map(
         (id) => getComputedStyle(document.getElementById(id)).transitionDuration,
       ),
     );
@@ -1271,22 +1132,6 @@ try {
       document.addEventListener("pg:speak", (e) => window.__spoken.push(e.detail));
     });
     await page.goto(`${base}app/${bust}`);
-    await page
-      .waitForFunction(() => document.getElementById("voice-note").textContent.includes("Kokoro"), null, {
-        timeout: 10000,
-      })
-      .catch(() => {});
-    const voice = await page.evaluate(() => ({
-      note: document.getElementById("voice-note").textContent,
-      selected: document.getElementById("voice-pick").value,
-      praiseDefault: document.getElementById("spoken-praise").checked,
-    }));
-    check(
-      "voice: recorded Kokoro voice is the default",
-      voice.selected.startsWith("kokoro:") && voice.note.includes("Kokoro"),
-      voice,
-    );
-    check("voice: spoken praise is off by default", voice.praiseDefault === false, voice);
     const clip = await page.evaluate(async () => {
       const m = await (await fetch("./voice/manifest.json")).json();
       const file = m.voices.af_heart["Looking good."];
@@ -1294,7 +1139,6 @@ try {
       return { file, status: r.status, type: r.headers.get("content-type"), bytes: (await r.arrayBuffer()).byteLength };
     });
     check("voice: clips are deployed", clip.status === 200 && clip.bytes > 2000, clip);
-    await page.check("#spoken-praise"); // opt in, to check praise is spoken with a clip
     await page.click("#start-demo");
     await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
     const hold = await page.evaluate(() => ({
@@ -1320,13 +1164,11 @@ try {
       .catch(() => {});
     const spoken = await page.evaluate(() => window.__spoken.slice());
     check(
-      "praise: spoken with the recorded voice when opted in",
-      spoken.some(
-        (x) =>
-          x.engine === "kokoro" &&
-          /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(
-            x.text,
-          ),
+      "praise: not spoken by default (spoken praise is a fixed default, off)",
+      !spoken.some((x) =>
+        /^(Looking good|Nice posture|You're looking good|Great, keep|Posture to die|Tall and relaxed|Spine of)/.test(
+          x.text,
+        ),
       ),
       spoken,
     );
@@ -1350,53 +1192,30 @@ try {
     await page.waitForTimeout(1500);
     const resumed = await page.textContent("#state-badge");
     check("pause: resume restarts tracking", resumed !== "paused", { resumed });
-    await page.click("#breath-check"); // 9 s real-time phases are on the 8x clock: ~1.2 s
+    // Learn the cues ends with Try a breath check; it is the one way to start one by hand (#96).
+    await page.evaluate(() => document.getElementById("practice-breath").click()); // 9 s phases on the 8x clock: ~1.2 s
     await page
       .waitForFunction(
-        () => /Relaxed|bracing|holding|clearly/.test(document.getElementById("relax-status").textContent),
+        () =>
+          /^(Let your shoulders drop|That lower spot is right|Relaxed and stacked|Couldn't see your shoulders)$/.test(
+            document.getElementById("banner").textContent,
+          ),
         null,
         { timeout: 8000 },
       )
       .catch(() => {});
     const breathOut = await page.evaluate(() => ({
-      status: document.getElementById("relax-status").textContent,
+      status: document.getElementById("banner").textContent,
       lines: window.__spoken
         .filter((x) => /breath|shoulders|relaxed/i.test(x.text))
         .map((x) => `${x.engine}: ${x.text}`),
     }));
     check(
-      "breath check: prompts in, out, then gives a verdict with the recorded voice",
+      "breath check: prompts in, out, then gives a short verdict on the video, spoken with the recorded voice",
       /Relaxed and stacked/.test(breathOut.status) &&
         breathOut.lines.length >= 3 &&
         breathOut.lines.every((l) => l.startsWith("kokoro")),
       breathOut,
-    );
-    const spokenBeforeTest = await page.evaluate(() => window.__spoken.length);
-    await page.click("#test-start");
-    await page.waitForTimeout(3000); // sim 24 s: the demo slouches in this window, yet nothing may fire
-    const silent = await page.evaluate(
-      (n) => ({
-        badge: document.getElementById("state-badge").textContent,
-        testing: document.body.classList.contains("testing"),
-        needleShown: getComputedStyle(document.querySelector(".panel.coaching")).display !== "none",
-        spoke: window.__spoken.length - n,
-        status: document.getElementById("test-status").textContent,
-      }),
-      spokenBeforeTest,
-    );
-    check(
-      "silent test: hides feedback and stays quiet",
-      silent.badge === "silent test" &&
-        silent.testing &&
-        !silent.needleShown &&
-        silent.spoke === 0 &&
-        /left/.test(silent.status),
-      silent,
-    );
-    await page.click("#test-start"); // stop early: not saved
-    check(
-      "silent test: stopping early is not saved",
-      (await page.evaluate(() => (JSON.parse(localStorage.getItem("posture-guard:v1")).tests || []).length)) === 0,
     );
     await page.click("#about-link");
     await page.click("#report-bug").catch(() => {}); // opens a new tab; only the href matters
@@ -1574,7 +1393,7 @@ try {
       { timeout: 90000 },
     );
     const after = await page.evaluate(() => ({
-      source: document.getElementById("source").textContent,
+      source: document.body.dataset.source || "-",
       marks: window.__loadMarks,
     }));
     check(
@@ -1695,13 +1514,13 @@ try {
           seen,
         );
         // the shoulder features are off on the fallback (#85)
-        await page.evaluate(() => document.getElementById("breath-check").click());
+        await page.evaluate(() => document.getElementById("practice-breath").click());
         await page.waitForTimeout(500);
         const sh = await page.evaluate(() => {
           const st = JSON.parse(localStorage.getItem("posture-guard:v1") || "{}");
           const days = Object.values(st.days || {});
           return {
-            status: document.getElementById("relax-status").textContent,
+            status: document.getElementById("banner").textContent,
             consentOpen: !!document.querySelector("dialog[open]"),
             braceEvents: days.reduce((n, d) => n + (d.brace_events || 0), 0),
             shoulderSecs: days.reduce((n, d) => n + (d.relaxed_s || 0) + (d.shoulder_s || 0), 0),
@@ -1724,177 +1543,25 @@ try {
       await noGL.close();
     }
   }
-  // 6. A custom sound survives a reload under the CSP (restoreSound must not
-  //    use fetch(data:), which connect-src 'self' blocks).
+  // 4c. Issue #51: consent gates the shoulder and breathing features. Since #96 the gate is
+  // the Settings → Shoulders & breathing switch (shown here with revealAll) and the breath
+  // check offered after Learn the cues.
   {
-    const { page, errors } = await newPage(browser);
-    await page.goto(base + "app/" + bust);
-    const rate = 8000,
-      n = 800; // 0.1 s of silence as 16-bit mono PCM WAV
-    const wav = Buffer.alloc(44 + n * 2);
-    wav.write("RIFF", 0);
-    wav.writeUInt32LE(36 + n * 2, 4);
-    wav.write("WAVEfmt ", 8);
-    wav.writeUInt32LE(16, 16);
-    wav.writeUInt16LE(1, 20);
-    wav.writeUInt16LE(1, 22);
-    wav.writeUInt32LE(rate, 24);
-    wav.writeUInt32LE(rate * 2, 28);
-    wav.writeUInt16LE(2, 32);
-    wav.writeUInt16LE(16, 34);
-    wav.write("data", 36);
-    wav.writeUInt32LE(n * 2, 40);
-    await page.setInputFiles("#bad-file", { name: "chime.wav", mimeType: "audio/wav", buffer: wav });
-    await page
-      .waitForFunction(() => JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound, null, {
-        timeout: 5000,
-      })
-      .catch(() => {});
-    const stored = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
-    check("custom sound: an uploaded sound is stored", stored);
-    await page.reload();
-    await page.click("#start-demo"); // restoreSound runs when a session begins
-    await page.waitForTimeout(1500);
-    const kept = await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").badSound);
-    check("custom sound: survives a reload (not blocked by the CSP)", kept);
-    check("custom sound: no page errors", errors.length === 0, errors);
-    await page.close();
-  }
-  // 4a. Sound packs: clean by default; Spooky synthesizes a bell and a ghost glide and persists.
-  {
-    const { page, errors } = await newPage(browser);
-    await page.addInitScript(() => {
-      window.__osc = [];
-      const orig = AudioContext.prototype.createOscillator;
-      AudioContext.prototype.createOscillator = function () {
-        const o = orig.call(this);
-        window.__osc.push(o);
-        return o;
-      };
-    });
-    await page.goto(`${base}app/${bust}`);
-    const def = await page.inputValue("#sound-pack");
-    const osc = async (sel) => {
-      await page.evaluate(() => {
-        window.__osc.length = 0;
-      });
-      await page.click(sel);
-      await page.waitForTimeout(200);
-      return page.evaluate(() => window.__osc.length);
-    };
-    const clean = await osc("#test-bad");
-    await page.selectOption("#sound-pack", "spooky");
-    const spookyBad = await osc("#test-bad");
-    const spookyGood = await osc("#test-good");
-    await page.reload();
-    const kept = await page.inputValue("#sound-pack");
-    check(
-      "sound pack: clean is the default and Spooky plays a bell and a ghost glide",
-      def === "clean" && clean === 2 && spookyBad === 14 && spookyGood === 2 && kept === "spooky",
-      { def, clean, spookyBad, spookyGood, kept },
-    );
-    check("sound pack: no page errors", errors.length === 0, errors);
-    await page.close();
-  }
-  // 4b. Offline mode (issue #49): opt in, go offline, reload, run, remove.
-  {
-    const { page, errors } = await newPage(browser);
-    const ctx = page.context();
-    await page.goto(`${base}app/${bust}`);
-    const supported = await page.evaluate(() => "serviceWorker" in navigator && "caches" in window);
-    if (!supported) {
-      console.log("SKIP offline mode: service workers unsupported in this browser");
-    } else {
-      const swBefore = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
-      check("offline: no service worker is registered until the user opts in", swBefore === 0, { swBefore });
-      await page.click("#offline-enable");
-      await page
-        .waitForFunction(
-          () =>
-            /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(
-              document.getElementById("offline-status").textContent,
-            ),
-          null,
-          { timeout: 90000 },
-        )
-        .catch(() => {});
-      const status = await page.evaluate(() => document.getElementById("offline-status").textContent);
-      check(
-        "offline: ready message appears and says video is never stored",
-        /^Offline mode is ready\. You can disconnect Wi-Fi now\./.test(status) && /video is never stored/i.test(status),
-        status,
-      );
-      await page.screenshot({ path: path.join(outDir, "offline-ready.png") });
-      await page.reload(); // let the worker take control of the page before going offline
-      await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 }).catch(() => {});
-      await ctx.setOffline(true);
-      const failedReqs = [];
-      page.on("requestfailed", (r) => failedReqs.push(r.url()));
-      const resp = await page.goto(`${base}app/?offline=1`).catch((e) => ({ err: String(e) }));
-      check("offline: the app reloads with the network off", !!resp && !resp.err, resp?.err);
-      await page.click("#start-demo");
-      await page.waitForTimeout(3000);
-      const off = await ui(page);
-      check("offline: demo mode runs", off.badge === "good posture", off);
-      if (y4m) {
-        await page.reload();
-        await page.click("#start-camera");
-        await page
-          .waitForFunction(
-            () =>
-              document.getElementById("source").textContent === "webcam" &&
-              document.getElementById("m-head_forward_deg").textContent !== "-",
-            null,
-            { timeout: 60000 },
-          )
-          .catch(() => {});
-        const cam = await ui(page);
-        check(
-          "offline: webcam mode starts and pose detection finds the person without a network",
-          !cam.startError && cam.source === "webcam" && cam.headForward !== "-",
-          cam,
-        );
-      }
-      check("offline: no failed requests", failedReqs.length === 0, failedReqs.slice(0, 5));
-      check("offline: no page errors", errors.length === 0, errors);
-      await ctx.setOffline(false);
-      await page.reload();
-      await page.click("#offline-remove");
-      await page.waitForFunction(
-        () => /Offline copy removed/.test(document.getElementById("offline-status").textContent),
-        null,
-        { timeout: 10000 },
-      );
-      const left = await page.evaluate(async () => ({
-        regs: (await navigator.serviceWorker.getRegistrations()).length,
-        caches: (await caches.keys()).filter((k) => k.startsWith("posture-guard-")).length,
-      }));
-      check(
-        "offline: Remove offline copy unregisters the worker and deletes the cache",
-        left.regs === 0 && left.caches === 0,
-        left,
-      );
-    }
-    await page.close();
-  }
-  // 4c. Issue #51: consent gates the shoulder and breathing features.
-  {
-    const { page, errors } = await newPage(browser, { consent: false });
+    const { page, errors } = await newPage(browser, { consent: false, extra: { revealAll: true } });
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
     check(
-      "consent: relax reminders box is off and the status says off until the user opts in",
-      !(await page.isChecked("#relax-reminders")) && /Off\./.test(await page.textContent("#consent-status")),
-      await page.textContent("#consent-status"),
+      "consent: the Shoulders & breathing switch is off until the user opts in",
+      !(await page.isChecked("#row-shoulders")),
     );
-    await page.click("#breath-check");
+    await page.evaluate(() => document.getElementById("practice-breath").click());
     check(
       "consent: the breath check asks first and does not start",
       await page.evaluate(
         () =>
           document.getElementById("consent-dialog").open &&
-          !/Breathe in slowly/.test(document.getElementById("relax-status").textContent),
+          !/Breathe in slowly/.test(document.getElementById("banner").textContent),
       ),
     );
     const dialog = await page.textContent("#consent-dialog");
@@ -1914,49 +1581,34 @@ try {
       "consent: declining stores nothing",
       await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").consent),
     );
-    await page.check("#breathing-moments");
+    await page.click("#row-shoulders"); // opens the consent dialog first
     check(
-      "consent: the breathing moments box also asks and resets when declined",
+      "consent: switching Shoulders & breathing on asks first",
       await page.evaluate(() => document.getElementById("consent-dialog").open),
     );
     await page.click("#consent-cancel");
-    check("consent: breathing moments stay off", !(await page.isChecked("#breathing-moments")));
-    await page.click("#breath-check");
+    check("consent: the switch stays off when declined", !(await page.isChecked("#row-shoulders")));
+    await page.click("#row-shoulders"); // opens the consent dialog first
     await page.check("#consent-check");
     await page.click("#consent-agree");
-    await page
-      .waitForFunction(() => /Breathe in slowly/.test(document.getElementById("relax-status").textContent), null, {
-        timeout: 5000,
-      })
-      .catch(() => {});
     const rec = await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).consent);
     check(
-      "consent: agreeing records a dated consent and runs the breath check",
-      rec &&
-        rec.version === 1 &&
-        !Number.isNaN(Date.parse(rec.at)) &&
-        /Breathe in slowly/.test(await page.textContent("#relax-status")),
+      "consent: agreeing records a dated consent and turns the shoulder features on",
+      rec && rec.version === 1 && !Number.isNaN(Date.parse(rec.at)) && (await page.isChecked("#row-shoulders")),
       rec,
     );
-    // The check was started from Settings (behind the consent dialog), so the app returns to
-    // the main screen when it starts. Wait for that before the next Settings action.
-    await page
-      .waitForFunction(() => document.getElementById("settings-view").hidden, null, { timeout: 10000 })
-      .catch(() => {});
+    await page.evaluate(() => document.getElementById("settings-close").click());
+    await page.click("#row-shoulders");
     check(
-      "consent: the breath check started from Settings returns to the main screen",
-      await page.evaluate(() => document.getElementById("settings-view").hidden),
-    );
-    await page.click("#consent-withdraw");
-    check(
-      "consent: withdrawing removes the record",
+      "consent: switching off withdraws the record",
       (await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent)) &&
-        !(await page.isChecked("#relax-reminders")),
+        !(await page.isChecked("#row-shoulders")),
     );
     page.on("dialog", (d) => d.accept());
-    await page.click("#consent-open");
+    await page.click("#row-shoulders"); // opens the consent dialog first
     await page.check("#consent-check");
     await page.click("#consent-agree");
+    await page.evaluate(() => document.getElementById("settings-close").click());
     await page.click("#progress-delete");
     await page.waitForLoadState("load");
     await page.waitForTimeout(500);
@@ -1976,8 +1628,9 @@ try {
     });
     await page.goto(`${base}app/${bust}`);
     const before = externalRequests.length;
-    await page.click("#start-demo"); // Share is a post-start header control
-    await page.click("#share-btn");
+    await page.click("#start-demo");
+    // Since #96 the share menu opens from the sponsor card's "Share instead" (no header button).
+    await page.evaluate(() => document.getElementById("sponsor-share").click());
     const links = await page.evaluate(() =>
       Object.fromEntries(
         ["bluesky", "linkedin", "x", "email", "mastodon"].map((id) => {
@@ -2026,8 +1679,9 @@ try {
   {
     const { page, errors } = await newPage(browser);
     await page.goto(`${base}app/${bust}`);
-    await page.click("#start-demo"); // Share is a post-start header control
-    await page.click("#share-btn");
+    await page.click("#start-demo");
+    // Since #96 the share menu opens from the sponsor card's "Share instead" (no header button).
+    await page.evaluate(() => document.getElementById("sponsor-share").click());
     await page.click("#share-card-btn");
     check(
       "share card: too little tracked time gives a hint and no card",
@@ -2036,7 +1690,7 @@ try {
     );
     await page.click("#share-close");
     await page.waitForTimeout(66000);
-    await page.click("#share-btn");
+    await page.evaluate(() => document.getElementById("sponsor-share").click());
     await page.click("#share-card-btn");
     const card = await page.evaluate(() => {
       const c = document.getElementById("share-card");
@@ -2090,7 +1744,7 @@ try {
     };
     {
       const { page, errors, seen } = await shownIn({}, 20000);
-      check("sponsor: card appears after sustained use, in the session panel", seen);
+      check("sponsor: card appears after sustained use, under the main screen", seen);
       if (seen) {
         const info = await page.evaluate(() => ({
           text: document.getElementById("sponsor-text").textContent,
@@ -2130,18 +1784,6 @@ try {
     ]) {
       const { page, seen } = await shownIn(extra, 4000);
       check(`sponsor: not shown ${name}`, !seen);
-      await page.close();
-    }
-    {
-      const { page } = await newPage(browser, { extra: used() });
-      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
-      await page.click("#start-demo");
-      await page.click("#test-start");
-      await page.waitForTimeout(4000);
-      check(
-        "sponsor: not shown during a silent test",
-        await page.evaluate(() => document.getElementById("sponsor-card").hidden),
-      );
       await page.close();
     }
   }
@@ -2263,31 +1905,25 @@ try {
         };
       });
     const shown = (page, sel) => page.locator(sel).isVisible();
+    // Since #96 the controls are the Settings rows (frames 08 to 12) and My week's two links.
     const STAGED_IDS = [
       "good-pct",
       "needle-text",
-      "calib-good",
-      "mode",
-      "eye-breaks",
-      "move-minutes",
-      "breathing-moments",
-      "relax-reminders",
-      "specific-cues",
-      "pause-shortcut",
-      "spoken-praise",
-      "voice-pick",
-      "sound-pack",
-      "test-start",
-      "progress-panel",
-      "offline-panel",
-      "breaks-panel",
-      "share-btn",
-      "consent-open",
+      "row-chime",
+      "row-sayfix",
+      "row-breaks",
+      "row-shoulders",
+      "row-posture",
+      "row-break",
+      "row-week",
+      "row-help",
+      "progress-export",
+      "progress-delete",
     ];
 
     // Stage 0: before tracking, at most 2 checkboxes and the staged panels are out of the tab order.
     {
-      const { page, errors } = await newPage(browser, { staged: true });
+      const { page, errors } = await newPage(browser);
       await page.goto(`${base}app/${bust}`);
       await page.waitForSelector("#start-camera:visible");
       const d0 = await density(page);
@@ -2328,7 +1964,7 @@ try {
 
     // Stage 1 to 2 on a clock 10x faster (settle after about 1 s), first-run guide skipped.
     {
-      const { page, errors } = await newPage(browser, { staged: true, extra: { firstRunDone: false } });
+      const { page, errors } = await newPage(browser, { extra: { firstRunDone: false } });
       await page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
       await page.click("#start-demo");
       await page.waitForFunction(() => !document.querySelector("#good-pct").closest("[data-stage]").hidden, null, {
@@ -2368,7 +2004,6 @@ try {
         days[key] = { good: 1200, bad: 300, best: 400 };
       }
       const { page, errors } = await newPage(browser, {
-        staged: true,
         extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false, days },
       });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
@@ -2423,7 +2058,6 @@ try {
         ["sit up", "slouched"],
       ]) {
         const r = await inState(badge);
-        check(`main screen (${name}): at most 10 visible words with 8 weeks of history`, r.words <= 10, r);
         check(
           `main screen (${name}): the gauge has a text equivalent for screen readers (#95)`,
           r.gaugeLabel === `Posture: ${name === "good" ? "upright" : "slouching"}` ||
@@ -2446,35 +2080,33 @@ try {
         header,
       );
       await page.click("#settings-btn");
-      const st = await page.evaluate(
-        (ids) => {
-          const view = document.getElementById("settings-view");
-          return {
-            open: !view.hidden && getComputedStyle(document.querySelector("main")).display === "none",
-            focus: document.activeElement?.id,
-            missing: ids.filter((id) => {
-              const e = document.getElementById(id) || document.getElementsByName(id)[0];
-              return !e?.closest("#settings-view");
-            }),
-            hiddenSections: [...view.querySelectorAll(".settings-grid > .panel")]
-              .filter((e) => e.hidden && e.id !== "personalize-panel")
-              .map((e) => e.id),
-            weekRows: document.querySelectorAll("#progress-weeks").length,
-            dayRows: document.querySelectorAll("#progress-days .day-row").length,
-          };
-        },
-        STAGED_IDS.filter((id) => !["good-pct", "needle-text"].includes(id)),
-      );
+      const st = await page.evaluate(() => {
+        const view = document.getElementById("settings-view");
+        const r = view.getBoundingClientRect();
+        return {
+          open: !view.hidden,
+          width: Math.round(r.width),
+          right: Math.round(window.innerWidth - r.right),
+          mainShown: getComputedStyle(document.querySelector("main")).display !== "none",
+          dimmed: !document.getElementById("settings-scrim").hidden,
+          focus: document.activeElement?.id,
+          grid: !!view.querySelector(".settings-grid, select, input[type=range], details, p"),
+        };
+      });
       check(
-        "settings: replaces the main screen, every section shown, every setting inside",
-        st.open && st.focus === "settings-title" && st.missing.length === 0 && st.hiddenSections.length === 0,
+        "settings (frame 08): a 380 px side panel from the right over the dimmed main screen, no grid or dropdowns",
+        st.open &&
+          st.width === 380 &&
+          st.right === 0 &&
+          st.mainShown &&
+          st.dimmed &&
+          st.focus === "settings-title" &&
+          !st.grid,
         st,
       );
-      check("settings: progress shows the last 7 days only", st.dayRows === 7 && st.weekRows === 0, st);
-      await page.screenshot({ path: path.join(outDir, "settings.png"), fullPage: true });
       await page.keyboard.press("Escape");
       check(
-        "settings: Escape returns to the main screen",
+        "settings: Escape closes it and returns focus to the gear",
         await page.evaluate(
           () => document.getElementById("settings-view").hidden && document.activeElement?.id === "settings-btn",
         ),
@@ -2519,79 +2151,146 @@ try {
       await page.close();
     }
 
-    // Time alone never puts settings on the main screen; Settings works at 320 px.
+    // #96 / #98 frames 08 to 11: the rows unlock with tracked time and days (5, 6, 7, 8),
+    // revealAll shows all 8, and every STAGED_IDS control is in the panel.
+    const rowsAt = async (extra, scale = 1) => {
+      const { page, errors } = await newPage(browser, {
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false, ...extra },
+      });
+      await page.goto(`${base}app/?clockScale=${scale}&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForTimeout(1500);
+      const r = await page.evaluate(() => ({
+        rows: [...document.querySelectorAll("#settings-list [data-row]")]
+          .filter((e) => !e.hidden)
+          .map((e) => e.dataset.row),
+        card: document.getElementById("unlock-card").hidden
+          ? null
+          : document.getElementById("unlock-title").textContent,
+        dot: !document.getElementById("settings-dot").hidden,
+      }));
+      return { page, errors, ...r };
+    };
+    const yesterday = (() => {
+      const d = new Date(Date.now() - 86400000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+    for (const [name, extra, rows] of [
+      [
+        "first day",
+        { trackedS: 0, rowsSeen: ["chime", "sayfix", "posture", "breaknow", "help"] },
+        "chime,sayfix,posture,breaknow,help",
+      ],
+      ["after 2 min", { trackedS: 125 }, "chime,sayfix,breaks,posture,breaknow,help"],
+      ["after 5 min", { trackedS: 305 }, "chime,sayfix,breaks,shoulders,posture,breaknow,help"],
+      [
+        "second day",
+        { trackedS: 10, days: { [yesterday]: { good: 60, bad: 5 } } },
+        "chime,sayfix,breaks,shoulders,posture,breaknow,week,help",
+      ],
+    ]) {
+      const r = await rowsAt(extra);
+      check(`settings rows (${name}): ${rows.split(",").length} rows`, r.rows.join() === rows, r.rows);
+      await r.page.click("#settings-btn");
+      await r.page.screenshot({ path: path.join(outDir, `review-settings-${name.replace(/ /g, "-")}.png`) });
+      check(`settings rows (${name}): no page errors`, r.errors.length === 0, r.errors);
+      await r.page.close();
+    }
+    {
+      const r = await rowsAt({ revealAll: true });
+      const present = await r.page.evaluate(
+        (ids) => ids.filter((id) => document.getElementById(id)?.closest("#settings-view")),
+        STAGED_IDS,
+      );
+      check("settings: revealAll shows all 8 rows", r.rows.length === 8, r.rows);
+      check("settings: every STAGED_IDS control is in the panel", present.length === STAGED_IDS.length - 2, {
+        present,
+      });
+      await r.page.close();
+    }
+    // The demo at ?clockScale=600 unlocks on its own: a fresh profile reaches 7 rows in seconds.
+    {
+      const r = await rowsAt({}, 600);
+      await r.page.waitForTimeout(1500);
+      const rows = await r.page.evaluate(
+        () => [...document.querySelectorAll("#settings-list [data-row]")].filter((e) => !e.hidden).length,
+      );
+      check("settings rows: the demo at clockScale 600 unlocks 2 min and 5 min rows by itself", rows === 7, rows);
+      await r.page.close();
+    }
+
+    // Frame 07: one unlock card per session, a dot on the gear, a green new row, x never shows it again.
+    {
+      // clockScale 600: the 5 min unlock also arrives in this session, but the card waits for the next one.
+      const r = await rowsAt({ trackedS: 125 }, 600);
+      check("unlock card: Break reminders is offered once 2 min are tracked", r.card === "Break reminders", r.card);
+      check("unlock card: the gear has a dot", r.dot);
+      await r.page.screenshot({ path: path.join(outDir, "review-07-unlock.png") });
+      const cardInfo = await r.page.evaluate(() => ({
+        switches: document.querySelectorAll("#unlock-card input[role=switch]:not([hidden])").length,
+        text: document.getElementById("unlock-card").innerText.replace(/\s+/g, " ").trim(),
+      }));
+      check(
+        "unlock card: one line, one switch, x",
+        cardInfo.switches === 1 && /^new break reminders/i.test(cardInfo.text),
+        cardInfo,
+      );
+      await r.page.click("#settings-btn");
+      check(
+        "unlock: the new row is green until Settings closes",
+        await r.page.evaluate(() => document.querySelector('[data-row="breaks"]').classList.contains("new")),
+      );
+      await r.page.click("#settings-close");
+      check(
+        "unlock: closing Settings clears the dot and the green row",
+        await r.page.evaluate(
+          () =>
+            document.getElementById("settings-dot").hidden &&
+            !document.querySelector('[data-row="breaks"]').classList.contains("new"),
+        ),
+      );
+      await r.page.click("#unlock-close");
+      await r.page.reload();
+      await r.page.click("#start-demo");
+      await r.page.waitForTimeout(1500);
+      const next = await r.page.evaluate(() => ({
+        card: document.getElementById("unlock-card").hidden
+          ? null
+          : document.getElementById("unlock-title").textContent,
+        done: JSON.parse(localStorage.getItem("posture-guard:v1")).unlockCardsDone,
+      }));
+      check(
+        "unlock card: x keeps it from coming back; the next session offers the next one",
+        next.card === "Shoulders & breathing" && next.done.includes("breaks"),
+        next,
+      );
+      await r.page.waitForTimeout(1500);
+      check(
+        "unlock card: at most one per session (no second card after this one)",
+        await r.page.evaluate(
+          () =>
+            document.querySelectorAll(".unlock-card:not([hidden])").length === 1 &&
+            document.getElementById("unlock-title").textContent === "Shoulders & breathing",
+        ),
+      );
+      check("unlock card: no page errors", r.errors.length === 0, r.errors);
+      await r.page.close();
+    }
+
+    // Settings fits at 320 px.
     {
       const { page, errors } = await newPage(browser, {
-        staged: true,
-        consent: false,
         viewport: { width: 320, height: 640 },
-        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+        extra: { revealAll: true },
       });
-      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.goto(`${base}app/${bust}`);
       const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
       check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
       await page.click("#start-demo");
-      await page.waitForSelector("#gauge:visible");
-      await page.waitForTimeout(2000);
-      check(
-        "progressive onboarding: time does not put configuration or optional tools on the main screen",
-        await page.evaluate(
-          () =>
-            [...document.querySelectorAll("main [data-stage]:not([hidden])")].map((e) => e.id).join() ===
-            "session-line,gauge",
-        ),
-      );
       await page.click("#settings-btn");
       check("settings: no horizontal scroll at 320 px", await fits());
-      await page.screenshot({ path: path.join(outDir, "settings-320.png"), fullPage: true });
-      await page.click("#breath-check");
-      await page.waitForSelector("#consent-dialog:visible");
-      check("settings: the breath check still asks for permission", await page.locator("#consent-dialog").isVisible());
-      await page.click("#consent-cancel");
-      check(
-        "settings: declining stores no consent and keeps Settings open",
-        await page.evaluate(
-          () =>
-            !JSON.parse(localStorage.getItem("posture-guard:v1")).consent &&
-            !document.getElementById("settings-view").hidden,
-        ),
-      );
-      await page.click("#consent-open");
-      await page.waitForSelector("#consent-dialog:visible");
-      await page.check("#consent-check");
-      await page.click("#consent-agree");
-      // The demo allows a breath check only in its good-posture half.
-      await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
-        timeout: 60000,
-        polling: 50,
-      });
-      await page.click("#breath-check");
-      await page
-        .waitForFunction(() => document.getElementById("settings-view").hidden, null, { timeout: 15000 })
-        .catch(() => {});
-      check(
-        "settings: a breath check started from Settings returns to the main screen",
-        await page.evaluate(
-          () =>
-            document.getElementById("settings-view").hidden &&
-            getComputedStyle(document.querySelector("main")).display !== "none",
-        ),
-      );
-      // Issue #84: Share and the weekly score stay reachable, now from Settings.
-      check(
-        "share reachable: Share sits in Settings, not the header",
-        await page.evaluate(
-          () => !!document.querySelector("#settings-view #share-btn") && !document.querySelector("header #share-btn"),
-        ),
-      );
-      check("share reachable: the weekly score toggle is off by default", !(await page.isChecked("#share-weekly")));
-      await page.click("#share-weekly");
-      await page.waitForSelector("#share-consent-dialog:visible");
-      check(
-        "share reachable: turning on the weekly score opens the consent dialog first and stays off",
-        !(await page.isChecked("#share-weekly")),
-      );
-      check("progressive onboarding: no page errors", errors.length === 0, errors);
+      await page.screenshot({ path: path.join(outDir, "settings-320.png") });
+      check("settings 320 px: no page errors", errors.length === 0, errors);
       await page.close();
     }
   }
@@ -2629,9 +2328,7 @@ try {
         after.consent === undefined &&
           !after.breathingMoments &&
           !after.spokenPraise &&
-          !(await page.isChecked("#breathing-moments")) &&
-          !(await page.isChecked("#relax-reminders")) &&
-          !(await page.isChecked("#spoken-praise")) &&
+          !(await page.isChecked("#row-shoulders")) &&
           before.eyeBreaks === after.eyeBreaks &&
           before.moveBreakMinutes === after.moveBreakMinutes,
         after,
@@ -2640,19 +2337,7 @@ try {
         "setup: focus goes to the status badge after the user pressed Skip all",
         (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
       );
-      check(
-        "setup: skipped steps are listed and Settings → Personalize reopens the first one",
-        after.setup.skipped.includes("framing") &&
-          (await page.evaluate(() => !document.getElementById("setup-btn").hidden)),
-        after.setup,
-      );
-      await page.click("#setup-btn");
-      check(
-        "setup: Set up reopens the first skipped step and moves focus to its heading",
-        (await page.textContent("#first-run-heading")) === "Get comfortable" &&
-          (await page.evaluate(() => document.activeElement?.id)) === "first-run-heading",
-      );
-      await page.click("#first-run-skip-all");
+      check("setup: skipped steps are recorded", after.setup.skipped.includes("framing"), after.setup);
       await page.reload();
       await page.click("#start-demo");
       await page.waitForTimeout(1500);
@@ -2674,7 +2359,7 @@ try {
       await page.close();
     }
 
-    // Setup waits while paused or in a silent test, then comes back.
+    // Setup waits while paused, then comes back.
     {
       const { page, errors } = await newPage(browser, { guide: true });
       await page.goto(`${base}app/${bust}`);
@@ -2686,9 +2371,6 @@ try {
       await page.keyboard.press("p");
       await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 20000 });
       check("setup: comes back after the pause", true);
-      await page.click("#test-start");
-      await page.waitForTimeout(500);
-      check("setup: waits during a silent test", !(await visible(page, "#first-run")));
       check("setup: waiting has no page errors", errors.length === 0, errors);
       await page.close();
     }
@@ -2716,7 +2398,7 @@ try {
       check(
         "breath intro: nothing starts and no consent dialog opens by itself",
         !(await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
-          !/Breathe in/.test(await page.textContent("#relax-status")),
+          !/Breathe in/.test(await page.textContent("#banner")),
       );
       check(
         "breath intro: the card is a polite status region",
@@ -2741,13 +2423,13 @@ try {
       check(
         "breath intro: Try it opens the consent dialog and does not start the check",
         (await page.evaluate(() => document.getElementById("consent-dialog").open)) &&
-          !/Breathe in/.test(await page.textContent("#relax-status")),
+          !/Breathe in/.test(await page.textContent("#banner")),
       );
       await page.click("#consent-cancel");
       const st = await stored(page);
       check(
         "breath intro: declining stores nothing and does not run the check",
-        st.consent === undefined && !st.breathIntroShown && !/Breathe in/.test(await page.textContent("#relax-status")),
+        st.consent === undefined && !st.breathIntroShown && !/Breathe in/.test(await page.textContent("#banner")),
         st,
       );
       check("breath intro: declining has no page errors", errors.length === 0, errors);
@@ -2763,7 +2445,7 @@ try {
         "breath intro: accepting records consent and runs the breath check once",
         st.consent?.version === 1 &&
           st.breathIntroShown === true &&
-          /Breathe in slowly/.test(await page.textContent("#relax-status")),
+          /Breathe in slowly/.test(await page.textContent("#banner")),
         st,
       );
       check("breath intro: accepting has no page errors", errors.length === 0, errors);
@@ -2779,7 +2461,7 @@ try {
       await page.click("#prompt-action");
       check(
         "breath intro: Try it runs the check when consent exists",
-        /Breathe in slowly/.test(await page.textContent("#relax-status")) && !(await visible(page, "#consent-dialog")),
+        /Breathe in slowly/.test(await page.textContent("#banner")) && !(await visible(page, "#consent-dialog")),
       );
       await page.close();
     }
@@ -2891,89 +2573,32 @@ try {
     }
   }
 
-  // 4h. "Take a break" menu (spec task 7): keyboard, 320 px, guided demo, water count.
+  // 4h. Take a break now (Settings row, #96): starts the stand-and-move break; under reduced
+  // motion every step shows at once. Not now ends it.
   {
     const { page, errors } = await newPage(browser, { viewport: { width: 320, height: 640 } });
-    page.on("dialog", (d) => d.accept());
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
-    await page.click("#settings-btn"); // the menu is the first section of Settings (#92)
-    const ids = ["break-stretch", "breathe-with-me", "breath-check", "break-eye", "break-move", "break-water"];
+    await page.click("#settings-btn");
+    await page.click("#row-break");
     check(
-      "break menu: lists the six entries as buttons",
-      await page.evaluate(
-        (ids) =>
-          ids.every(
-            (id) =>
-              document.getElementById(id)?.tagName === "BUTTON" && !document.getElementById(id).closest("[hidden]"),
-          ),
-        ids,
-      ),
-    );
-    check(
-      "break menu: fits 320 px",
-      await page.evaluate(
-        (ids) =>
-          document.documentElement.scrollWidth <= window.innerWidth &&
-          ids.every((id) => document.getElementById(id).getBoundingClientRect().right <= window.innerWidth),
-        ids,
-      ),
-    );
-    await page.focus("#break-stretch");
-    const order = [];
-    for (let i = 0; i < ids.length; i++) {
-      order.push(await page.evaluate(() => document.activeElement.id));
-      await page.keyboard.press("Tab");
-    }
-    check("break menu: reachable by keyboard in order", order.join() === ids.join(), order);
-    await page.screenshot({ path: path.join(outDir, "break-menu-320.png"), fullPage: true });
-    await page.focus("#break-stretch");
-    await page.keyboard.press("Enter"); // starting a break returns to the main screen
-    check(
-      "break menu: Stretch shows every step at once under reduced motion",
+      "take a break now: closes Settings and shows the stand-and-move steps at once under reduced motion",
       await page.evaluate(
         () =>
+          document.getElementById("settings-view").hidden &&
           document.getElementById("prompt-card").classList.contains("show") &&
-          /1\. .*\n2\. .*\n3\. /s.test(document.getElementById("prompt-text").textContent),
+          /1\. .*\n2\. /s.test(document.getElementById("prompt-text").textContent),
       ),
     );
+    await page.screenshot({ path: path.join(outDir, "take-a-break-320.png"), fullPage: true });
     await page.click("#prompt-notnow");
-    // Done on the static water card must not log a drink (and must not reset the reminder).
-    await page.click("#break-water");
-    await page.click("#prompt-done");
     check(
-      "break menu: Done on the water card closes it without logging a drink",
-      await page.evaluate(
-        () =>
-          !document.getElementById("prompt-card").classList.contains("show") &&
-          !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water,
-      ),
+      "take a break now: Not now ends it",
+      await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")),
     );
-    await page.click("#break-water");
-    await page.click("#prompt-action");
-    await page.click("#break-water");
-    await page.click("#prompt-action");
-    const count = () => page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).water);
-    const water = await count();
-    const day = new Date().toISOString().slice(0, 10);
-    check("break menu: I drank stores a daily count", water?.[day] === 2, water);
-    check(
-      "break menu: the count shows in Your progress",
-      /2 today/.test(await page.textContent("#progress-water")),
-      await page.textContent("#progress-water"),
-    );
-    await page.reload();
-    check("break menu: the count persists across a reload", (await count())?.[day] === 2);
-    await page.click("#progress-delete");
-    await page.waitForLoadState("load");
-    await page.waitForTimeout(500);
-    check(
-      "break menu: Delete my data clears the water count",
-      await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").water),
-    );
-    check("break menu: no page errors", errors.length === 0, errors);
+    check("take a break now: no page errors", errors.length === 0, errors);
     await page.close();
   }
 

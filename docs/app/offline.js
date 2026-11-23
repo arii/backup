@@ -6,12 +6,6 @@
 // worker calls). app.js owns the registration and the buttons; sw.js owns the
 // cache. tests/js/offline.test.mjs.
 
-/** Each release gets its own cache, named CACHE_PREFIX + precache version (mirrors sw.js). */
-export const CACHE_PREFIX = "posture-guard-";
-export const cacheNameFor = (version) => CACHE_PREFIX + version;
-/** Cache entry that records which precache version and file hashes are stored. */
-export const META_URL = "./__offline-meta.json";
-
 export const READY_TEXT =
   "Offline mode is ready. You can disconnect Wi-Fi now. Your video is never stored. " +
   "Links to the home page and the privacy page still need a network. " +

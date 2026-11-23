@@ -49,7 +49,6 @@ export function consentStatus(store) {
 // from the landmark consent above. Off by default. The dialog lists the exact record. --
 
 const SHARE_CONSENT_VERSION = 1;
-export const SHARE_CONSENT_TITLE = "Share my weekly score?";
 export const SHARE_CONSENT_POINTS = Object.freeze([
   "What is shared: only the record shown below, when you press Create link. It holds a nickname you choose, the week, your tracked minutes, a consistency score and your breaks taken.",
   "No video, images, landmarks, minute-by-minute data, name, email or device identifier is included.",
@@ -57,7 +56,6 @@ export const SHARE_CONSENT_POINTS = Object.freeze([
   "Once someone has the link, they keep it. You cannot take back a copy. Links can be edited by whoever holds them.",
   "You can switch this off any time under Your progress. That removes this record. Your local data stays.",
 ]);
-export const SHARE_CONSENT_CHECKBOX = "I agree to create links with this record.";
 
 /** True when sharing consent is recorded for the current text. */
 export function hasShareConsent(store) {

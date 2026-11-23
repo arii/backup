@@ -142,3 +142,58 @@ test("R5: back-to-back good frames settle even when each step is larger than gap
   r.update(OK, 60);
   assert.equal(r.stage, STAGES.settled);
 });
+
+// -- Settings unlocks (#96) --
+import {
+  nextUnlockCard,
+  trackedDays,
+  trackedSecondsFromDays,
+  unlockLevel,
+  visibleRows,
+} from "../../docs/app/reveal.js";
+
+test("unlocks: 5 rows on day one, then 6, 7 and 8 at 2 min, 5 min and a second day", () => {
+  const counts = [
+    unlockLevel({ trackedS: 0, days: 1 }),
+    unlockLevel({ trackedS: REVEAL.config_s, days: 1 }),
+    unlockLevel({ trackedS: REVEAL.comfortable_s, days: 1 }),
+    unlockLevel({ trackedS: 10, days: 2 }),
+  ].map((l) => visibleRows(l).length);
+  assert.deepEqual(counts, [5, 6, 7, 8]);
+  assert.deepEqual(visibleRows(0), ["chime", "sayfix", "posture", "breaknow", "help"]);
+  assert.ok(visibleRows(1).includes("breaks") && !visibleRows(1).includes("shoulders"));
+  assert.equal(visibleRows(0, true).length, 8, "revealAll shows every row");
+});
+
+test("property: the level never drops as tracked time or days grow, and never exceeds 8 rows", () => {
+  const rand = rng(96);
+  for (let i = 0; i < 500; i++) {
+    const t = rand() * 1000;
+    const d = Math.floor(rand() * 4);
+    const a = unlockLevel({ trackedS: t, days: d });
+    assert.ok(unlockLevel({ trackedS: t + rand() * 100, days: d }) >= a);
+    assert.ok(unlockLevel({ trackedS: t, days: d + 1 }) >= a);
+    assert.ok(visibleRows(a).length <= 8);
+  }
+});
+
+test("unlock cards queue in order, and a done card never comes back", () => {
+  assert.equal(nextUnlockCard(0, []), null);
+  assert.equal(nextUnlockCard(1, []), "breaks");
+  assert.equal(nextUnlockCard(3, []), "breaks", "one at a time, in order");
+  assert.equal(nextUnlockCard(3, ["breaks"]), "shoulders");
+  assert.equal(nextUnlockCard(3, ["breaks", "shoulders"]), "week");
+  assert.equal(nextUnlockCard(3, ["breaks", "shoulders", "week"]), null);
+});
+
+test("a returning user's tracked time and days come from store.days", () => {
+  const days = {
+    "2026-11-20": { good: 100, bad: 50 },
+    "2026-11-21": { good: 0, bad: 0 },
+    x: null,
+    y: { good: "junk" },
+  };
+  assert.equal(trackedSecondsFromDays(days), 150);
+  assert.equal(trackedDays(days), 1);
+  assert.equal(trackedSecondsFromDays(undefined), 0);
+});

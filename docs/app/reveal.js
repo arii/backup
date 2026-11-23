@@ -95,3 +95,60 @@ export class RevealStages {
     return STAGES.settled;
   }
 }
+
+// -- Settings unlocks (#96, storyboard v3 frames 07 to 11) ------------------------------
+// Settings has 5 rows on day one and gains one row per unlock, 8 at most. The level comes
+// from the tracked time and days stored in this browser, so a returning user keeps what
+// they had. Pure: the caller passes the numbers.
+
+/** Rows in Settings order, with the unlock level that shows each one. */
+const ROWS = Object.freeze([
+  { key: "chime", level: 0 },
+  { key: "sayfix", level: 0 },
+  { key: "breaks", level: 1 },
+  { key: "shoulders", level: 2 },
+  { key: "posture", level: 0 },
+  { key: "breaknow", level: 0 },
+  { key: "week", level: 3 },
+  { key: "help", level: 0 },
+]);
+
+/** The unlock card for each level after the first, in queue order. */
+const CARDS = Object.freeze([
+  { key: "breaks", level: 1 },
+  { key: "shoulders", level: 2 },
+  { key: "week", level: 3 },
+]);
+
+/** 0 first session, 1 after config_s tracked, 2 after comfortable_s, 3 once two local days have tracked time. */
+export function unlockLevel({ trackedS = 0, days = 0 } = {}, cfg = REVEAL) {
+  if (days >= 2) return 3;
+  if (trackedS >= cfg.comfortable_s) return 2;
+  if (trackedS >= cfg.config_s) return 1;
+  return 0;
+}
+
+/** Row keys shown at a level; revealAll shows all of them. */
+export function visibleRows(level, revealAll = false) {
+  return ROWS.filter((r) => revealAll || r.level <= level).map((r) => r.key);
+}
+
+/** The next unlock card to offer, or null. Cards queue in order; a done card never comes back. */
+export function nextUnlockCard(level, done = []) {
+  return CARDS.find((c) => c.level <= level && !done.includes(c.key))?.key ?? null;
+}
+
+/** Tracked seconds recorded in store.days (good plus slouched), for a store from before #96. */
+export function trackedSecondsFromDays(days) {
+  let total = 0;
+  for (const d of Object.values(days || {})) {
+    const s = (Number(d?.good) || 0) + (Number(d?.bad) || 0);
+    if (Number.isFinite(s) && s > 0) total += s;
+  }
+  return total;
+}
+
+/** Local days with any tracked time. */
+export function trackedDays(days) {
+  return Object.values(days || {}).filter((d) => (Number(d?.good) || 0) + (Number(d?.bad) || 0) > 0).length;
+}
