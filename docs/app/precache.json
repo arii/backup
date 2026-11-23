@@ -1,5 +1,5 @@
 {
-  "version": "8def43a9c4817f05",
+  "version": "72d29f7a006435a4",
   "totalBytes": 33393258,
   "files": [
     {
@@ -245,7 +245,7 @@
     {
       "url": "voice/af_heart/good-back-to-it-when-you-are-ready-f36765.mp3",
       "size": 10460,
-      "sha256": "0355450ec36026fc1e176f58991dbadffe194ba75069c6d219372cf4afdece27"
+      "sha256": "9b2301d74d1e60a0b5f4237a36ad52ce8313668b20b2cbcd82dd124ecf8baaef"
     },
     {
       "url": "voice/af_heart/great-keep-it-up-ee7635.mp3",
@@ -330,7 +330,7 @@
     {
       "url": "voice/af_heart/please-fix-your-posture-465eb4.mp3",
       "size": 8156,
-      "sha256": "5f5ce4e743e3c64c66e2c177e000df70d60c1101ef7514149d309fa1c96e9158"
+      "sha256": "e386612dfc26ef3cfcb53d8c87217d67ad40a56ce17c4822eca8f179077ba3df"
     },
     {
       "url": "voice/af_heart/posture-to-die-for-7ae0ad.mp3",
@@ -480,7 +480,7 @@
     {
       "url": "voice/am_michael/chest-open-your-arms-wide-and-breathe-in-8883f9.mp3",
       "size": 26444,
-      "sha256": "1a9a512623a55fa80fc59b77b83b3736f10c2322053069420ac8ce99f4573562"
+      "sha256": "ad20df7e263fa23e02a2d7674160423bad671970eb351472e3fc10c15ffc6643"
     },
     {
       "url": "voice/am_michael/easy-does-it-looking-good-b2adac.mp3",
@@ -625,7 +625,7 @@
     {
       "url": "voice/am_michael/take-a-few-slow-sips-978485.mp3",
       "size": 8732,
-      "sha256": "ff60a3ea717246dc67a77907605399e35c932baa737d9ce521a06cd3e98fb7ec"
+      "sha256": "19964aa4811b8b320290491185c2e45bf4e5dd601a87acab33a60d9258fe4a27"
     },
     {
       "url": "voice/am_michael/that-s-better-11cffb.mp3",
@@ -660,7 +660,7 @@
     {
       "url": "voice/am_michael/want-a-minute-to-breathe-out-with-me-51465f.mp3",
       "size": 11180,
-      "sha256": "7e3c5d14f454a8251a6e144278abed5b63d6c446a505f3790da894e8adb11562"
+      "sha256": "b1b9aab6f65331735809e1cc9fe7b6a199050f2a5978f3b2d27d5841f310db81"
     },
     {
       "url": "voice/am_michael/want-to-try-a-30-second-breath-check-it--495ea5.mp3",
@@ -675,7 +675,7 @@
     {
       "url": "voice/am_michael/you-re-looking-good-21a0ef.mp3",
       "size": 6428,
-      "sha256": "1ed26e2a34cbbcb5547abf4470f2e4f475dab6a8228158a80cb596433ad28e5d"
+      "sha256": "39a4d8316c3069563748ff8c1052b33807de43ce239237df8ca6b944158f3e13"
     },
     {
       "url": "voice/am_michael/your-head-is-tilted-straighten-your-neck-bd8293.mp3",
