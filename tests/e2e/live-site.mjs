@@ -362,6 +362,17 @@ try {
           banner: document.getElementById("banner").classList.contains("show")
             ? document.getElementById("banner").textContent
             : "",
+          // A fading or hidden pill still counts if it is visible at all (frame 05: none).
+          bannerVisible:
+            Number(getComputedStyle(document.getElementById("banner")).opacity) > 0.02 &&
+            getComputedStyle(document.getElementById("banner")).visibility !== "hidden",
+          bannerColor: (() => {
+            const c = getComputedStyle(document.getElementById("banner")).backgroundColor;
+            return c === "rgb(255, 92, 92)" ? "red" : c === "rgb(76, 195, 106)" ? "green" : c;
+          })(),
+          praiseBold:
+            Number(getComputedStyle(document.getElementById("gauge-praise")).fontWeight) >= 700 &&
+            !!document.querySelector("#gauge-praise svg"),
         };
       });
     const until = async (test, ms) => {
@@ -383,6 +394,7 @@ try {
         good.zone === "green" &&
         good.skeleton === "green" &&
         good.praise &&
+        good.praiseBold &&
         good.bar === "green" &&
         good.barText === "",
       good,
@@ -398,7 +410,8 @@ try {
         slipping.skeleton === "amber" &&
         !slipping.praise &&
         slipping.barText === "" &&
-        slipping.banner === "",
+        slipping.banner === "" &&
+        !slipping.bannerVisible,
       slipping,
     );
     await shot("05-slipping");
@@ -417,7 +430,8 @@ try {
         slouched.skeleton === "red" &&
         slouched.bar === "none" &&
         !slouched.praise &&
-        /^(Head forward|Head tilted|Shoulders uneven|Leaning sideways|Sit up)$/.test(slouched.banner),
+        /^(Tuck your chin|Level your head|Level your shoulders|Sit up straight|Sit up)$/.test(slouched.banner) &&
+        slouched.bannerColor === "red",
       slouched,
     );
     await shot("06-slouched");

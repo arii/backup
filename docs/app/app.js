@@ -8,7 +8,7 @@
 // calibration and daily totals. No frame or landmark leaves the browser.
 
 import { ACTIVITY, ActivityMachine, OwedReminder } from "./activity.js";
-import { DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED } from "./posture-core.js";
+import { CUE_SHORT, DEFAULTS, LEFT_EAR, Nudge, PostureEngine, Reason, State, TRACKED } from "./posture-core.js";
 import {
   BREAK_LINES,
   BREATHE_LINES,
@@ -581,7 +581,7 @@ let praiseTimer = null; // the spoken half of a praise line, queued after the ar
  *  frame, "Sit up" otherwise. */
 function reminderText(nudge, cue) {
   // One short cue on the video (K5, #98); the voice says the full fix.
-  if (nudge === Nudge.CHIME || nudge === Nudge.VOICE) return cue ? cue.title : "Sit up";
+  if (nudge === Nudge.CHIME || nudge === Nudge.VOICE) return (cue && CUE_SHORT[cue.metric]) || "Sit up";
   return BANNERS[nudge];
 }
 
@@ -613,6 +613,7 @@ function fire(nudge, cue) {
   const text = praise || reminderText(nudge, cue);
   const banner = $("banner");
   banner.textContent = text;
+  banner.classList.remove("cut");
   banner.classList.toggle("positive", !reminder);
   banner.classList.add("show");
   clearTimeout(bannerTimer);
@@ -761,7 +762,7 @@ function sayRelax(line) {
 function showRelaxBanner(text) {
   const banner = $("banner");
   banner.textContent = text;
-  banner.classList.remove("positive");
+  banner.classList.remove("positive", "cut");
   banner.classList.add("show", "relax");
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => banner.classList.remove("show", "relax"), 6000);
@@ -1658,7 +1659,7 @@ function fireMilestone(minute) {
   if (!rules().praise || !policy.onPraise("milestone")) return;
   const banner = $("banner");
   banner.textContent = MILESTONE_TEXT[minute];
-  banner.classList.remove("relax");
+  banner.classList.remove("relax", "cut");
   banner.classList.add("positive", "show");
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => banner.classList.remove("show"), 6000);
@@ -1930,7 +1931,11 @@ function render(out, landmarks) {
   renderNeedle(view, held);
   // Praise on the video goes as soon as posture leaves the green zone (frame 05, #98).
   const banner = $("banner");
-  if (view.zone !== "good" && banner.classList.contains("positive")) banner.classList.remove("show", "positive");
+  // "cut" drops the fade, so no faint pill is left on the video (frame 05).
+  if (view.zone !== "good" && banner.classList.contains("positive") && banner.classList.contains("show")) {
+    banner.classList.add("cut");
+    banner.classList.remove("show");
+  }
   renderGaugeStatus(
     view.zone,
     held || activity.inGrace(clockS()) || !!test || !!practice ? null : out.hold,

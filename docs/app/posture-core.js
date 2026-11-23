@@ -728,6 +728,15 @@ export function mirrorSign(landmarks) {
   return landmarks[RIGHT_SHOULDER].x - landmarks[LEFT_SHOULDER].x < 0 ? -1.0 : 1.0;
 }
 
+/** The short cue on the video (frame 06 in #98): what to do, in a few words. The voice says
+ *  the full fix from cueText. */
+export const CUE_SHORT = Object.freeze({
+  head_forward: "Tuck your chin",
+  head_tilt: "Level your head",
+  shoulder_level: "Level your shoulders",
+  trunk_lean: "Sit up straight",
+});
+
 /** [title, fix, say] for a metric's cue. Exported so voice-lines.js can list
  *  every spoken sentence for pre-rendering. */
 export function cueText(metric, side) {

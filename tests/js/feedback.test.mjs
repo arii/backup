@@ -17,7 +17,7 @@ import {
   shouldSuggestLight,
   tabTitleFor,
 } from "../../docs/app/feedback.js";
-import { CUE_METRICS, cueText } from "../../docs/app/posture-core.js";
+import { CUE_METRICS, CUE_SHORT, cueText } from "../../docs/app/posture-core.js";
 import { ALL_LINES } from "../../docs/app/voice-lines.js";
 
 /** Replay slouch episodes: each is a chime then a voice reminder 10 s later, `gap` s apart. */
@@ -204,4 +204,13 @@ test("tabTitleFor prefixes only while a reminder is active", () => {
   for (const c of ["badge good", "badge paused", "badge no_person", "badge activity", "badge practice", ""]) {
     assert.equal(tabTitleFor(c, "BackUp"), "BackUp");
   }
+});
+
+test("the short video cue for each metric is a few words and says what to do (#98 frame 06)", () => {
+  for (const metric of CUE_METRICS) {
+    const cue = CUE_SHORT[metric];
+    assert.ok(cue && cue.split(/\s+/).length <= 3, `${metric}: ${cue}`);
+    assert.doesNotMatch(cue, SHAME);
+  }
+  assert.equal(CUE_SHORT.head_forward, "Tuck your chin");
 });
