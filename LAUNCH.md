@@ -71,7 +71,7 @@ All copy follows the wellness rules (#41, #51): it **notices, reminds and helps 
 
 These need the owner's accounts, hardware or voice, so an agent cannot do them. Engineering parts of #30 (no-WebGL camera fallback, live-site e2e) are done.
 
-- [ ] **Default branch** is `main` (Settings, Branches). Check that the repo home page shows the BackUp README and LICENSE.
+- [x] **Default branch** is `main` (verified 2026-11-23 with `gh repo view`) (Settings, Branches). Check that the repo home page shows the BackUp README and LICENSE.
 - [ ] **WebGL in your Chrome** (best accuracy; without it the app uses a simpler fallback): `chrome://settings/system`, turn on "Use graphics acceleration when available", relaunch, then check `chrome://gpu` says "WebGL: Hardware accelerated".
 - [ ] **Manual webcam test with a real person.** CI only uses a drawn figure. Open [the app](https://arii.github.io/posture-guard/app/) and:
   1. Click Start, accept the notice, allow the camera. Expect the badge to leave "no one in view" and the fps and angle readouts to move.
