@@ -64,6 +64,8 @@ to fix it.
 2. Text that changes (diagnosis, step titles) SHALL be in an `aria-live` region.
 3. THE walkthrough SHALL work at 375 px width and honour `prefers-reduced-motion`.
 4. THE walkthrough SHALL be dismissible with Escape except at the safety acknowledgement step, which needs the explicit button.
+5. THE posture gauge SHALL carry its one-word label as text and as its `aria-label` ("Posture: upright"), so the state never depends on colour or the needle angle. (#95)
+6. THE last automatic setup card SHALL say once where the rest is: Settings for breaks, sounds and progress, Help for *Learn the cues* and *Not working?*. (#95)
 
 ### Requirement 7: Test and capture bypass
 1. THE e2e script (`tests/e2e/live-site.mjs`) and `video/scripts/capture.mjs` SHALL seed `localStorage` key `posture-guard:v1` with the current `ackVersion` and `onboarded` via `context.addInitScript` so they reach `#start-demo`.

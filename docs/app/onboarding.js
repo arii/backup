@@ -61,7 +61,7 @@ export const ONBOARDING_STEPS = Object.freeze([
 /** Closing sentence of the setup sequence (rendered in app.js). */
 const DONE_INTRO =
   "Leave this tab open while you work. Pause any time. Move often and sit comfortably, not rigidly. " +
-  "Breaks and breathing are optional, whenever you’re ready.";
+  "Breaks, sounds and progress are optional, under Settings. Help has Learn the cues and Not working?";
 
 /** The "Set up as you go" sequence. `stage` is the reveal stage (reveal.js) from which the card may
  *  appear on its own. Every choice can be changed later in the matching settings panel. */

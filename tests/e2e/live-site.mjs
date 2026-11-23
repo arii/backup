@@ -964,8 +964,10 @@ try {
     );
     await page.click("#first-run-next");
     check(
-      "first run: the third card finishes setup without adding configuration",
+      "first run: the third card finishes setup without adding configuration, and points to Settings and Help",
       /You’re ready/.test(await page.textContent("#first-run-heading")) &&
+        /Settings/.test(await page.textContent("#first-run-body")) &&
+        /Help/.test(await page.textContent("#first-run-body")) &&
         /Step 3 of 3/.test(await page.textContent("#first-run-count")) &&
         (await page.locator("#first-run-body button").count()) === 0,
     );
@@ -2203,6 +2205,7 @@ try {
               (e) => !e.closest("#start-overlay"),
             ).length,
             mini: document.querySelectorAll(".mini-view").length,
+            gaugeLabel: document.getElementById("gauge-svg").getAttribute("aria-label"),
           };
         });
       // Badge and words come from one evaluate, so the state cannot change in between.
@@ -2220,6 +2223,12 @@ try {
       ]) {
         const r = await inState(badge);
         check(`main screen (${name}): at most 10 visible words with 8 weeks of history`, r.words <= 10, r);
+        check(
+          `main screen (${name}): the gauge has a text equivalent for screen readers (#95)`,
+          r.gaugeLabel === `Posture: ${name === "good" ? "upright" : "slouching"}` ||
+            (name === "good" && r.gaugeLabel === "Posture: drifting"),
+          r.gaugeLabel,
+        );
         check(
           `main screen (${name}): no panels, details or mini views`,
           r.panels.length === 0 && !r.summaries && !r.mini,

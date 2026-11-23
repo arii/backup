@@ -1882,7 +1882,7 @@ function renderNeedle(needle, transition, result, held) {
   if (needle === null) return;
   $("needle-rotor").setAttribute("transform", needleTransform(needle));
   if (held) {
-    $("needle-text").textContent = "posture paused";
+    setGaugeLabel("posture paused");
     return;
   }
   // The threshold needle averages all metrics, so a single-metric slouch
@@ -1893,7 +1893,15 @@ function renderNeedle(needle, transition, result, held) {
     : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
       ? "drifting"
       : "upright";
-  $("needle-text").textContent = label; // one word; the cue itself is the banner on the video
+  setGaugeLabel(label); // one word; the cue itself is the banner on the video
+}
+
+// The gauge is role="img", so screen readers read its aria-label, not the <text> inside.
+// Both carry the same words, so the state never depends on colour or the needle angle (#95).
+function setGaugeLabel(label) {
+  if ($("needle-text").textContent === label) return;
+  $("needle-text").textContent = label;
+  $("gauge-svg").setAttribute("aria-label", `Posture: ${label}`);
 }
 
 function render(out, landmarks) {
@@ -2441,6 +2449,7 @@ function bugReportUrl() {
     `- Calibration: good ${cal.good ? "recorded" : "no"}, slouch ${cal.bad ? "recorded" : "no"}, needle ${cal.calibrated ? "calibrated" : "default"}`,
     `- Custom sounds: bad ${custom.bad ? "yes" : "no"}, good ${custom.good ? "yes" : "no"}`,
     `- Reminders this session: ${reminderCount}`,
+    `- Help opened this session: ${helpOpens}`,
     `- Load marks (ms): ${JSON.stringify(loadMarks)}`,
   ].join("\n");
   const body = buildBugReportBody({ diag, problems });
@@ -3019,7 +3028,10 @@ showStartControls();
 // First visit: start keyboard focus on the card, so Tab reaches Next before the header controls.
 if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 
+// Help opens this session, for the bug report only (memory, never stored or sent) (#95).
+let helpOpens = 0;
 function openHelp() {
+  helpOpens += 1;
   const body = $("help-body");
   body.replaceChildren();
   for (const step of ONBOARDING_STEPS) {
