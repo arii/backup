@@ -70,6 +70,6 @@ export function offlineMessage(state, info = {}) {
     case "error":
       return "The offline download did not finish, so offline mode is not on. Check your connection and try again.";
     default:
-      return `Optional: download the app to this device${info.totalBytes ? ` (about ${formatSize(info.totalBytes)})` : ""} so it works without a network. Your video is never stored either way.`;
+      return `${info.totalBytes ? `About ${formatSize(info.totalBytes)}, a` : "A"}pp files only, never video.`;
   }
 }

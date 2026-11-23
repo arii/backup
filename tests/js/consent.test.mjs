@@ -32,7 +32,7 @@ test("recording stores a version and an ISO date; withdrawing removes it", () =>
   assert.match(consentStatus(store), /2026-03-04/);
   withdrawConsent(store);
   assert.equal(hasConsent(store), false);
-  assert.match(consentStatus(store), /need your OK/);
+  assert.match(consentStatus(store), /^Off\b.*your OK/);
 });
 
 test("a record for the current or a newer version counts", () => {

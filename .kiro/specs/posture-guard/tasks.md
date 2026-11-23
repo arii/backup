@@ -60,7 +60,8 @@
   - `cues.py` (`posture_cue`, `mirror_sign`) and its port `postureCue` in
     `posture-core.js`; cue on the snapshot payload, in reminder events and in the
     spoken prompt (`audio.specific_cues`, cached TTS per sentence); "What to fix" box
-    in the browser app and dashboard. Golden timeline records the cue per frame.
+    in the browser app and dashboard (the browser box was removed in #92: the video banner
+    carries the cue). Golden timeline records the cue per frame.
   - Raised `scoring.shoulder_level_deg` 4 -> 6: at 4 the 1 deg exit band sat inside
     landmark jitter, so upright people got "shoulder dropped".
   - Tests: `tests/test_cues.py`, property P7 (mirror invariance), audio and pipeline

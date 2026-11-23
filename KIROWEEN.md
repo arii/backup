@@ -163,7 +163,7 @@ What the Kiro phase changed (PRs #19 onward):
 - **Spec only, not built:** the social leaderboard, the face-model (blendshape) jaw
   proxy and the blink reminder (both evaluated and rejected, see
   `docs/research/face-landmarker-evaluation.md`). Built: onboarding, safety acknowledgement, Help,
-  *Not working?*, *Learn the cues*, the personal progress panel (weekly view, JSON export and import, a consent-gated peer share link with no server), Light coaching (and a
+  *Not working?*, *Learn the cues*, the personal progress panel (last 7 days, JSON export and import, a consent-gated peer share link with no server), Light coaching (and a
   suggestion to try it after repeated dismissals), milestone praise, the hourly reminder
   cap, eye, move, stretch, water and timed jaw prompts, and the guided breathing exercise.
 - **E2E scripts.** `tests/e2e/live-site.mjs` and `video/scripts/capture.mjs` hard-code
@@ -192,8 +192,8 @@ What the Kiro phase changed (PRs #19 onward):
 1. **0:00** "Posture to die for. Please don't." Slump dramatically, open the live
    URL, press *Start with webcam*.
 2. **0:20** Sit up straight: the badge reads GOOD POSTURE, the skeleton is green.
-3. **0:40** Slouch: the needle swings right, the chime plays and the *What to fix*
-   box says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
+3. **0:40** Slouch: the needle swings right, the chime plays and the banner on the
+   video says "Head forward: tuck your chin..."; keep slouching to hear it spoken.
    Drop one shoulder to show "Shoulders uneven".
 4. **1:10** Sit up: the recovery chime and "Back to good posture".
 5. **1:30** Record good and slouch posture; show the calibrated needle.

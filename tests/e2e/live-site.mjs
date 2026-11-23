@@ -122,7 +122,6 @@ async function newPage(
     fresh = false,
     guide = false,
     consent = true,
-    staged = false,
     intro = false,
     extra = null,
     viewport = { width: 1280, height: 900 },
@@ -132,7 +131,7 @@ async function newPage(
   await context.grantPermissions(["camera"]);
   if (!fresh) {
     await context.addInitScript(
-      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, staged, intro]) => {
+      ([onboarded, ackVersion, firstRunDone, consentRecord, extraStore, intro]) => {
         try {
           if (sessionStorage.getItem("pg-e2e-acked")) return; // seed once per tab, so a reload keeps what the app wrote
           sessionStorage.setItem("pg-e2e-acked", "1");
@@ -143,14 +142,13 @@ async function newPage(
           if (consentRecord) s.consent = consentRecord;
           if (firstRunDone) s.setupDone = true; // the setup sequence has its own checks (guide: true)
           if (!intro) s.breathIntroShown = true; // the first breath check offer has its own checks (intro: true)
-          s.revealAll = !staged; // every panel exists unless a check is about the staged reveal
           if (extraStore) Object.assign(s, extraStore);
           localStorage.setItem("posture-guard:v1", JSON.stringify(s));
         } catch {
           /* storage unavailable */
         }
       },
-      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, staged, intro],
+      [ONBOARDED, ACKED, !guide, consent ? CONSENT : null, extra, intro],
     );
   }
   const page = await context.newPage();
@@ -163,7 +161,39 @@ async function newPage(
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
+  useSettings(page);
   return { page, errors };
+}
+
+// Since #92 every setting lives in the Settings view, which replaces the main screen
+// while open. A user opens Settings, changes a control and presses Done; this wrapper
+// does the same around any action on a control inside #settings-view, so the checks
+// can keep naming controls directly and the main screen is back afterwards.
+function useSettings(page) {
+  const inClosedSettings = (sel) =>
+    page
+      .evaluate((s) => {
+        const e = document.querySelector(s);
+        return !!e && !!e.closest("#settings-view") && document.getElementById("settings-view").hidden;
+      }, sel)
+      .catch(() => false);
+  for (const name of ["click", "check", "uncheck", "selectOption", "fill", "setInputFiles"]) {
+    const orig = page[name].bind(page);
+    page[name] = async (sel, ...rest) => {
+      if (typeof sel !== "string" || !(await inClosedSettings(sel))) return orig(sel, ...rest);
+      // Before tracking the header button is not shown yet; the view itself still works.
+      await page.evaluate(() => document.getElementById("settings-btn").click());
+      try {
+        return await orig(sel, ...rest);
+      } finally {
+        // Done, unless the action opened a dialog: the check answers it first, as a user would.
+        await page.evaluate(() => {
+          if (document.querySelector("dialog[open]")) return;
+          if (!document.getElementById("settings-view").hidden) document.getElementById("settings-close").click();
+        });
+      }
+    };
+  }
 }
 
 const ui = (page) =>
@@ -393,9 +423,8 @@ try {
         t: performance.now() / 1000,
         banner: document.getElementById("banner").classList.contains("show"),
         count: Number(document.getElementById("reminder-count").textContent),
-        today: document.getElementById("today").textContent,
+        today: JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1") || "{}").days || {}),
         badge: document.getElementById("state-badge").textContent,
-        fixActive: document.getElementById("fix-box").classList.contains("active"),
       }));
     // The demo slouches in the second half of every 40 s of page time. Start the break
     // early in a slouch phase (whichever cycle that is), so every later wait is relative
@@ -418,14 +447,11 @@ try {
     }
     const during = samples.filter((s) => phase(s.t) > 22);
     check(
-      "activity: eye break while the demo slouches shows no banner, fix box, reminder or day tally",
-      during.length > 8 &&
-        during.every((s) => !s.banner && !s.fixActive && s.count === before.count && s.today === before.today),
+      "activity: eye break while the demo slouches shows no banner, reminder or day tally",
+      during.length > 8 && during.every((s) => !s.banner && s.count === before.count && s.today === before.today),
       {
         before,
-        during: during
-          .filter((s) => s.banner || s.fixActive || s.count !== before.count || s.today !== before.today)
-          .slice(0, 3),
+        during: during.filter((s) => s.banner || s.count !== before.count || s.today !== before.today).slice(0, 3),
       },
     );
     check(
@@ -592,7 +618,10 @@ try {
     }));
     check(
       "help: the button reopens the short welcome with its safety reminder",
-      help.open && /gentle nudge/.test(help.text) && /not medical advice or a medical device/.test(help.text),
+      help.open &&
+        /gentle nudge/.test(help.text) &&
+        /not medical advice or a medical device/.test(help.text) &&
+        !/Good to know/.test(help.text), // #92: no explanation list in Help
       { open: help.open },
     );
     await page.screenshot({ path: path.join(outDir, "help-dialog.png") });
@@ -612,9 +641,10 @@ try {
       ),
     );
     await page.keyboard.press("Escape");
-    await page.click("#reveal-all"); // a fresh profile starts staged; this is the "I want it all" path
+    await page.click("#settings-btn"); // every setting is one click away in Settings
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
+    await page.click("#settings-close");
     check("first run: no page errors", errors.length === 0, errors);
     await page.close();
   }
@@ -681,25 +711,17 @@ try {
     await page.waitForTimeout(300);
     const focus = await page.evaluate(() => document.getElementById("t-head_forward").classList.contains("focus"));
     check("practice: the step highlights the matching tile", focus);
-    const miniSeen = new Set();
-    let miniInk = false;
-    for (let i = 0; i < 12; i++) {
-      // sim 24 s: the demo slouches meanwhile, yet nothing may fire
-      await page.waitForTimeout(250);
-      const m = await page.evaluate(() => {
-        const cv = document.getElementById("practice-mini-canvas");
-        const px = cv.width && cv.height ? cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data : [];
-        return {
-          t: document.getElementById("practice-needle-rotor").getAttribute("transform"),
-          ink: px.some((v, k) => k % 4 === 3 && v > 0),
-          w: cv.clientWidth,
-        };
-      });
-      miniSeen.add(m.t);
-      miniInk = miniInk || m.ink;
-    }
-    check("practice: mini skeleton canvas is drawn next to the instructions", miniInk);
-    check("practice: mini needle moves between good and slouch in the demo", miniSeen.size > 1, [...miniSeen]);
+    await page.waitForTimeout(3000); // sim 24 s: the demo slouches meanwhile, yet nothing may fire
+    const views = await page.evaluate(() => ({
+      mini: document.querySelectorAll(".mini-view, .mini-canvas").length,
+      canvases: document.querySelectorAll("main canvas").length,
+      gauge: !!document.getElementById("gauge").offsetParent,
+    }));
+    check(
+      "practice: uses the main video and gauge, no second skeleton or needle",
+      views.mini === 0 && views.canvases === 1 && views.gauge,
+      views,
+    );
     const quiet = await page.evaluate(
       (b) => ({
         spoken: window.__spoken.length,
@@ -735,17 +757,12 @@ try {
       exported.schema === 2 && !!exported.days && !("calibration" in exported),
       Object.keys(exported),
     );
-    // Weekly view, import (progress-review tasks 4, 7).
+    // Your progress shows the last 7 days only (#92); import (progress-review task 7).
     const weeks = await page.evaluate(() => ({
-      rows: document.querySelectorAll("#progress-weeks .day-row").length,
-      hidden: document.getElementById("progress-weeks").hidden,
-      text: document.getElementById("progress-weeks").textContent,
+      days: document.querySelectorAll("#progress-days .day-row").length,
+      weeks: document.querySelectorAll("#progress-weeks").length,
     }));
-    check(
-      "progress: weekly view lists 8 weeks with coached and silent numbers",
-      weeks.rows === 8 && !weeks.hidden && /coached/.test(weeks.text) && /silent/.test(weeks.text),
-      weeks,
-    );
+    check("progress: the last 7 days only, no weekly rows", weeks.days === 7 && weeks.weeks === 0, weeks);
     await page.setInputFiles("#progress-import-file", {
       name: "bad.json",
       mimeType: "application/json",
@@ -793,7 +810,8 @@ try {
     // Share my weekly score (tasks 9, 10): hidden until consent, link carries only the six fields.
     check(
       "share weekly: off by default and the section is hidden",
-      !(await page.isChecked("#share-weekly")) && !(await page.isVisible("#peer-section")),
+      !(await page.isChecked("#share-weekly")) &&
+        (await page.evaluate(() => document.getElementById("peer-section").hidden)),
     );
     await page.evaluate(() => document.getElementById("share-weekly").click());
     await page.waitForSelector("#share-consent-dialog[open]");
@@ -834,7 +852,10 @@ try {
     check("share weekly: Share stays disabled until the box is ticked", await page.isDisabled("#share-consent-agree"));
     await page.check("#share-consent-check");
     await page.click("#share-consent-agree");
-    check("share weekly: after consent the section shows", await page.isVisible("#peer-section"));
+    check(
+      "share weekly: after consent the section shows",
+      await page.evaluate(() => !document.getElementById("peer-section").hidden),
+    );
     await page.click("#peer-create");
     const link = await page.inputValue("#peer-link");
     check(
@@ -897,7 +918,6 @@ try {
       bannerLive: document.getElementById("banner").getAttribute("aria-live"),
       badLabel: document.querySelector('label[for="bad-file"]')?.textContent,
       goodLabel: document.querySelector('label[for="good-file"]')?.textContent,
-      mode: /Chime only still speaks/.test(document.getElementById("mode-note").textContent),
     }));
     check(
       "controls: breath check and record buttons are disabled before start, with a tooltip",
@@ -906,9 +926,10 @@ try {
     );
     check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
     check("a11y: sound file inputs have labels", pre.badLabel === "Bad sound" && pre.goodLabel === "Good sound", pre);
-    check("chime-only note explains breath lines", pre.mode, pre);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
+    // The guide waits for tracking to settle (stage 2, about 10 s of clear posture).
+    await page.waitForSelector("#first-run:visible", { timeout: 20000 }).catch(() => {});
     const post = await page.evaluate(() => ({
       breath: document.getElementById("breath-check").disabled,
       good: document.getElementById("calib-good").disabled,
@@ -943,8 +964,10 @@ try {
     );
     await page.click("#first-run-next");
     check(
-      "first run: the third card finishes setup without adding configuration",
+      "first run: the third card finishes setup without adding configuration, and points to Settings and Help",
       /You’re ready/.test(await page.textContent("#first-run-heading")) &&
+        /Settings/.test(await page.textContent("#first-run-body")) &&
+        /Help/.test(await page.textContent("#first-run-body")) &&
         /Step 3 of 3/.test(await page.textContent("#first-run-count")) &&
         (await page.locator("#first-run-body button").count()) === 0,
     );
@@ -954,7 +977,8 @@ try {
       flag: JSON.parse(localStorage.getItem("posture-guard:v1")).firstRunDone === true,
     }));
     check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
-    await page.click("#setup-panel summary");
+    await page.click("#help-btn");
+    await page.click("#help-notworking");
     await page.click("#intro-again");
     check(
       "first run: Show the intro again reopens it",
@@ -979,7 +1003,9 @@ try {
     // Reduced motion: no transitions on the hold bar, score bar or banner.
     await page.emulateMedia({ reducedMotion: "reduce" });
     const motion = await page.evaluate(() =>
-      ["hold-fill", "banner", "good-bar"].map((id) => getComputedStyle(document.getElementById(id)).transitionDuration),
+      ["prompt-fill", "banner", "test-progress"].map(
+        (id) => getComputedStyle(document.getElementById(id)).transitionDuration,
+      ),
     );
     check(
       "a11y: prefers-reduced-motion disables transitions",
@@ -1003,22 +1029,60 @@ try {
       timeout: 20000,
     });
     check("not working: the demo reports that tracking looks good", true);
-    await page.click("#setup-panel summary");
     await page.waitForTimeout(500);
-    const sm = await page.evaluate(() => {
-      const cv = document.getElementById("setup-mini-canvas");
-      return {
-        w: cv.clientWidth,
-        rotor: !!document.getElementById("setup-needle-rotor"),
-        ink: cv.width
-          ? cv
-              .getContext("2d")
-              .getImageData(0, 0, cv.width, cv.height)
-              .data.some((v, k) => k % 4 === 3 && v > 0)
-          : false,
-      };
+    const sm = await page.evaluate(() => ({
+      hidden: document.getElementById("setup-panel").hidden,
+      mini: document.querySelectorAll("#setup-panel .mini-view").length,
+      cameraTip: /arm.s length|Light in front/i.test(document.getElementById("setup-panel").textContent),
+    }));
+    check(
+      "not working: hidden while tracking looks good, with no mini view or camera tips",
+      sm.hidden && sm.mini === 0 && !sm.cameraTip,
+      sm,
+    );
+    await page.click("#help-btn");
+    await page.click("#help-notworking");
+    const asked = await page.evaluate(() => ({
+      shown: !document.getElementById("setup-panel").hidden,
+      focus: document.activeElement?.id,
+      actions: ["practice-start", "intro-again"].every((id) => !!document.getElementById(id).offsetParent),
+      bug: !!document.querySelector("#setup-panel .report-bug-link"),
+    }));
+    check(
+      "not working: Help shows it with Learn the cues, Show the intro again and Report a bug",
+      asked.shown && asked.focus === "setup-title" && asked.actions && asked.bug,
+      asked,
+    );
+    await page.click("#setup-close");
+    check(
+      "not working: Hide puts it away again while tracking looks good",
+      await page.evaluate(() => document.getElementById("setup-panel").hidden),
+    );
+    check("not working: no page errors while tracking", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 2d2. Not working? shows itself when the camera cannot start.
+  {
+    const { page, errors } = await newPage(browser);
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () =>
+        Promise.reject(Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }));
     });
-    check("not working: the panel shows a live mini skeleton and needle", sm.w > 0 && sm.rotor && sm.ink, sm);
+    await page.goto(`${base}app/${bust}`);
+    check(
+      "not working: hidden before anything starts",
+      await page.evaluate(() => document.getElementById("setup-panel").hidden),
+    );
+    await page.click("#start-camera");
+    await page.waitForFunction(() => document.getElementById("start-error").textContent !== "", null, {
+      timeout: 30000,
+    });
+    check(
+      "not working: a blocked camera shows it",
+      await page.evaluate(() => !document.getElementById("setup-panel").hidden),
+    );
+    check("not working (blocked camera): no page errors", errors.length === 0, errors);
     await page.screenshot({ path: path.join(outDir, "app-setup-ok.png") });
     check("not working: no page errors", errors.length === 0, errors);
     await page.close();
@@ -1079,13 +1143,13 @@ try {
     await page.click("#start-demo");
     await page.waitForTimeout(700); // ~5 s simulated: GOOD, counting toward the first praise
     const hold = await page.evaluate(() => ({
-      cls: document.getElementById("hold-bar").className,
-      text: document.getElementById("hold-text").textContent,
-      width: document.getElementById("hold-fill").style.width,
+      badge: document.getElementById("state-badge").textContent,
+      fixShown: !!document.getElementById("fix-box"),
+      needle: document.getElementById("needle-text").textContent,
     }));
     check(
-      "hold bar fills toward the next praise",
-      hold.cls.includes("good") && /looking good/i.test(hold.text) && parseFloat(hold.width) > 0,
+      "coaching area while good: the gauge and its one-word label only, no fix box",
+      hold.badge === "good posture" && !hold.fixShown && /upright|drifting/.test(hold.needle),
       hold,
     );
     await page
@@ -1682,6 +1746,15 @@ try {
         /Breathe in slowly/.test(await page.textContent("#relax-status")),
       rec,
     );
+    // The check was started from Settings (behind the consent dialog), so the app returns to
+    // the main screen when it starts. Wait for that before the next Settings action.
+    await page
+      .waitForFunction(() => document.getElementById("settings-view").hidden, null, { timeout: 10000 })
+      .catch(() => {});
+    check(
+      "consent: the breath check started from Settings returns to the main screen",
+      await page.evaluate(() => document.getElementById("settings-view").hidden),
+    );
     await page.click("#consent-withdraw");
     check(
       "consent: withdrawing removes the record",
@@ -1832,7 +1905,7 @@ try {
           link: document.getElementById("sponsor-link").href,
           buttons: [...document.querySelectorAll("#sponsor-card button")].map((b) => b.textContent),
           stored: JSON.parse(localStorage.getItem("posture-guard:v1")).sponsor,
-          inPanel: !!document.getElementById("sponsor-card").closest(".panel"),
+          inPanel: !document.getElementById("sponsor-card").closest("main"), // under the main screen since #92
           video: document.getElementById("sponsor-card").closest(".stage") === null,
         }));
         check(
@@ -2055,7 +2128,7 @@ try {
         STAGED_IDS,
       );
       check("staged reveal: hidden controls stay in the DOM", missing.length === 0, missing);
-      check("staged reveal: 'Show all settings' is not shown before tracking", !(await shown(page, "#reveal-all")));
+      check("staged reveal: Settings is not offered before tracking", !(await shown(page, "#settings-btn")));
       await page.screenshot({ path: path.join(outDir, "reveal-stage0.png") });
       check("staged reveal: stage 0 has no errors", errors.length === 0, errors);
       await page.close();
@@ -2073,8 +2146,10 @@ try {
       await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
         timeout: 8000,
       });
-      const note = await page.locator("#reveal-note").textContent();
-      check("staged reveal: stage 2 is announced once in #reveal-note", /Added: .*posture needle/.test(note), note);
+      check(
+        "staged reveal: stages are not announced (no #reveal-note)",
+        await page.evaluate(() => !document.getElementById("reveal-note")),
+      );
       check(
         "staged reveal: stage 2 does not show reminders yet",
         !(await shown(page, "#breaks-panel")) && !(await shown(page, "#progress-panel")),
@@ -2090,167 +2165,241 @@ try {
       await page.close();
     }
 
-    // Time alone never expands the workspace, even for returning visitors.
+    // Issue #92: the main screen is the camera, the gauge and one session line. At most 10
+    // visible words in <main> (first-run card and video banner excluded) while good and
+    // while slouched, with 8 weeks of progress history seeded. Settings holds the rest.
     {
-      const { page } = await newPage(browser, { staged: true, guide: true });
-      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
-      await page.click("#start-demo");
-      await page.waitForSelector("#first-run:visible");
-      await page.waitForTimeout(1500);
-      check(
-        "progressive onboarding: optional prompts do not interrupt unfinished setup",
-        await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")),
-      );
-      await page.close();
-    }
-    {
+      const days = {};
+      for (let i = 1; i <= 56; i++) {
+        const d = new Date(Date.now() - i * 86400000);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        days[key] = { good: 1200, bad: 300, best: 400 };
+      }
       const { page, errors } = await newPage(browser, {
         staged: true,
-        consent: false,
-        // Advance discovery without an accelerated eye break blocking a manual breath check.
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false, days },
+      });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForSelector("#gauge:visible");
+      const mainScreen = () =>
+        page.evaluate(() => {
+          const vis = (e) => {
+            const r = e.getBoundingClientRect();
+            const st = getComputedStyle(e);
+            return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+          };
+          let words = 0;
+          let text = "";
+          const walker = document.createTreeWalker(document.querySelector("main"), NodeFilter.SHOW_TEXT);
+          for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+            const p = t.parentElement;
+            if (
+              !p ||
+              ["SCRIPT", "STYLE"].includes(p.tagName) ||
+              p.closest("#first-run, #banner, #prompt-card") ||
+              !vis(p)
+            )
+              continue;
+            words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+            text += ` ${t.textContent.trim()}`;
+          }
+          return {
+            badge: document.getElementById("state-badge").textContent,
+            words,
+            text: text.replace(/\s+/g, " ").trim(),
+            panels: [...document.querySelectorAll("main .panel")].filter(vis).map((e) => e.id),
+            // The welcome card's "Full safety notice" sits in the start overlay, which is out of scope.
+            summaries: [...document.querySelectorAll("main summary, #settings-view summary")].filter(
+              (e) => !e.closest("#start-overlay"),
+            ).length,
+            mini: document.querySelectorAll(".mini-view").length,
+            gaugeLabel: document.getElementById("gauge-svg").getAttribute("aria-label"),
+          };
+        });
+      // Badge and words come from one evaluate, so the state cannot change in between.
+      const inState = async (badge) => {
+        for (let i = 0; i < 600; i++) {
+          const r = await mainScreen();
+          if (r.badge === badge) return r;
+          await page.waitForTimeout(100);
+        }
+        return { badge: "timeout", words: 99 };
+      };
+      for (const [badge, name] of [
+        ["good posture", "good"],
+        ["sit up", "slouched"],
+      ]) {
+        const r = await inState(badge);
+        check(`main screen (${name}): at most 10 visible words with 8 weeks of history`, r.words <= 10, r);
+        check(
+          `main screen (${name}): the gauge has a text equivalent for screen readers (#95)`,
+          r.gaugeLabel === `Posture: ${name === "good" ? "upright" : "slouching"}` ||
+            (name === "good" && r.gaugeLabel === "Posture: drifting"),
+          r.gaugeLabel,
+        );
+        check(
+          `main screen (${name}): no panels, details or mini views`,
+          r.panels.length === 0 && !r.summaries && !r.mini,
+          r,
+        );
+        await page.screenshot({ path: path.join(outDir, `main-${name}.png`) });
+      }
+      const header = await page.evaluate(() =>
+        [...document.querySelectorAll("header button")].filter((e) => e.offsetParent).map((e) => e.id),
+      );
+      check(
+        "main screen: the header has Pause, Help and Settings only",
+        header.join() === "pause,help-btn,settings-btn",
+        header,
+      );
+      await page.click("#settings-btn");
+      const st = await page.evaluate(
+        (ids) => {
+          const view = document.getElementById("settings-view");
+          return {
+            open: !view.hidden && getComputedStyle(document.querySelector("main")).display === "none",
+            focus: document.activeElement?.id,
+            missing: ids.filter((id) => {
+              const e = document.getElementById(id) || document.getElementsByName(id)[0];
+              return !e?.closest("#settings-view");
+            }),
+            hiddenSections: [...view.querySelectorAll(".settings-grid > .panel")]
+              .filter((e) => e.hidden && e.id !== "personalize-panel")
+              .map((e) => e.id),
+            weekRows: document.querySelectorAll("#progress-weeks").length,
+            dayRows: document.querySelectorAll("#progress-days .day-row").length,
+          };
+        },
+        STAGED_IDS.filter((id) => !["good-pct", "needle-text"].includes(id)),
+      );
+      check(
+        "settings: replaces the main screen, every section shown, every setting inside",
+        st.open && st.focus === "settings-title" && st.missing.length === 0 && st.hiddenSections.length === 0,
+        st,
+      );
+      check("settings: progress shows the last 7 days only", st.dayRows === 7 && st.weekRows === 0, st);
+      await page.screenshot({ path: path.join(outDir, "settings.png"), fullPage: true });
+      await page.keyboard.press("Escape");
+      check(
+        "settings: Escape returns to the main screen",
+        await page.evaluate(
+          () => document.getElementById("settings-view").hidden && document.activeElement?.id === "settings-btn",
+        ),
+      );
+      check("settings: no page errors", errors.length === 0, errors);
+      await page.close();
+    }
+
+    // Issue #92 review screenshots: five states at 1280 and 375 px, saved to the report.
+    for (const width of [1280, 375]) {
+      const { page, errors } = await newPage(browser, {
+        viewport: { width, height: 900 },
         extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
       });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       await page.click("#start-demo");
-      await page.waitForSelector("#explore-panel:visible");
-      await page.waitForTimeout(2000);
-      check(
-        "progressive onboarding: time does not reveal configuration or optional tools",
-        !(await shown(page, "#breaks-panel")) &&
-          !(await shown(page, "#break-menu")) &&
-          !(await shown(page, "#progress-panel")) &&
-          !(await shown(page, "#reminders-panel")),
-      );
-      await page.locator("#explore-panel summary").click();
-      await page.click('[data-explore="break-menu relax-panel"]');
-      check(
-        "progressive onboarding: breathing and breaks open only when requested",
-        (await shown(page, "#break-menu")) &&
-          !(await shown(page, "#reminders-panel")) &&
-          !(await shown(page, "#progress-panel")),
-      );
-      await page.click("#breath-check");
-      await page.waitForSelector("#consent-dialog:visible");
-      check(
-        "progressive onboarding: breath check still asks for permission",
-        await page.locator("#consent-dialog").isVisible(),
-      );
-      await page.click("#consent-cancel");
-      check(
-        "progressive onboarding: exploring does not grant consent",
-        await page.evaluate(() => !JSON.parse(localStorage.getItem("posture-guard:v1")).consent),
-      );
-      await page.reload();
-      await page.click("#start-demo");
-      check(
-        "progressive onboarding: selected tools survive reload without revealing other features",
-        (await shown(page, "#break-menu")) && !(await shown(page, "#progress-panel")),
-      );
-      check("progressive onboarding: no page errors", errors.length === 0, errors);
+      await page.waitForSelector("#gauge:visible");
+      const until = (text) =>
+        page.waitForFunction((t) => document.getElementById("state-badge").textContent === t, text, {
+          timeout: 60000,
+          polling: 50,
+        });
+      const shot = (name) =>
+        page.screenshot({ path: path.join(outDir, `review-${width}-${name}.png`), fullPage: true });
+      await until("good posture");
+      await shot("1-good");
+      await until("sit up");
+      await page.waitForTimeout(400);
+      await shot("2-slouched");
+      await page.click("#settings-btn");
+      await shot("3-settings");
+      await page.click("#settings-close");
+      await page.click("#help-btn");
+      await page.click("#help-practice");
+      await page.waitForTimeout(800);
+      await shot("4-learn-the-cues");
+      await page.click("#practice-stop");
+      await page.click("#help-btn");
+      await page.click("#help-notworking");
+      await shot("5-not-working");
+      check(`review screenshots (${width} px): no page errors`, errors.length === 0, errors);
       await page.close();
     }
 
-    // Show all settings: everything now, persisted, reversible.
+    // Time alone never puts settings on the main screen; Settings works at 320 px.
     {
-      const { page, errors } = await newPage(browser, { staged: true });
-      await page.goto(`${base}app/${bust}`);
-      await page.click("#start-demo");
-      check(
-        "staged reveal: after start, Show all settings and Not working? are offered",
-        (await shown(page, "#reveal-all")) && (await shown(page, "#setup-panel")),
-      );
-      await page.click("#reveal-all");
-      const all = await page.evaluate(() => ({
-        hiddenLeft: [...document.querySelectorAll("[data-stage]")].filter((e) => e.hidden).length,
-        stored: JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll,
-        label: document.getElementById("reveal-all").textContent.trim(),
-        pressed: document.getElementById("reveal-all").getAttribute("aria-pressed"),
-        groupsOpen: [...document.querySelectorAll("details[data-group]")].every((d) => d.open),
-      }));
-      check(
-        "staged reveal: Show all settings reveals every panel and persists",
-        all.hiddenLeft === 0 && all.stored === true && all.label === "Simplify the page" && all.pressed === "true",
-        all,
-      );
-      check("staged reveal: Show all settings opens the settings groups", all.groupsOpen, all);
-      await page.setViewportSize({ width: 320, height: 640 });
-      check(
-        "staged reveal: no horizontal scroll at 320 px with everything shown",
-        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-      );
-      await page.screenshot({ path: path.join(outDir, "reveal-all-320.png"), fullPage: true });
-      await page.reload();
-      check("staged reveal: Show all settings survives a reload", await shown(page, "#breaks-panel"));
-      await page.click("#start-demo"); // the toggle is offered once tracking has started
-      await page.click("#reveal-all");
-      check(
-        "staged reveal: Simplify the page hides the panels again",
-        !(await shown(page, "#breaks-panel")) &&
-          (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).revealAll)) === false,
-      );
-      check("staged reveal: show all has no errors", errors.length === 0, errors);
-      await page.close();
-    }
-
-    // 320 px before tracking and after explicitly opening reminder settings.
-    {
-      const { page } = await newPage(browser, { staged: true, viewport: { width: 320, height: 640 } });
+      const { page, errors } = await newPage(browser, {
+        staged: true,
+        consent: false,
+        viewport: { width: 320, height: 640 },
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+      });
       await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
       const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
       check("staged reveal: no horizontal scroll at 320 px, stage 0", await fits());
       await page.click("#start-demo");
-      await page.waitForSelector("#explore-panel:visible");
-      await page.locator("#explore-panel summary").click();
-      await page.click('[data-explore="reminders-panel calibration-panel breaks-panel"]');
-      await page.waitForSelector("#breaks-panel:visible");
-      check("staged reveal: no horizontal scroll at 320 px after exploring reminders", await fits());
-      await page.screenshot({ path: path.join(outDir, "explore-reminders-320.png"), fullPage: true });
-      await page.close();
-    }
-
-    // Issue #84: Share and the weekly-score panel are reachable from Explore more, never by time alone.
-    {
-      const { page, errors } = await newPage(browser, {
-        staged: true,
-        consent: false,
-        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
-      });
-      const url = `${base}app/?clockScale=600&v=${Date.now()}`;
-      await page.goto(url);
-      await page.click("#start-demo");
-      await page.waitForSelector("#explore-panel:visible");
+      await page.waitForSelector("#gauge:visible");
       await page.waitForTimeout(2000);
       check(
-        "share reachable: Share and the weekly score stay hidden before Explore, even at a high clockScale",
-        !(await shown(page, "#share-btn")) && !(await shown(page, "#weekly-panel")),
+        "progressive onboarding: time does not put configuration or optional tools on the main screen",
+        await page.evaluate(
+          () =>
+            [...document.querySelectorAll("main [data-stage]:not([hidden])")].map((e) => e.id).join() ===
+            "session-line,gauge",
+        ),
       );
-      await page.locator("#explore-panel summary").click();
-      await page.click('[data-explore^="progress-panel"]');
+      await page.click("#settings-btn");
+      check("settings: no horizontal scroll at 320 px", await fits());
+      await page.screenshot({ path: path.join(outDir, "settings-320.png"), fullPage: true });
+      await page.click("#breath-check");
+      await page.waitForSelector("#consent-dialog:visible");
+      check("settings: the breath check still asks for permission", await page.locator("#consent-dialog").isVisible());
+      await page.click("#consent-cancel");
       check(
-        "share reachable: Progress & offline shows the header Share button and the weekly score panel",
-        (await shown(page, "#share-btn")) && (await shown(page, "#weekly-panel")),
+        "settings: declining stores no consent and keeps Settings open",
+        await page.evaluate(
+          () =>
+            !JSON.parse(localStorage.getItem("posture-guard:v1")).consent &&
+            !document.getElementById("settings-view").hidden,
+        ),
       );
+      await page.click("#consent-open");
+      await page.waitForSelector("#consent-dialog:visible");
+      await page.check("#consent-check");
+      await page.click("#consent-agree");
+      // The demo allows a breath check only in its good-posture half.
+      await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+        timeout: 60000,
+        polling: 50,
+      });
+      await page.click("#breath-check");
+      await page
+        .waitForFunction(() => document.getElementById("settings-view").hidden, null, { timeout: 15000 })
+        .catch(() => {});
       check(
-        "share reachable: the weekly score toggle is still off by default",
-        !(await page.isChecked("#share-weekly")),
+        "settings: a breath check started from Settings returns to the main screen",
+        await page.evaluate(
+          () =>
+            document.getElementById("settings-view").hidden &&
+            getComputedStyle(document.querySelector("main")).display !== "none",
+        ),
       );
-      await page.goto(url);
-      await page.waitForTimeout(500);
-      check("share reachable: the choice persists across a reload", await shown(page, "#weekly-panel"));
+      // Issue #84: Share and the weekly score stay reachable, now from Settings.
       check(
-        "share reachable: the header Share button stays hidden on the pre-start screen after a reload",
-        !(await shown(page, "#share-btn")),
+        "share reachable: Share sits in Settings, not the header",
+        await page.evaluate(
+          () => !!document.querySelector("#settings-view #share-btn") && !document.querySelector("header #share-btn"),
+        ),
       );
-      await page.click("#start-demo");
-      await page.waitForSelector("#share-btn:visible");
-      check("share reachable: Share is shown once tracking starts", await shown(page, "#share-btn"));
+      check("share reachable: the weekly score toggle is off by default", !(await page.isChecked("#share-weekly")));
       await page.click("#share-weekly");
       await page.waitForSelector("#share-consent-dialog:visible");
       check(
         "share reachable: turning on the weekly score opens the consent dialog first and stays off",
         !(await page.isChecked("#share-weekly")),
       );
-      check("share reachable: no page errors", errors.length === 0, errors);
+      check("progressive onboarding: no page errors", errors.length === 0, errors);
       await page.close();
     }
   }
@@ -2265,7 +2414,7 @@ try {
       const { page, errors } = await newPage(browser, { guide: true, consent: false });
       await page.goto(`${base}app/${bust}`);
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 20000 });
       check(
         "setup: the card opens by itself, without taking focus",
         (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
@@ -2300,8 +2449,9 @@ try {
         (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
       );
       check(
-        "setup: skipped steps are listed and the header Set up button reopens the first one",
-        after.setup.skipped.includes("framing") && (await visible(page, "#setup-btn")),
+        "setup: skipped steps are listed and Settings → Personalize reopens the first one",
+        after.setup.skipped.includes("framing") &&
+          (await page.evaluate(() => !document.getElementById("setup-btn").hidden)),
         after.setup,
       );
       await page.click("#setup-btn");
@@ -2337,12 +2487,12 @@ try {
       const { page, errors } = await newPage(browser, { guide: true });
       await page.goto(`${base}app/${bust}`);
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 8000 });
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 20000 });
       await page.keyboard.press("p");
       await page.waitForTimeout(300);
       check("setup: waits while paused", !(await visible(page, "#first-run")));
       await page.keyboard.press("p");
-      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 5000 });
+      await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 20000 });
       check("setup: comes back after the pause", true);
       await page.click("#test-start");
       await page.waitForTimeout(500);
@@ -2557,6 +2707,7 @@ try {
     await page.goto(`${base}app/${bust}`);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
+    await page.click("#settings-btn"); // the menu is the first section of Settings (#92)
     const ids = ["break-stretch", "breathe-with-me", "breath-check", "break-eye", "break-move", "break-water"];
     check(
       "break menu: lists the six entries as buttons",
@@ -2587,7 +2738,7 @@ try {
     check("break menu: reachable by keyboard in order", order.join() === ids.join(), order);
     await page.screenshot({ path: path.join(outDir, "break-menu-320.png"), fullPage: true });
     await page.focus("#break-stretch");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter"); // starting a break returns to the main screen
     check(
       "break menu: Stretch shows every step at once under reduced motion",
       await page.evaluate(

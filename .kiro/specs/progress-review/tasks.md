@@ -31,6 +31,8 @@ There is no server and no health data leaves the device (issue #51). The peer sh
 - [x] 7. Weekly view, per-day best run, coached vs silent chart
   - `summarizeWeeks` (ISO weeks, last 8), weekly rows with a coached bar and a silent bar,
     per-day "best run" text.
+  - #92 removed the weekly rows from the page (last 7 days only); `summarizeWeeks` stays for
+    the share record.
   - _Requirements: 5.1, 5.2, 5.4_
 - [x] 8. Consistency score module with the 90% cap
   - `docs/app/consistency.js`, tests: `tests/js/consistency.test.mjs` (P7: 90 and 100 score the same,

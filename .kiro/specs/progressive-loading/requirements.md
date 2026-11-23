@@ -113,28 +113,27 @@ becomes useful.
 #### Acceptance Criteria
 1. THE App SHALL define reveal stages in a pure module `docs/app/reveal.js` (injected clock, no DOM, tested):
    - **Stage 0, before tracking:** stage, Start buttons, walkthrough, Help.
-   - **Stage 1, tracking running** (first scored frame): "This session" summary, state badge, fps, Pause.
-   - **Stage 2, settled** (state is good or slouch, not "settling in", for 10 s of scored frames): posture needle, "What to fix" box, tiles, and the setup steps of Requirement 5.
-   - **Stage 3, 2 minutes of tracking with no setup error:** "Reminders & sounds" and "Calibrate to your desk".
-   - **Stage 4, 5 minutes (the prompt quiet period ends) or on the first prompt:** "Breaks & prompts", "Relax, don't brace", the wellness menu, "Test me".
-   - **Stage 5, after first session ends or on the second visit:** "Your progress", "Offline mode", Share, Sponsor card.
-2. A returning user (`store.onboarded >= ONBOARDING_VERSION` and `store.firstRunDone`) SHALL jump to Stage 4 at settle and see all panels from the next visit's second session.
-3. THE page SHALL include a persistent "Show all settings" button. Pressing it SHALL reveal everything, set `store.revealAll = true`, and be reversible ("Simplify the page").
+   - **Stage 1, tracking running** (first scored frame): one session line (good % and best streak, no heading, no panel), state badge, Pause, *Settings*.
+   - **Stage 2, settled** (state is good or slouch, not "settling in", for 10 s of scored frames): the posture gauge with its one-word label, and the setup steps of Requirement 5.
+   - Stages 0 to 2 are the only automatic stages, and they are the whole main screen. Changed by #81 and #92: `RevealStages` still computes stages 3 and 4 from tracked time, but `currentStage()` in `app.js` caps what is shown at stage 2, and no stage adds panels to the main screen.
+2. *Settings* (`#settings-btn` in the header, once tracking starts) SHALL open one full-screen view (`#settings-view`) that replaces the main screen until *Done* or Escape. It holds every former panel as an always-shown section: *Take a break*, *Relax your shoulders*, *Breaks & prompts*, *Shoulders & breathing*, *Reminders & sounds*, *Your comfortable posture*, *Test me*, *Your progress* (last 7 days), *Share my weekly score*, *Offline mode*, *Guided setup* (*Personalize*), *Share BackUp* and *Tracking* (fps, source, reminders). Controls that start something on the main screen (a break, a recording, a silent test, setup) return to it. (Replaces *Explore more*, `store.explored` and *Show all settings*, removed in #92.)
+3. Each Settings section SHALL have a heading and its controls, labels of at most 4 words that say what they set, and at most one safety line. No explanatory paragraphs, and no `<details>`.
 4. Hidden panels SHALL use the `hidden` attribute (out of the tab order and the accessibility tree), not just CSS opacity.
-5. WHEN a stage reveals, THE App SHALL announce it once in a `role="status"` line (for example, "Added: reminders and sounds") and SHALL NOT move focus, except when the user pressed the control that triggered it.
-6. A panel the user opened by hand (Help, "Not working?", Show all settings) SHALL stay revealed for the session. Reveals SHALL never hide something already shown during the session.
+5. WHEN a stage reveals, THE App SHALL NOT announce it and SHALL NOT move focus. (#90 removed the "Added: …" note; #92 removed `#reveal-note`.)
+6. Reveals SHALL never hide something already shown during the session.
 7. IF the user pauses, switches to a silent test, or tracking stops (`stopCamera`), THEN the stage SHALL not go backward, and SHALL not advance during a pause or test.
 8. THE ids of all existing controls SHALL NOT change (`#start-camera`, `#start-demo`, `#test-start`, `#breath-check`, and the e2e ids). Hidden controls SHALL still exist in the DOM so `setTrackingControls`, `renderPromptSettings` and the e2e script keep working.
 9. THE settings checkbox count visible at the end of Stage 2 SHALL be at most 2, and visible words below the stage at most 150. (Baseline: 10 and about 840.)
+10. THE main screen (`<main>`) SHALL show only the camera or demo view, the gauge and the session line. The only panels are the first-run card, *Learn the cues* while practising, and *Not working?* when a start is slow or fails or it is opened from Help. In the demo at `?clockScale=600`, outside the first-run card and the video banner, at most 10 visible words while good and while slouched, with 8 weeks of progress history seeded. No `<summary>` in `<main>` or Settings, and no `.mini-view`. (Added by #90, replaced by #92.)
 
 ### Requirement 5: Progressive configuration with "skip all"
 **User Story:** As a user, I want to set things up one small step at a time, and skip
 all of it if I want.
 
 #### Acceptance Criteria
-1. THE App SHALL extend the existing first-run guide (`FIRST_RUN`, `#first-run`) into a "Set up as you go" sequence. Each step is one card with one idea, shown after its reveal stage: (1) framing check (built), (2) calibrate good and slouch (built), (3) reminder style (Chime + voice, Chime only, Silent; and "say what to fix"), (4) sound pack and voice, (5) breaks: eye, move, stretch, water, (6) shoulder and breathing features (the consent step, Requirement 6).
+1. THE App SHALL extend the existing first-run guide (`FIRST_RUN`, `#first-run`) into a "Set up as you go" sequence (`SETUP_STEPS` in `onboarding.js`). The automatic sequence, from stage 2, has three cards: (1) *Get comfortable* (framing check), (2) "Save my comfortable posture" (good posture only, no slouch recording), (3) *You're ready*. The steps (4) reminder style, (5) sound pack and voice, (6) breaks and (7) shoulder and breathing features (the consent step, Requirement 6) are `optional: true`: they never open on their own and are reached only from *Settings → Guided setup → Personalize* (`#setup-btn`). (Changed by #81; before, six steps opened by stage.)
 2. EVERY card SHALL have **Skip this step** and a persistent **Skip all, use defaults** button. Skip all SHALL set `store.setupDone = true`, close the sequence, keep the defaults in `settings.js`, and SHALL NOT enable anything that is off by default (breathing moments, spoken praise, water reminders) and SHALL NOT record consent.
-3. A skipped step SHALL be marked skipped, not done, and SHALL be available from a "Set up" button in the header (next to Help) and under "Show all settings".
+3. A skipped step SHALL be marked skipped, not done, and SHALL be available from *Personalize* in Settings.
 4. Steps SHALL appear only while posture is good or settling, never during a posture reminder, pause, silent test or practice. The sequence waits, it does not queue behind the prompt scheduler.
 5. Progress SHALL persist in `store.setup = {step, skipped:[...], done:[...]}` and SHALL be removed by "Delete my data".
 6. A step that changes a setting SHALL apply it immediately and show it in the matching settings panel. The sequence SHALL be keyboard-operable, announce the step title in `role="status"`, and move focus to the card heading only when the user pressed Next or Skip.
@@ -225,5 +224,5 @@ Full evaluation (method, findings, fixes, limitations): [docs/ux-evaluation-prog
 
 Targets for what is visible before the visitor starts anything.
 
-- App (`docs/app/`): at most 40 words and 5 controls at 1280, 1000 and 320 px. The header shows only the brand and Help. Status, Pause, Not working? and Show all settings appear once tracking starts. Privacy, Consumer Health Data policy, third-party notices, GitHub, Report a bug, Sponsor and the technical notes (MediaPipe, `posture-core.js`, background tab at about 5 fps) live in the About & credits dialog and the README.
+- App (`docs/app/`): at most 40 words and 5 controls at 1280, 1000 and 320 px. The header shows only the brand and Help. Status, Pause and Settings appear once tracking starts. Privacy, Consumer Health Data policy, third-party notices, GitHub, Report a bug, Sponsor and the technical notes (MediaPipe, `posture-core.js`, background tab at about 5 fps) live in the About & credits dialog and the README.
 - Landing page (`docs/index.html`): at most 300 visible words with details collapsed (now about 96, was about 1020 including all sections). Headline, one-line pitch, Start button, three short feature lines, the three safety sentences and a quiet footer stay visible. What you need, How it works, All features, Screenshots and Privacy are collapsed `<details>`.

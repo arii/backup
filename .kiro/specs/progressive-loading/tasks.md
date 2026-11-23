@@ -32,11 +32,16 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     with the scaled clock; persist `store.revealAll`.
   - Check at 320 px, in the demo, on the MoveNet fallback and after `stopCamera`.
   - Built in FEAT-003. Measured with `tests/e2e/measure-load.mjs`: at stage 2, 0 visible
-    checkboxes and 76 words below the stage (baseline 10 and about 820). The stage 5 "next
-    session" rule: `returning` jumps to stage 4 at settle, `seasoned` (returning with two or
-    more earlier sessions) jumps to stage 5. Settings groups are closed `<details data-group>`;
-    Show all settings opens them. e2e seeds `revealAll` and `setupDone` (task 8 seeds done for
-    `live-site.mjs`; `capture.mjs` still open).
+    checkboxes and 76 words below the stage (baseline 10 and about 820). e2e seeds `revealAll`
+    and `setupDone` (task 8 seeds done for `live-site.mjs`; `capture.mjs` still open).
+  - Changed by #81: automatic stages are 0 to 2 only. *Explore more* (three choices, stored in
+    `store.explored`) and *Show all settings* open the rest. #86 removed the unreachable
+    `returning`/`seasoned` jumps and the "Added: …" notes for stages 3 to 5.
+  - Changed by #90, then replaced by #92: the main screen is the camera, the gauge and one
+    session line. Every setting is in one Settings view; *Explore more*, *Show all settings*,
+    the fix box, `#reveal-note`, the "Good to know" Help list and the mini views are gone.
+    e2e checks at most 10 words in `<main>` while good and while slouched (8 weeks of history
+    seeded), no panels outside their state, and every `STAGED_IDS` control inside Settings.
   - _Requirements: 3.1, 4, 11_
 - [x] 4. Progressive setup with "Skip all"
   - Extend `FIRST_RUN` with style, voice, breaks and shoulders steps; delay to stage 2;
@@ -45,7 +50,9 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
     (skip all grants no consent, enables nothing off by default).
   - Update "Delete my data" to clear `store.setup`, `store.water`, `store.breathIntroShown`.
   - Built in FEAT-004. Steps: framing, calibrate (stage 2), style, voice (stage 3), breaks,
-    shoulders, done (stage 4). Cards drive the real controls (one write path). `skipAll`
+    shoulders, done (stage 4). Changed by #81: the automatic sequence is framing, calibrate
+    (good posture only) and done; style, voice, breaks and shoulders are `optional` and open
+    only from *Personalize* (in Settings since #92). Cards drive the real controls (one write path). `skipAll`
     marks the open steps skipped so the header "Set up" button can reopen them. The privacy
     page lists setup progress and the water count (water arrives in task 7).
   - _Requirements: 5, 9.3_
@@ -121,6 +128,7 @@ finished last; do not leave e2e red between tasks.
 5. How strict should staging be: reveal by time and tracking state as designed, or let
    people open everything with one click from the start (design has both)?
    **Decision: staged reveal as designed, plus an always-available "Show all settings".**
+   (Superseded by #92: the main screen stays minimal and everything else is in Settings.)
 6. Show a sample looping demo in the stage before the click (small asset), or keep it text?
    **Decision: deferred, not built. The spec did not recommend it, it adds an asset to the
    precache, and "Try the demo" already gives a no-camera preview (requirements 3.2).**

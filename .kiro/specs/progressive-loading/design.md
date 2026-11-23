@@ -21,7 +21,7 @@
 - `docs/app/onboarding.js`: add `SETUP_STEPS`, `nextSetupStep(store)`, `skipAll(store)`
   as pure helpers (version constants stay).
 - `docs/app/index.html`: wrap panels in `data-stage="N"` containers (ids unchanged),
-  `<noscript>`, compact status card, "Show all settings" and "Set up" buttons.
+  `<noscript>`, compact status card, and (since #92) the *Settings* view.
 - `docs/index.html`: intent prefetch script (optional, Requirement 8.2).
 - `docs/privacy.html`, `docs/index.html` privacy line: wording from Requirement 9.
 
@@ -37,11 +37,9 @@ click          getUserMedia() ──────────────┐     
 ~0.3 s         video frames playing  ──> show mirrored video, card shrinks to a strip
                download done ──> step "Start the model" (elapsed counter)
                warm-up (blocks main thread, one paint first)
-first frame    stage 1: "This session", badge, fps
-10 s settled   stage 2: needle, what to fix, tiles, setup step 1 (framing)
-2 min          stage 3: reminders & sounds, calibration
-5 min          stage 4: breaks, wellness menu, relax, test
-next session   stage 5: progress, offline, share, sponsor
+first frame    stage 1: session line, badge, Settings
+10 s settled   stage 2: gauge, setup step 1 (framing)
+later          nothing more on its own: everything else is in Settings
 ```
 The 10 s settle comes from the existing "settling in" badge logic (`app.js` around line
 1500): it ends when the state leaves NO_PERSON with a scored frame. `RevealStages` adds a
@@ -114,15 +112,15 @@ Out of scope).
 ## Reveal stages (`reveal.js`)
 ```js
 export const STAGES = Object.freeze({
-  idle: 0, tracking: 1, settled: 2, configured: 3, comfortable: 4, returning: 5,
+  idle: 0, tracking: 1, settled: 2, configured: 3, comfortable: 4, all: 5,
 });
-export const REVEAL = Object.freeze({ settle_s: 10, config_s: 120, comfortable_s: 300 });
+export const REVEAL = Object.freeze({ settle_s: 10, gap_s: 3, config_s: 120, comfortable_s: 300 });
 export class RevealStages {
-  constructor({ returning = false, revealAll = false, cfg = REVEAL } = {})
+  constructor({ revealAll = false, cfg = REVEAL } = {})
   /** frame: { scored: bool, state: "good"|"slouch"|..., paused, silentTest, practice }
    *  now: seconds (scaled by clockScale like pclock). Returns { stage, changed }. */
   update(frame, now)
-  forceAll()        // "Show all settings"
+  forceAll()        // stage 5 (kept for tests; the app no longer offers "Show all settings")
 }
 ```
 Rules (properties, tested):
@@ -130,29 +128,25 @@ Rules (properties, tested):
 - R2 no advance while `paused`, `silentTest` or `practice`; time does not accumulate then.
 - R3 settle: needs `settle_s` consecutive seconds of scored frames in state good or slouch.
   A gap longer than 3 s of unscored frames resets the hold (not the stage).
-- R4 `returning` jumps to stage 4 when settled. `revealAll` or `forceAll()` returns 5.
+- R4 `revealAll` or `forceAll()` returns 5 (`STAGES.all`). The `returning` and `seasoned`
+  jumps were removed in #86: since #81 the app caps the shown stage at 2, so they could
+  not take effect.
 - R5 `clockScale`: the app passes the scaled clock, same as `pclock`.
 
-Mapping stage to DOM (`data-stage` on the panel wrappers in `docs/app/index.html`):
-| Stage | Panels shown |
+Mapping stage to DOM (`data-stage` in `docs/app/index.html`):
+| Stage | Shown on the main screen |
 |---|---|
-| 0 | stage, Start buttons, walkthrough, Help, "Not working?" (collapsed) |
-| 1 | + "This session" |
-| 2 | + posture needle (with tiles), setup step 1 |
-| 3 | + "Reminders & sounds" (collapsed `<details>`), "Calibrate to your desk" |
-| 4 | + "Relax, don't brace", "Breaks & prompts", wellness menu, "Learn the cues", "Test me" |
-| 5 | + "Your progress", "Offline mode", Share, Sponsor |
-Collapsed `<details>` also helps the checkbox count: each reminders group is inside a
-`<details>` closed by default, so even at stage 4 the visible checkboxes stay low until
-the user opens a group. Target is in Requirement 4.9.
+| 0 | stage, Start buttons, welcome, Help |
+| 1 | + session line (`#session-line`), badge, Pause, Settings |
+| 2 | + posture gauge (`#gauge`), setup step 1 |
 
-Show-all control: `<button id="reveal-all" class="link">Show all settings</button>` in the
-header row; text toggles to "Simplify the page". `store.revealAll` is persisted. Hidden
-panels use `hidden` so they leave the tab order. `renderPromptSettings()` and the other
-renderers write to hidden elements without effect, so no code change there.
-
-Announcement: `#reveal-note` (`role="status"`, visually quiet, 6 s) shows "Added: reminders
-and sounds" at each stage change.
+`currentStage()` in `app.js` returns `min(reveal.stage, 2)`. Since #92 nothing else is
+staged: every other control is in the Settings view (`#settings-view`), a sibling of
+`<main>` that replaces it while open (`body.settings-open main { display: none }`;
+tracking keeps running). Sections are always shown there, in two CSS columns at desktop
+width and one at 320 px. The slouch cue shows once, as the video banner; there is no fix
+box. The angle tiles show only during *Learn the cues*. #92 removed *Explore more*,
+`store.explored`, *Show all settings*, `store.revealAll` handling and `#reveal-note`.
 
 ## Setup sequence (progressive configuration, "skip all")
 Reuse `FIRST_RUN` (`app.js` `firstRun`, `#first-run`, `store.firstRunDone`). Today it is shown
@@ -267,10 +261,10 @@ check that exactly one request per file is made after landing then app (HTTP cac
 - **P7** The live-region text changes at most once per step, not per progress tick.
 
 ## Risks
-- Hidden panels may break code that measures layout (mini-views draw only when visible;
-  they already check visibility). Test practice and "Not working?" at stage 0 and 2.
-- A user who wants a setting right now may not find it. Mitigation: "Show all settings"
-  is always in the header, Help links to it.
+- Hidden panels may break code that measures layout. Test practice and "Not working?" at
+  stage 0 and 2.
+- A user who wants a setting right now may not find it. Mitigation: *Settings* is always
+  in the header once tracking runs.
 - Parallel start raises peak memory slightly (buffers held while the permission prompt is
   open). The two buffers are about 15 MB; acceptable.
 - Headless numbers use software WebGL; real GPU warm-up differs. Re-measure on a laptop

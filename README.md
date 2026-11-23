@@ -9,9 +9,9 @@ and it chimes. Keep slouching, and it tells you out loud exactly what is wrong a
 how to fix it. Everything runs on your computer; no video or landmark leaves it.
 
 **Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
-you have no camera). The first visit shows a short walkthrough (camera placement,
-what you will see and hear, and a safety notice). The *Help* button replays it, and
-*Not working?* checks framing, lighting and speed problems.
+you have no camera). The first visit shows one short welcome with the safety
+notice on demand. *Help* shows it again, and its *Not working?* button opens the
+setup check for framing, lighting and speed problems.
 
 ![The browser app in demo mode on a desktop screen](docs/assets/app-desktop.png)
 
@@ -41,11 +41,13 @@ Docs last verified: 2026-11-20.
 2. **Start the webcam** (or try the demo). Keep your head and shoulders in frame.
 3. **Get comfortable.** Optionally save your comfortable posture with a single
    three-second recording. There is no required slouch recording or settings tour.
-4. **Keep working.** Posture guidance stays simple. Detailed measurements and
-   session stats are collapsed; settings never appear just because time passes.
-5. **Explore when ready.** Open *Explore more* for breathing and breaks, reminder
-   preferences, or progress and offline tools. Your choices stay in this browser.
-   *Show all settings* is still available, and *Help* has camera troubleshooting.
+4. **Keep working.** The main screen shows only the live view, a posture gauge
+   and one session line. When you slouch, the cue appears once, as a banner on
+   the video.
+5. **Settings when you want them.** *Settings* in the header opens one screen
+   with breaks and breathing, reminders and sounds, calibration, the silent test,
+   progress, offline mode and sharing. *Done* takes you back. *Help* has
+   *Learn the cues* and *Not working?* for camera troubleshooting.
 
 Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboarding-and-setup/requirements.md).
 
@@ -145,8 +147,7 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   shoulders", "Shoulders uneven: level your shoulders and take your weight off that
   elbow", "Head tilted: straighten your neck", "Leaning sideways: sit up with your
   weight even". The advice is sideless, so a mirrored camera image never changes it.
-  The *What to fix* box under the needle shows the same advice live. The needle
-  shows no score number.
+  The needle shows no score number, only a one-word label.
 - **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
   speech synthesis as a fallback.
 - **Share.** The Share dialog has plain links (no third-party scripts) and a
@@ -160,7 +161,7 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   in `docs/app/vendor/`, so no third-party server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
   hidden. Chimes play through Web Audio, the prompt through the browser's speech
-  synthesis, and *Notify when tab is hidden* adds desktop notifications.
+  synthesis, and *Notify in background* adds desktop notifications.
 - **Remembers you.** Calibration, settings, the camera you last used, custom sounds (under 1.5 MB)
   and daily good/slouch totals persist in `localStorage`.
 
