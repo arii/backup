@@ -52,7 +52,7 @@ export const ONBOARDING_STEPS = Object.freeze([
     title: "A gentle nudge, not another task",
     points: [
       "Use your camera for a reminder when you slouch. Your video stays on this device.",
-      "Start with posture. Explore breaks and breathing when you’re ready.",
+      "Start with posture. Breaks and breathing are in Settings when you’re ready.",
       SAFETY_SHORT,
     ],
   },
@@ -108,7 +108,7 @@ export const SETUP_STEPS = Object.freeze([
     title: "Shoulders and breathing",
     intro:
       "BackUp can notice shoulders creeping up and offer a breath check. These features stay off until you agree " +
-      "to what they look at, and you can withdraw that any time under Breaks & prompts.",
+      "to what they look at, and you can withdraw that any time in Settings, under Shoulders & breathing.",
   },
 ]);
 

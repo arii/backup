@@ -41,12 +41,13 @@ Docs last verified: 2026-11-20.
 2. **Start the webcam** (or try the demo). Keep your head and shoulders in frame.
 3. **Get comfortable.** Optionally save your comfortable posture with a single
    three-second recording. There is no required slouch recording or settings tour.
-4. **Keep working.** The main screen shows the live view, a posture needle and
-   one line of session stats. What to fix appears only while you slouch, and
-   settings never appear just because time passes.
-5. **Explore when ready.** Open *Explore more* for breathing and breaks, reminder
-   preferences, or progress and offline tools. Your choices stay in this browser.
-   *Show all settings* is still available, and *Help* has camera troubleshooting.
+4. **Keep working.** The main screen shows only the live view, a posture gauge
+   and one session line. When you slouch, the cue appears once, as a banner on
+   the video.
+5. **Settings when you want them.** *Settings* in the header opens one screen
+   with breaks and breathing, reminders and sounds, calibration, the silent test,
+   progress, offline mode and sharing. *Done* takes you back. *Help* has
+   *Learn the cues* and *Not working?* for camera troubleshooting.
 
 Design and requirements: [`.kiro/specs/onboarding-and-setup`](.kiro/specs/onboarding-and-setup/requirements.md).
 
@@ -146,8 +147,7 @@ Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
   shoulders", "Shoulders uneven: level your shoulders and take your weight off that
   elbow", "Head tilted: straighten your neck", "Leaning sideways: sit up with your
   weight even". The advice is sideless, so a mirrored camera image never changes it.
-  The *What to fix* box under the needle shows the same advice live. The needle
-  shows no score number.
+  The needle shows no score number, only a one-word label.
 - **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
   speech synthesis as a fallback.
 - **Share.** The Share dialog has plain links (no third-party scripts) and a

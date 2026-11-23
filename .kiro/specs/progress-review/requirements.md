@@ -48,7 +48,7 @@ am improving.
 3. Import SHALL reject files above 1 MB, any value that is not a finite non-negative number, and any day with a seconds value above 86400 or good plus bad above 86400.
 
 ### Requirement 5: Richer trends
-1. THE panel MAY show a weekly view (ISO weeks) in addition to days.
+1. THE panel MAY show a weekly view (ISO weeks) in addition to days. (Removed from the page in #92: *Your progress* shows the last 7 days only. `summarizeWeeks` still feeds the weekly share record.)
 2. THE panel MAY show the best continuous good streak per day (needs `day.best` recorded).
 3. THE panel MAY show a relaxed-shoulders trend. This needs a new daily counter from the bracing monitor (`day.relaxed_s`, `day.shoulder_s` as the measured denominator, `day.brace_events`), with the same privacy rule.
 4. THE panel MAY show a coached versus silent comparison chart across weeks.

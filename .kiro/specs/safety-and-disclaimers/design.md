@@ -38,7 +38,7 @@ Full notice (`SAFETY_POINTS`):
 7. The software is provided as-is, without warranty, under the MIT License.
 
 Panel line under "Relax, don't brace":
-> This is a gentle check, not a medical test. Stop if anything hurts.
+> A gentle check, not a medical test. Stop if anything hurts.
 
 ## Placement map
 | Surface | Content | Mechanism |

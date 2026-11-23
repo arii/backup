@@ -53,22 +53,20 @@ Reuses the `body.testing` gating (no audio, no stats, no reminders). Each step h
 target metric id (`head_forward`, `head_tilt`, `shoulder_level`, `trunk_lean`, from `CUE_METRICS`) and lights the matching
 tile via the existing metric render path. "Next" is manual.
 
-## Live mini view
-The needle panel sits in the other column, so practice instructions alone are hard to
-follow. The practice panel holds a `.mini-view`: a 160x120 canvas (mirrored with
-CSS like the stage) and a small SVG gauge with the same arcs as the main needle.
-`renderMiniViews` in `app.js` runs from `render()`, reuses `drawSkeleton` (parameterised
-by canvas, context and scale) and the same `rotate((needle + 1) * 90)` transform. It
-draws only while practice runs and never during the silent test
-(`body.testing .mini-view` is hidden and the needle value is withheld).
-The "Not working?" panel had a second mini view until #90 removed it: it copied the
-stage and the needle panel and was the "duplicate skeleton" users found confusing.
+## One live view (no mini views)
+Earlier builds drew a compact `.mini-view` (a second canvas skeleton and needle) in the
+"Not working?" panel and in the practice panel. Users read them as a confusing duplicate,
+so #90 and #92 removed both. Learn the cues now uses the main stage skeleton and the
+gauge; the angle tiles under the gauge show only while `body.practicing` is set. After
+the last step `body.practice-done` keeps the practice panel up with *Try a breath check*
+and *Close*. `mini-view.js` keeps only `needleTransform`, used by the main gauge.
 
 ## "Not working?" visibility
-`app.js` keeps a set of reasons (`setupWhy`): `start` (a slow hint, a failed or stopped
-start, no WebGL), `fixes` (the setup check has fixes), `asked` (Help → *Not working?*)
-and `practice` (the *Try a breath check* offer after Learn the cues). The panel is shown
-while the set is not empty. A successful start clears `start`.
+`app.js` keeps a set of reasons (`setupWhy`): `start` (a slow hint while starting, a
+failed or stopped start, no WebGL) and `asked` (Help → *Not working?*). The panel is shown
+while the set is not empty. A successful start clears `start`; *Hide* clears `asked`.
+The setup check still runs and fills the panel's status and fixes, so they are current
+whenever it is opened.
 
 ## Correctness properties
 - **P1 persistence**: for any frame sequence where a fault lasts less than `persist_s`,

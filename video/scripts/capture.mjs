@@ -48,7 +48,6 @@ async function record(name, args, script) {
       s.ackVersion = Math.max(s.ackVersion || 0, 1);
       s.firstRunDone = true; // skip the first-run guide card
       s.setupDone = true; // skip the progressive setup sequence
-      s.revealAll = true; // show every panel from the start (no staged reveal)
       s.breathIntroShown = true; // the automatic breath check offer would interrupt the clip
       // Opt in to the shoulder and breathing features (docs/app/consent.js, CONSENT_VERSION 1).
       s.consent = s.consent || { version: 1, at: "2026-01-01T00:00:00.000Z" };
@@ -92,8 +91,11 @@ const demo = await record("demo", [], async (page, now) => {
     timeout: 20000,
   });
   const voice = now();
-  const cue = await text(page, "fix-title");
-  const fix = await text(page, "fix-how");
+  // The cue is the banner on the video ("Head forward: Tuck your chin..."); the fix box went in #92.
+  const banner = await text(page, "banner");
+  const cut = banner.indexOf(":");
+  const cue = cut < 0 ? banner : banner.slice(0, cut);
+  const fix = cut < 0 ? "" : banner.slice(cut + 1).trim();
   await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
     timeout: 25000,
   });
@@ -128,7 +130,7 @@ if (y4m && existsSync(y4m)) {
         }
         await page.waitForTimeout(250);
       }
-      const cue = await text(page, "fix-title");
+      const cue = (await text(page, "banner")).split(":")[0];
       await page.waitForTimeout(3000);
       return { live, reminder, cue, end: now() };
     },

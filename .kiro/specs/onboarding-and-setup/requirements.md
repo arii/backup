@@ -27,7 +27,7 @@ does and that it is safe to try before the camera turns on.
 7. THE ids `#start-camera`, `#start-demo`, `#test-start` and `#breath-check` SHALL NOT change.
 
 ### Requirement 2: Help
-1. THE App SHALL show a "Help" button in the header that opens the Help dialog (`#help-dialog`). It SHALL show the welcome text, a "Good to know" list (one line each on reminder timing, break prompts, coaching levels, the silent test, storage and the offline copy), and the buttons *Learn the cues* and *Not working?*.
+1. THE App SHALL show a "Help" button in the header that opens the Help dialog (`#help-dialog`). It SHALL show the welcome text (with the short safety line) and the buttons *Learn the cues* and *Not working?*, and nothing else. (#92 removed the "Good to know" list that #90 had added: removed explanations are deleted, not moved.)
 2. Opening Help SHALL NOT clear `store.ackVersion` and SHALL NOT interrupt a running session.
 
 ### Requirement 3: Setup check
@@ -44,7 +44,7 @@ to fix it.
 7. Each diagnosis SHALL map to plain-language fixes (see design).
 
 ### Requirement 4: "Not working?" troubleshooting
-1. THE App SHALL show the "Not working?" panel (`#setup-panel`, a plain panel with a heading) only while the setup check reports a fix, while a start step is slow or has failed, or after the user picks *Not working?* in Help. WHILE tracking looks good and none of these hold, THE panel SHALL be hidden. (Changed by #90; before, it showed from the start of tracking.)
+1. THE App SHALL show the "Not working?" panel (`#setup-panel`, a plain panel with a heading) on the main screen only while a start step is slow or has failed, or after the user picks *Not working?* in Help. *Hide* puts away a panel the user opened. Otherwise THE panel SHALL be hidden. (Changed by #90 and #92; before, it showed from the start of tracking. Live tracking problems show as one line in `#warnings` above the gauge.)
 2. THE panel SHALL show the current diagnosis, its fixes as a checklist, *Learn the cues*, *Show the intro again* and a *Report a bug* link. It SHALL NOT repeat the generic camera placement tips, which are on the start overlay and the *Get comfortable* card.
 3. THE panel text SHALL change in an `aria-live="polite"` region.
 4. THE panel SHALL cover: camera permission denied or no camera found, camera used by another app, low light or backlight, too close or too far, no one in view, low frame rate (close other tabs, lower resolution), and WebGL or model load failure.
@@ -54,11 +54,10 @@ to fix it.
 2. EACH step SHALL light the matching metric tile when the live metric crosses its threshold, and SHALL advance only on user action ("Next"), never on a timer.
 3. WHILE practice mode is active, THE App SHALL play no sounds, speak nothing, and record no stats (same gating as the silent test, `body.testing`).
 
-### Requirement 5a: Live mini view
-1. WHILE practice mode is active, THE practice panel SHALL show a compact mirrored posture skeleton and a small needle gauge, fed by the same landmarks and needle value as the main stage and needle panel.
-2. THE "Not working?" panel SHALL NOT hold a mini view. (Removed by #90: it repeated the stage and the needle panel.)
-3. THE mini skeleton SHALL use the same wire colours as the main skeleton, and THE mini needle SHALL use the same rotation as the main needle.
-4. WHILE the silent test is running, THE mini views SHALL be hidden and SHALL not be drawn.
+### Requirement 5a: One live view
+1. Learn the cues SHALL use the main video, skeleton and posture gauge. THE App SHALL NOT draw a second skeleton or needle anywhere (no `.mini-view`). (#90 removed the copy in "Not working?"; #92 removed the one in the practice panel. Both were the "duplicate skeleton" users found confusing.)
+2. WHILE practice mode is active, THE angle tiles under the gauge SHALL be shown, so the step can light the matching tile. Otherwise they SHALL be hidden.
+3. WHEN the last step is done, THE practice panel SHALL stay up with *Try a breath check* and *Close* until the user picks one.
 
 ### Requirement 6: Accessibility
 1. EVERY onboarding control SHALL have a text label, a visible focus state and be reachable by keyboard in reading order.

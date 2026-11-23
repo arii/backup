@@ -1,6 +1,6 @@
 {
-  "version": "1a9f6fbda9729ee5",
-  "totalBytes": 33428943,
+  "version": "116aca260b357ffe",
+  "totalBytes": 33420441,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 138046,
-      "sha256": "c01c3137892859b51d686850e373cc98eb9a237ac4d1f596e10ec6a3ceacd721"
+      "size": 133123,
+      "sha256": "1f90a00bf69239b60927b78330a5514390d1e6837b818f88a9999eeb48d9b1d1"
     },
     {
       "url": "breaks.js",
@@ -39,8 +39,8 @@
     },
     {
       "url": "index.html",
-      "size": 52969,
-      "sha256": "ab7925e57cb88d59ab44ac8c4c989d85040fecaf95f31f0ddb02bc430a20db0b"
+      "size": 49832,
+      "sha256": "62bb7e6d695b58018075ec8175d02b7c90d21e159a4bdc3eecbd919a81b7d0df"
     },
     {
       "url": "loading.js",
@@ -49,8 +49,8 @@
     },
     {
       "url": "mini-view.js",
-      "size": 997,
-      "sha256": "2a94801ec6ab51c8061c6f101e65e49bb89955e72f2c73cfd25f6d4f6d60205c"
+      "size": 529,
+      "sha256": "80e477624407b36943b663783753709d98d87700f64feb3e3c5fb3e0d82efc8e"
     },
     {
       "url": "movenet-adapter.js",
@@ -64,8 +64,8 @@
     },
     {
       "url": "onboarding.js",
-      "size": 12289,
-      "sha256": "e74defe80642275a6348175112c7ed07e8788573cfa8e4485b44e5cacc2333ee"
+      "size": 12315,
+      "sha256": "f3df5564dcbcaf46799e74698b678ef3737ea0e3d620134009998bfa057d4ef8"
     },
     {
       "url": "posture-core.js",

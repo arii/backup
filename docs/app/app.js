@@ -25,8 +25,8 @@ import { LoadSteps, downloadAll, nextPaint } from "./loading.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
-import { PROMPTS, PromptScheduler } from "./prompts.js";
-import { MINI_SCALE, miniViewsToDraw, needleTransform } from "./mini-view.js";
+import { PromptScheduler } from "./prompts.js";
+import { needleTransform } from "./mini-view.js";
 import {
   DIAGNOSIS_TEXT,
   Diagnosis,
@@ -873,7 +873,6 @@ function setTrackingControls(on) {
     else if (READY_TITLE[id]) el.title = READY_TITLE[id];
     else el.removeAttribute("title");
   }
-  $("pre-start-note").hidden = on;
 }
 
 $("breath-check").addEventListener("click", startBreathCheck);
@@ -1425,7 +1424,7 @@ for (const kind of ["stretch", "eye", "move", "water"])
   $(`break-${kind}`).addEventListener("click", () => openBreak(kind));
 
 // -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
-// A small non-modal card in the session panel. Gating is in sponsor.js; the
+// A small non-modal card under the main screen, never over the video. Gating is in sponsor.js; the
 // counts it uses live only in this browser's store.
 
 let sponsorCard = null; // { t } while on screen
@@ -1730,7 +1729,6 @@ function renderStats() {
   const tracked = session.good + session.bad;
   const pct = tracked > 0 ? Math.round((100 * session.good) / tracked) : null;
   $("good-pct").textContent = pct === null ? "-" : `${pct}%`;
-  $("good-bar").style.width = `${pct ?? 0}%`;
   $("best-streak").textContent = mmss(session.best);
   $("reminder-count").textContent = String(reminderCount);
 }
@@ -1823,83 +1821,6 @@ function causeFor(result, landmarks) {
   }
 }
 
-/** The "what to fix" box: shown while a reminder is active or a metric is past
- *  its threshold. Hidden while posture is good: the needle label already says so. */
-function renderFix(state, result, cue, hold, heldLabel = "") {
-  const box = $("fix-box");
-  const bad = state === State.BAD_CHIME || state === State.BAD_VOICE;
-  const drifting = result.kind === "scored" && wireColor(state, result) === WIRE.drift;
-  let title,
-    how = "",
-    cls = "";
-  if (heldLabel) {
-    title = heldLabel; // an activity owns the moment: no cue, no verdict on posture
-  } else if ((bad || drifting) && cue) {
-    title = cue.title;
-    how = cue.fix;
-    cls = "active";
-  } else if (bad) {
-    title = "Almost there";
-    cls = "active"; // the hold bar shows how long is left
-  } else if (state === State.GOOD) {
-    title = "";
-    cls = "quiet";
-  } else {
-    title = "What to fix shows up here";
-  }
-  $("fix-title").textContent = title;
-  $("fix-how").textContent = how;
-  box.className = `fix ${cls}`;
-  for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
-    $(`t-${metric}`).classList.toggle("focus", cls === "active" && cue !== null && cue.metric === metric);
-  }
-  renderHold(hold);
-}
-
-// Fill-on-hold bar: fills while you hold a posture, so "hold it" shows how
-// long is left instead of saying "a few seconds".
-const HOLD_TEXT = {
-  recover: (s) => `Hold it… reminder clears in ${s}`,
-  confirm: (s) => `Hold it… good posture in ${s}`,
-  slipping: (s) => `Slouching… reminder in ${s}`,
-  praise: (s) => `Good posture held… next “looking good” in ${s}`,
-};
-function renderHold(hold) {
-  const bar = $("hold-bar");
-  if (!hold) {
-    bar.className = "hold idle";
-    return;
-  }
-  const secs = hold.remaining >= 10 ? `${Math.ceil(hold.remaining)} s` : `${hold.remaining.toFixed(1)} s`;
-  bar.className = `hold ${hold.kind === "slipping" ? "warn" : "good"}`;
-  $("hold-fill").style.width = `${(hold.fraction * 100).toFixed(1)}%`;
-  $("hold-text").textContent = HOLD_TEXT[hold.kind](secs);
-  bar.setAttribute("aria-valuenow", String(Math.round(hold.fraction * 100)));
-}
-
-// Compact live view inside the practice panel, so the skeleton and needle sit
-// next to the instructions. Hidden and skipped during the silent test.
-const MINI_VIEWS = ["practice"].map((pre) => {
-  const cv = $(`${pre}-mini-canvas`);
-  return { pre, cv, c: cv.getContext("2d"), rotor: $(`${pre}-needle-rotor`), root: $(`${pre}-mini`) };
-});
-
-function renderMiniViews(landmarks, color, needle) {
-  const open = { practice: !!practice };
-  const draw = new Set(
-    miniViewsToDraw(
-      MINI_VIEWS.map((m) => m.pre),
-      open,
-      needle,
-    ),
-  );
-  for (const m of MINI_VIEWS) {
-    if (!draw.has(m.pre)) continue;
-    drawSkeleton(landmarks, color, m.cv, m.c, MINI_SCALE);
-    m.rotor.setAttribute("transform", needleTransform(needle));
-  }
-}
-
 // -- load marks -----------------------------------------------------------------
 // performance.now() at each start-up milestone, kept for the bug-report
 // diagnostics and for e2e (window.__loadMarks). Only the first hit counts.
@@ -1972,28 +1893,25 @@ function renderNeedle(needle, transition, result, held) {
     : needle > -0.3 || wireColor(transition.state, result) === WIRE.drift
       ? "drifting"
       : "upright";
-  $("needle-text").textContent = label + (engine.needleCalibrated ? " \u00b7 calibrated" : "");
+  $("needle-text").textContent = label; // one word; the cue itself is the banner on the video
 }
 
 function render(out, landmarks) {
-  const { result, transition, needle, cue, hold } = out;
+  const { result, transition, needle } = out;
   const held = out.held === true;
   const label = rules().label;
-  // No cue or hold bar while an activity holds posture feedback or just ended (its grace).
-  const quiet = held || activity.inGrace(clockS());
   if (result.kind === "scored") {
     markLoad("firstScored");
     if (transition.state !== State.NO_PERSON) markLoad("settled");
   }
-  renderFix(transition.state, result, quiet ? null : cue, quiet ? null : hold, held ? label : "");
   if (practice) renderPractice(result);
   renderBadge(transition, result, held, label);
+  returnToMainOnStart();
   $("warnings").textContent = causeFor(result, landmarks);
   renderMetrics(result);
   renderNeedle(needle, transition, result, held);
   const wire = test || held ? WIRE.slate : wireColor(transition.state, result);
   drawSkeleton(landmarks, wire);
-  renderMiniViews(landmarks, wire, test ? null : needle);
   renderTest();
   renderCalibration();
   updateFirstRunLive(result, landmarks);
@@ -2098,40 +2016,18 @@ document.addEventListener("keydown", (e) => {
 // hidden panels. Stages are not announced: the panels appearing is the news.
 
 const reveal = new RevealStages();
-const pinned = new Set(); // panels opened by hand (e.g. the first-run guide points at the test): never hidden again
-let revealNoteTimer = null;
-
-function revealNote(text) {
-  const el = $("reveal-note");
-  el.textContent = text;
-  clearTimeout(revealNoteTimer);
-  revealNoteTimer = setTimeout(() => {
-    el.textContent = "";
-  }, 6000);
-}
 
 function currentStage() {
   // Time and repeat visits never opt someone into a more complicated workspace.
-  return store.revealAll ? STAGES.all : Math.min(reveal.stage, STAGES.settled);
+  return Math.min(reveal.stage, STAGES.settled);
 }
 
 function applyReveal() {
   const stage = currentStage();
-  for (const el of document.querySelectorAll("[data-stage]")) {
-    el.hidden = Number(el.dataset.stage) > stage && !pinned.has(el) && !store.explored?.includes(el.id);
-  }
-  $("explore-panel").hidden = stage < STAGES.settled;
-  const all = !!store.revealAll;
-  const btn = $("reveal-all");
-  btn.textContent = all ? "Simplify the page" : "Show all settings";
-  btn.setAttribute("aria-pressed", String(all));
+  for (const el of document.querySelectorAll("[data-stage]")) el.hidden = Number(el.dataset.stage) > stage;
+  // Learn the cues uses the main gauge and its tiles, even before tracking has settled.
+  if (document.body.classList.contains("practicing")) $("gauge").hidden = false;
   return stage;
-}
-
-/** Show one staged panel and keep it shown (the user asked for it). */
-function pinPanel(id) {
-  pinned.add($(id).closest("[data-stage]"));
-  applyReveal();
 }
 
 function revealStep(out) {
@@ -2149,28 +2045,61 @@ function revealStep(out) {
   if (changed) applyReveal();
 }
 
-function setRevealAll(on) {
-  store.revealAll = on;
-  save();
-  applyReveal();
-  revealNote(on ? "Showing all settings" : "Page simplified");
-}
-$("reveal-all").addEventListener("click", () => setRevealAll(!store.revealAll));
-for (const button of document.querySelectorAll("[data-explore]")) {
-  button.addEventListener("click", () => {
-    const ids = button.dataset.explore.split(" ");
-    store.explored = [...new Set([...(store.explored || []), ...ids])];
-    save();
-    applyReveal();
-    const panel = $(ids[0]);
-    panel.scrollIntoView({ block: "nearest" });
-    panel.tabIndex = -1;
-    panel.focus({ preventScroll: true });
-  });
-}
-if (store.revealAll) setRevealAll(true);
 applyReveal();
-$("reveal-note").textContent = "";
+
+// -- settings view -------------------------------------------------------------------
+// Settings replaces the main screen until Done (issue #92): the main screen keeps only
+// the camera, the gauge and the session line. Tracking keeps running underneath.
+function setSettingsOpen(open) {
+  if (open === !$("settings-view").hidden) return;
+  $("settings-view").hidden = !open;
+  document.body.classList.toggle("settings-open", open);
+  $("settings-btn").setAttribute("aria-expanded", String(open));
+  if (open) {
+    renderProgress();
+    window.scrollTo(0, 0);
+    $("settings-title").focus();
+  } else {
+    $("settings-btn").focus({ preventScroll: true });
+  }
+}
+$("settings-btn").addEventListener("click", () => setSettingsOpen($("settings-view").hidden));
+$("settings-close").addEventListener("click", () => setSettingsOpen(false));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("settings-view").hidden && !document.querySelector("dialog[open]"))
+    setSettingsOpen(false);
+});
+// Something the user starts from Settings (a break, a breath check or guide, possibly after
+// a consent dialog, a recording, a silent test, practice or a setup card) brings them back
+// to the main screen, once, when it starts. Refused starts keep Settings open, so the
+// message next to the control stays readable. A prompt that starts on its own, with no
+// recent user action, does not pull the user out of Settings. Called every frame.
+const USER_START_S = 3; // a start within this long after a click or key counts as the user's
+let mainBusy = false;
+let lastUserAction = -Infinity;
+for (const type of ["click", "keydown"]) {
+  document.addEventListener(
+    type,
+    (e) => {
+      // Opening Settings itself is not a start.
+      if (!e.target.closest?.("#settings-btn")) lastUserAction = performance.now();
+    },
+    true,
+  );
+}
+function returnToMainOnStart() {
+  const busy =
+    !!card ||
+    !!sponsorCard ||
+    breath.active ||
+    guide.active ||
+    !!test ||
+    !!practice ||
+    firstRun.open ||
+    !!engine.calibration.status.active;
+  if (busy && !mainBusy && performance.now() - lastUserAction < USER_START_S * 1000) setSettingsOpen(false);
+  mainBusy = busy;
+}
 
 let wasHeld = false; // the previous frame was scored by hold()
 let settleUntil = -Infinity; // after a held run the restarted engine reads NO_PERSON until posture is clear
@@ -2312,9 +2241,8 @@ function webglCanvas() {
 }
 
 // "Not working?" is shown only while something calls for it: a slow or failed start
-// ("start"), a fix from the setup check ("fixes"), the user asking for it in Help
-// ("asked"), or the message after Learn the cues ("practice"). Tracking that looks
-// good shows none of these, so the panel stays out of the way.
+// ("start") or the user asking for it in Help ("asked"). The setup check keeps its
+// status and fixes current, so they are right whenever the panel opens (#92).
 const setupWhy = new Set();
 function setSetupReason(why, on) {
   if (on) setupWhy.add(why);
@@ -2563,7 +2491,7 @@ let loopsStarted = false;
 
 function begin(source) {
   $("source").textContent = source;
-  document.body.classList.remove("pre-start"); // status, Pause and Show all settings appear now
+  document.body.classList.remove("pre-start"); // status, Pause and Settings appear now
   setSetupReason("start", false); // started: a slow or failed earlier attempt no longer applies
   $("start-overlay").style.display = "none";
   showWebGLHelp(false);
@@ -2739,7 +2667,7 @@ $("start-demo").addEventListener("click", () => {
 // is in store.setup. Every card has Skip this step and Skip all, use defaults.
 // Skip all records no consent and turns nothing on. The sequence waits while a
 // posture reminder, a pause, a silent test, practice or a breath check is on
-// (it does not queue behind the prompt scheduler). The header Set up button and
+// (it does not queue behind the prompt scheduler). Settings → Personalize and
 // "Show the intro again" open it by hand. Focus moves only after a button press.
 
 const firstRun = { step: 0, open: false, manual: false };
@@ -2910,6 +2838,7 @@ function renderFirstRun() {
 
 function renderSetupButton() {
   $("setup-btn").hidden = !loopsStarted || firstRun.open || !reopenSetupStep(store);
+  $("personalize-panel").hidden = $("setup-btn").hidden;
 }
 
 function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
@@ -3013,9 +2942,9 @@ $("first-run-skip-all").addEventListener("click", () => {
   save();
   closeFirstRun();
   $("state-badge").focus();
-  revealNote("Setup skipped, defaults kept. Use Set up to come back.");
 });
 $("setup-btn").addEventListener("click", () => {
+  setSettingsOpen(false); // first, so focus can go to the card heading
   openFirstRun(reopenSetupStep(store), true);
   $("first-run").scrollIntoView({ block: "nearest" });
   focusFirstRunHeading();
@@ -3090,27 +3019,10 @@ showStartControls();
 // First visit: start keyboard focus on the card, so Tab reaches Next before the header controls.
 if (!$("onboarding").hidden) $("ob-title").focus({ preventScroll: true });
 
-// Explanations that used to sit in the panels (issue #90). The panels keep their
-// controls; the reasons behind them are one line each here.
-const HELP_NOTES = Object.freeze([
-  `Reminder after ${DEFAULTS.state.bad_sustain_s} s of slouching, voice ${DEFAULTS.state.voice_delay_s} s later. ` +
-    "Praise comes when you recover, then less often the longer you hold it.",
-  `Break prompts come one at a time: none in the first ${PROMPTS.first_quiet_s / 60} minutes, ` +
-    `at most one every ${PROMPTS.global_gap_s / 60} minutes, none while paused or testing.`,
-  `Leaving the camera for ${BREAKS.away_reset_s / 60} minutes or more counts as a break and is not scored.`,
-  "Chime only still speaks the breath-check lines. Silent mutes everything.",
-  "Light coaching plays a chime before any voice and praises only at milestones. Test me shows whether the habit sticks.",
-  "Test me is a silent check with no sounds, banners, needle or hints, so it measures your own habit. " +
-    "Take one for a baseline, then again after a few days of coaching.",
-  "A custom spoken prompt uses your browser's voice, not the recorded one.",
-  "Progress is stored only in this browser and counted by your local day.",
-  "The offline copy downloads only when you ask and holds app files, never video. Remove offline copy or Delete my data deletes it.",
-]);
-
 function openHelp() {
   const body = $("help-body");
   body.replaceChildren();
-  for (const step of [...ONBOARDING_STEPS, { title: "Good to know", points: HELP_NOTES }]) {
+  for (const step of ONBOARDING_STEPS) {
     const h = document.createElement("h3");
     h.textContent = step.title;
     const ul = document.createElement("ul");
@@ -3124,6 +3036,7 @@ $("help-btn").addEventListener("click", openHelp);
 $("help-close").addEventListener("click", () => $("help-dialog").close());
 $("help-notworking").addEventListener("click", () => {
   $("help-dialog").close();
+  setSettingsOpen(false);
   setSetupReason("asked", true);
   $("setup-panel").scrollIntoView({ block: "nearest" });
   $("setup-title").focus();
@@ -3131,8 +3044,6 @@ $("help-notworking").addEventListener("click", () => {
 // "Hide" puts away what the user opened by hand; a live fault or start problem keeps it shown.
 $("setup-close").addEventListener("click", () => {
   setSetupReason("asked", false);
-  setSetupReason("practice", false);
-  $("practice-breath").hidden = true;
   $("practice-msg").textContent = "";
   if (!$("setup-panel").hidden) return;
   $("help-btn").focus();
@@ -3142,6 +3053,7 @@ $("help-practice").addEventListener("click", () => {
   $("help-msg").textContent = msg;
   if (!msg) {
     $("help-dialog").close();
+    setSettingsOpen(false);
     $("practice-next").focus();
   }
 });
@@ -3176,7 +3088,6 @@ function renderSetup({ diagnosis, fixes }) {
   status.textContent = DIAGNOSIS_TEXT[diagnosis];
   status.className = diagnosis === Diagnosis.OK ? "ok" : diagnosis === Diagnosis.CHECKING ? "" : "fault";
   fillList($("setup-fixes"), fixes);
-  setSetupReason("fixes", fixes.length > 0);
 }
 
 // -- learn the cues (practice) ---------------------------------------------------------
@@ -3201,13 +3112,15 @@ function startPractice() {
   if (practice) return "";
   if (!activity.start(ACTIVITY.PRACTICE, clockS())) return "Finish the current activity first.";
   $("practice-breath").hidden = true;
-  setSetupReason("practice", false); // a new practice replaces the old breath-check offer
+  document.body.classList.remove("practice-done");
+  $("practice-stop").textContent = "Stop practice";
   breath.cancel();
   stopSpeech();
   $("banner").classList.remove("show");
   cancelPrompts();
   practice = { i: 0 };
   document.body.classList.add("practicing");
+  applyReveal();
   renderPracticeStep();
   return "";
 }
@@ -3216,6 +3129,7 @@ function stopPractice() {
   practice = null;
   activity.stop(ACTIVITY.PRACTICE, clockS());
   document.body.classList.remove("practicing");
+  applyReveal(); // the gauge goes back to its stage
   for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"])
     $(`t-${metric}`).classList.remove("focus");
   engine.restart(); // practice postures must not carry into a reminder
@@ -3245,10 +3159,6 @@ function renderPractice(result) {
     practiceLive = live;
     $("practice-live").textContent = live;
   }
-  $("fix-title").textContent = "Practice";
-  $("fix-how").textContent = "";
-  $("fix-box").className = "fix active";
-  $("hold-bar").className = "hold idle";
   for (const metric of ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"]) {
     $(`t-${metric}`).classList.toggle("focus", metric === step.metric);
   }
@@ -3263,22 +3173,32 @@ $("practice-next").addEventListener("click", () => {
   if (!practice) return;
   if (practice.i >= PRACTICE_STEPS.length - 1) {
     stopPractice();
-    $("practice-msg").textContent = "Practice finished. Want to try a breath check next?";
+    // The panel stays up for the breath-check offer until the user picks it or closes it.
+    document.body.classList.add("practice-done");
+    $("practice-count").textContent = "";
+    $("practice-text").textContent = "Practice finished. Try a breath check next?";
+    $("practice-live").textContent = "";
     $("practice-breath").hidden = false;
-    setSetupReason("practice", true); // the offer lives in this panel
+    $("practice-breath").focus(); // Next is about to hide; keep focus in the panel
+    $("practice-next").hidden = true;
+    $("practice-stop").textContent = "Close";
     return;
   }
   practice.i += 1;
   renderPracticeStep();
 });
+function closePracticeDone() {
+  document.body.classList.remove("practice-done");
+  $("practice-breath").hidden = true;
+  $("practice-next").hidden = false;
+  $("practice-stop").textContent = "Stop practice";
+}
 $("practice-stop").addEventListener("click", () => {
-  stopPractice();
-  $("practice-msg").textContent = "Practice stopped.";
+  if (practice) stopPractice();
+  closePracticeDone();
 });
 $("practice-breath").addEventListener("click", () => {
-  $("practice-breath").hidden = true;
-  $("practice-msg").textContent = "";
-  setSetupReason("practice", false);
+  closePracticeDone();
   startBreathCheck();
 });
 
@@ -3325,7 +3245,7 @@ function renderProgress() {
   $("progress-best").textContent = relaxedDays.length
     ? `Shoulders relaxed over the last 7 days: ${Math.round(relaxedDays.reduce((a, d) => a + d.relaxed_pct, 0) / relaxedDays.length)}% of tracked time, ${braces} bracing reminder${braces === 1 ? "" : "s"}.`
     : "";
-  renderWeeks();
+  renderShareWeek();
   $("progress-total").textContent = s.empty
     ? ""
     : `Total good posture time so far: ${minutesText(s.cumulative_good_s)}.`;
@@ -3345,43 +3265,9 @@ function renderProgress() {
   $("progress-light").hidden = !suggest;
 }
 
-function weekRow(w) {
-  const row = document.createElement("div");
-  row.className = "day-row";
-  row.setAttribute("role", "listitem");
-  const label = document.createElement("span");
-  label.textContent = `W${w.week.slice(-2)}`;
-  const bars = document.createElement("div");
-  for (const [pct, color] of [
-    [w.coached_pct, "#4cc36a"],
-    [w.silent_pct, "#6b8fd6"],
-  ]) {
-    const bar = document.createElement("div");
-    bar.className = "score-bar";
-    const fill = document.createElement("div");
-    fill.style.width = `${pct ?? 0}%`;
-    fill.style.background = color;
-    bar.append(fill);
-    bars.append(bar);
-  }
-  const fmt = (v) => (v === null ? "no data" : `${v}%`);
-  const text = document.createElement("span");
-  text.textContent = `coached ${fmt(w.coached_pct)} \u00b7 silent ${fmt(w.silent_pct)}`;
-  if (w.relaxed_pct !== null) text.textContent += ` \u00b7 relaxed ${w.relaxed_pct}%`;
-  row.setAttribute("aria-label", `Week ${w.week}, starting ${w.start}: ${text.textContent}`);
-  row.append(label, bars, text);
-  return row;
-}
-
-function renderWeeks() {
+function renderShareWeek() {
   const weeks = summarizeWeeks(store, Date.now());
-  const any = weeks.some((w) => w.coached_pct !== null || w.silent_pct !== null);
-  $("progress-weeks").hidden = !any;
-  $("progress-weeks-note").textContent = any
-    ? "Weeks start on Monday. Green bar: coached good %. Blue bar: silent-test good %. Silent is what stays when coaching is off."
-    : "";
-  $("progress-weeks").replaceChildren(...weeks.map(weekRow));
-  renderPeer(weeks[weeks.length - 1]);
+  renderPeer(weeks[weeks.length - 1]); // the share record uses this week; the page shows days only
 }
 
 // -- import ------------------------------------------------------------------------------
