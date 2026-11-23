@@ -2183,6 +2183,48 @@ try {
       await page.screenshot({ path: path.join(outDir, "explore-reminders-320.png"), fullPage: true });
       await page.close();
     }
+
+    // Issue #84: Share and the weekly-score panel are reachable from Explore more, never by time alone.
+    {
+      const { page, errors } = await newPage(browser, {
+        staged: true,
+        consent: false,
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+      });
+      const url = `${base}app/?clockScale=600&v=${Date.now()}`;
+      await page.goto(url);
+      await page.click("#start-demo");
+      await page.waitForSelector("#explore-panel:visible");
+      await page.waitForTimeout(2000);
+      check(
+        "share reachable: Share and the weekly score stay hidden before Explore, even at a high clockScale",
+        !(await shown(page, "#share-btn")) && !(await shown(page, "#weekly-panel")),
+      );
+      await page.locator("#explore-panel summary").click();
+      await page.click('[data-explore^="progress-panel"]');
+      check(
+        "share reachable: Progress & offline shows the header Share button and the weekly score panel",
+        (await shown(page, "#share-btn")) && (await shown(page, "#weekly-panel")),
+      );
+      check(
+        "share reachable: the weekly score toggle is still off by default",
+        !(await page.isChecked("#share-weekly")),
+      );
+      await page.goto(url);
+      await page.waitForTimeout(500);
+      check(
+        "share reachable: the choice persists across a reload",
+        (await shown(page, "#share-btn")) && (await shown(page, "#weekly-panel")),
+      );
+      await page.click("#share-weekly");
+      await page.waitForSelector("#share-consent-dialog:visible");
+      check(
+        "share reachable: turning on the weekly score opens the consent dialog first and stays off",
+        !(await page.isChecked("#share-weekly")),
+      );
+      check("share reachable: no page errors", errors.length === 0, errors);
+      await page.close();
+    }
   }
 
   // 4g. Progressive setup and the breath check intro (.kiro/specs/progressive-loading, tasks 4 and 5).
