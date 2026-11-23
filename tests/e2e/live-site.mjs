@@ -1746,6 +1746,15 @@ try {
         /Breathe in slowly/.test(await page.textContent("#relax-status")),
       rec,
     );
+    // The check was started from Settings (behind the consent dialog), so the app returns to
+    // the main screen when it starts. Wait for that before the next Settings action.
+    await page
+      .waitForFunction(() => document.getElementById("settings-view").hidden, null, { timeout: 10000 })
+      .catch(() => {});
+    check(
+      "consent: the breath check started from Settings returns to the main screen",
+      await page.evaluate(() => document.getElementById("settings-view").hidden),
+    );
     await page.click("#consent-withdraw");
     check(
       "consent: withdrawing removes the record",
