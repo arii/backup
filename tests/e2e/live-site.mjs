@@ -2273,6 +2273,42 @@ try {
       await page.close();
     }
 
+    // Issue #92 review screenshots: five states at 1280 and 375 px, saved to the report.
+    for (const width of [1280, 375]) {
+      const { page, errors } = await newPage(browser, {
+        viewport: { width, height: 900 },
+        extra: { eyeBreaks: false, moveBreakMinutes: 0, relaxReminders: false },
+      });
+      await page.goto(`${base}app/?clockScale=600&v=${Date.now()}`);
+      await page.click("#start-demo");
+      await page.waitForSelector("#gauge:visible");
+      const until = (text) =>
+        page.waitForFunction((t) => document.getElementById("state-badge").textContent === t, text, {
+          timeout: 60000,
+          polling: 50,
+        });
+      const shot = (name) =>
+        page.screenshot({ path: path.join(outDir, `review-${width}-${name}.png`), fullPage: true });
+      await until("good posture");
+      await shot("1-good");
+      await until("sit up");
+      await page.waitForTimeout(400);
+      await shot("2-slouched");
+      await page.click("#settings-btn");
+      await shot("3-settings");
+      await page.click("#settings-close");
+      await page.click("#help-btn");
+      await page.click("#help-practice");
+      await page.waitForTimeout(800);
+      await shot("4-learn-the-cues");
+      await page.click("#practice-stop");
+      await page.click("#help-btn");
+      await page.click("#help-notworking");
+      await shot("5-not-working");
+      check(`review screenshots (${width} px): no page errors`, errors.length === 0, errors);
+      await page.close();
+    }
+
     // Time alone never puts settings on the main screen; Settings works at 320 px.
     {
       const { page, errors } = await newPage(browser, {
