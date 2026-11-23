@@ -19,7 +19,7 @@ import {
   TEST_LINE,
   VOICES,
 } from "./voice-lines.js";
-import { BracingMonitor, BreathCheck, neckRatio } from "./relax.js";
+import { BracingMonitor, BreathCheck, neckRatio, SHOULDER_OFF_REASON, shoulderChecksOn } from "./relax.js";
 import { createMoveNetDetector } from "./movenet-adapter.js";
 import { LoadSteps, downloadAll, nextPaint } from "./loading.js";
 import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
@@ -777,6 +777,10 @@ const VERDICT_TEXT = {
 
 function startBreathCheck() {
   if (!loopsStarted || !canBegin()) return;
+  if (!shoulderChecksOn(lowAccuracy)) {
+    $("relax-status").textContent = SHOULDER_OFF_REASON; // the fallback model has no reliable shoulder signal
+    return;
+  }
   if (!requireConsent(startBreathCheck)) return;
   ensureAudio();
   runBreathCheck();
@@ -793,6 +797,11 @@ function runBreathCheck() {
 }
 
 function relaxStep(landmarks, state, now) {
+  if (!shoulderChecksOn(lowAccuracy)) {
+    relaxLastT = null;
+    $("relax-shoulders").textContent = "off on the simpler model";
+    return;
+  }
   if (inMode()) {
     relaxLastT = null;
     return;
@@ -861,6 +870,7 @@ function setTrackingControls(on) {
     const el = $(id);
     el.disabled = !on;
     if (!on) el.title = NEEDS_TRACKING_TIP;
+    else if (id === "breath-check" && !shoulderChecksOn(lowAccuracy)) el.title = SHOULDER_OFF_REASON;
     else if (READY_TITLE[id]) el.title = READY_TITLE[id];
     else el.removeAttribute("title");
   }
@@ -1179,6 +1189,11 @@ function guideStep() {
   const g = guide.update(preal);
   if (!g) return;
   if (g.phase === "done") {
+    if (!shoulderChecksOn(lowAccuracy)) {
+      activity.stop(ACTIVITY.BREATHE_GUIDE, clockS(), "completed"); // timed only: no hand-off to a verdict
+      hideCard();
+      return;
+    }
     if (settings.breatheCues && settings.mode !== "silent") speak(BREATHE_LINES.done);
     runBreathCheck(); // hand-off, no grace: ends with the existing breath check (do the shoulders stay down?)
     hideCard();
@@ -1673,7 +1688,10 @@ function accountDay(state, now, dt) {
     session.streak += dt;
     session.best = Math.max(session.best, session.streak);
     // relaxed seconds need the shoulder consent (the monitor only runs with it)
-    tallyDay(day, "good", dt, { relaxed: hasConsent(store) ? bracing.relaxed : null, streak: session.streak });
+    tallyDay(day, "good", dt, {
+      relaxed: hasConsent(store) && shoulderChecksOn(lowAccuracy) ? bracing.relaxed : null,
+      streak: session.streak,
+    });
     const milestone = policy.onGood(now, dt);
     if (milestone !== null) fireMilestone(milestone);
   } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {

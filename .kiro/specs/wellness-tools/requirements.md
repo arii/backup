@@ -52,6 +52,11 @@ Ground truth about the sensor:
 2. THE App SHALL run the bracing monitor (`BracingMonitor`) that flags shoulders creeping
    up while posture reads good.
 3. These SHALL keep their current behaviour and ids.
+4. WHILE the MoveNet fallback model is in use (no WebGL), THE shoulder features SHALL be off:
+   no bracing banner, spoken line or `brace_events`, no `relaxed_s` or `shoulder_s` added to the
+   day, and `#breath-check` SHALL show "Shoulder checks need the main model (hardware
+   acceleration)" instead of starting. *Breathe with me* SHALL still run as a timer and SHALL
+   NOT hand off to a breath check. The main model behaves as before (`shoulderChecksOn` in `relax.js`).
 
 ### Requirement 3: Guided slow-breathing exercise (built, `docs/app/breathing.js`)
 1. THE App SHALL offer an optional paced breathing exercise of 1, 2 or 5 minutes.
