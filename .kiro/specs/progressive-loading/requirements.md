@@ -164,7 +164,7 @@ all of it if I want.
 4. Prefetch SHALL NOT install a service worker. The service worker stays opt-in (`offline.js`).
 
 ### Requirement 9: Privacy and wording
-1. `docs/privacy.html` line 50 says that without the Offline button "nothing is cached on purpose". WHEN Requirement 8.2 ships, THE page SHALL say: "Like any website, your browser may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video." The landing page privacy line (`docs/index.html` line 412) SHALL change the same way.
+1. `docs/privacy.html` line 50 says that without the Offline button "nothing is cached on purpose". WHEN Requirement 8.2 ships, THE page SHALL say: "Like any website, your browser may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video." The landing page carries only its one privacy line; this HTTP-cache note lives on `docs/privacy.html` (#96).
 2. THE status card SHALL say the camera is on and nothing is uploaded, using the same wording as `#start-intro`.
 3. THE water count and setup progress SHALL be listed in the privacy page's "what is stored" list.
 4. No new third-party request, no analytics for load timing. Load timings (Requirement 10) are kept in memory and shown only in the bug report diagnostics (`bugReportUrl`) as numbers.
@@ -225,4 +225,4 @@ Full evaluation (method, findings, fixes, limitations): [docs/ux-evaluation-prog
 Targets for what is visible before the visitor starts anything.
 
 - App (`docs/app/`): at most 40 words and 5 controls at 1280, 1000 and 320 px. The header shows only the brand and Help. Status, Pause and Settings appear once tracking starts. Privacy, Consumer Health Data policy, third-party notices, GitHub, Report a bug, Sponsor and the technical notes (MediaPipe, `posture-core.js`, background tab at about 5 fps) live in the About & credits dialog and the README.
-- Landing page (`docs/index.html`): at most 300 visible words with details collapsed (now about 96, was about 1020 including all sections). Headline, one-line pitch, Start button, three short feature lines, the three safety sentences and a quiet footer stay visible. What you need, How it works, All features, Screenshots and Privacy are collapsed `<details>`.
+- Landing page (`docs/index.html`, #96): the title, subtitle and tagline, *Try it in your browser* and *Try the demo*, one privacy line with the sponsor disclosure, the three `SAFETY_SHORT` sentences, one screenshot of the current main screen, the WebGL warning (only when WebGL is off) and the footer. No `<details>`, at most 60 visible words outside the footer. *What you need* and *Known limitations* are in the README; privacy details are on `docs/privacy.html`. (Before #96, five collapsed `<details>` hid about 400 more words.)
