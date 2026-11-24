@@ -107,6 +107,14 @@ slow hints, single download as buffers, MoveNet fallback, warm-up under a spinne
   - Re-measured: see "Measured results" in requirements.md.
   - _Requirements: 12_
 
+- [x] 10. Settings unlocks and unlock cards (#96, #98 frames 07 to 12)
+  - `reveal.js`: `unlockLevel`, `visibleRows`, `nextUnlockCard`, `trackedSecondsFromDays`, `trackedDays`
+    with unit and property tests. `app.js`: side panel, rows, unlock card, gear dot, My week.
+  - The optional setup cards, *Personalize*, *Test me*, offline, sharing, import, sound and voice
+    controls are removed; their settings are fixed defaults.
+  - e2e: rows at each stage (5, 6, 7, 8 with a seeded second day), revealAll, one card per session,
+    × not shown again, dot and green row cleared on close, 320 px.
+
 ## Order and parallelism
 Tasks 1 and 2 first (2 delivers most of the "looks alive" value). Task 3 depends on 2 for
 the compact card. Tasks 4 and 5 depend on 3 and can be done in parallel. Task 6 is

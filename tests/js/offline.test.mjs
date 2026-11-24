@@ -95,7 +95,9 @@ test("static docs quote the real offline download size from precache.json", asyn
   const { readFileSync } = await import("node:fs");
   const pre = JSON.parse(readFileSync(new URL("../../docs/app/precache.json", import.meta.url), "utf8"));
   const mb = Math.round(pre.totalBytes / 1048576);
-  for (const f of ["docs/privacy.html", "README.md"]) {
+  // README dropped its offline section when the offline copy stopped being offered (#96);
+  // the privacy page still describes copies made before.
+  for (const f of ["docs/privacy.html"]) {
     const text = readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
     const m = text.match(/about (\d+) MB/);
     assert.ok(m, `${f} states the size`);

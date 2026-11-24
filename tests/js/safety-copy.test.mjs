@@ -110,10 +110,15 @@ test("every wellness tool says to stop if it hurts or makes you dizzy", () => {
   assert.match(GUIDE_SAFETY, /Stop/);
 });
 
-test("the app page carries the tool safety lines", () => {
-  const html = htmlText("docs/app/index.html");
-  assert.match(html, /Stop if you feel dizzy/);
-  assert.match(html, /Stop if anything hurts/);
+test("the app shows the exercise safety lines with the exercise itself", () => {
+  // Since #96 there is no Settings panel to print them in: the prompt card shows toolSafety and
+  // GUIDE_SAFETY, and the breath check banner shows the stop line of RELAX_SAFETY.
+  const app = read("docs/app/app.js");
+  assert.match(app, /toolSafety\(/);
+  assert.match(app, /GUIDE_SAFETY/);
+  assert.match(app, /RELAX_SAFETY\.slice\(RELAX_SAFETY\.indexOf\("Stop"\)\)/);
+  assert.match(RELAX_SAFETY, /Stop if anything hurts\.$/);
+  assert.match(GUIDE_SAFETY, /Stop if you feel dizzy/);
 });
 
 test("the app footer's short disclaimer stays tied to the official safety wording", () => {

@@ -40,10 +40,6 @@ export class FeedbackPolicy {
     this.reset();
   }
 
-  setLevel(level) {
-    this.level = normalizeLevel(level);
-  }
-
   reset() {
     this.granted = []; // times of granted reminders, for the hourly cap
     this.episodeId = null;
