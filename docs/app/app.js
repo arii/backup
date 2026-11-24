@@ -16,6 +16,7 @@ import {
   PRAISE,
   RECOVERY_PRAISE,
   RELAX_LINES,
+  TEST_LINE,
   VOICES,
 } from "./voice-lines.js";
 import { BracingMonitor, BreathCheck, neckRatio, SHOULDER_OFF_REASON, shoulderChecksOn } from "./relax.js";
@@ -40,7 +41,28 @@ import {
   SetupCheck,
   shouldShowOnboarding,
 } from "./onboarding.js";
-import { dayKeyFor, exportJson, migrateStore, summarize, tallyDay } from "./progress.js";
+import { consistencyScore } from "./consistency.js";
+import {
+  applyImport,
+  dayKeyFor,
+  exportJson,
+  IMPORT_MAX_BYTES,
+  migrateStore,
+  parseImport,
+  previewImport,
+  summarize,
+  summarizeWeeks,
+  tallyDay,
+} from "./progress.js";
+import {
+  CACHE_PREFIX,
+  cacheNameFor,
+  isOfflineReady,
+  META_URL,
+  offlineMessage,
+  offlineState,
+  progressPercent,
+} from "./offline.js";
 import { addWater, DEMO_DONE, demoAt, demoLength, demoStaticText, toolSafety } from "./wellness.js";
 import {
   NEEDS_TRACKING_TIP,
@@ -49,6 +71,8 @@ import {
   cameraProblem,
   isDeviceGoneError,
   isPauseShortcut,
+  minutesLabel,
+  nextOption,
   resolveSettings,
 } from "./settings.js";
 import { BUG_LINK_TIP, buildBugReportBody, clearStoredData, sanitizeError, webglSummary } from "./privacy.js";
@@ -57,12 +81,21 @@ import {
   CONSENT_POINTS,
   CONSENT_TITLE,
   hasConsent,
+  hasShareConsent,
   recordConsent,
+  recordShareConsent,
+  SHARE_CONSENT_CHECKBOX,
+  SHARE_CONSENT_POINTS,
+  SHARE_CONSENT_TITLE,
   withdrawConsent,
+  withdrawShareConsent,
 } from "./consent.js";
 import {
   SHARE_TEXT,
   cardAltText,
+  cleanNickname,
+  peerLink,
+  peerRecord,
   readPeerLink,
   drawScoreCard,
   nativeSharePayload,
@@ -99,7 +132,7 @@ import {
   unlockLevel,
   visibleRows,
 } from "./reveal.js";
-import { FeedbackPolicy, MILESTONE_TEXT, tabTitleFor, normalizeLevel, recordAnnoyance } from "./feedback.js";
+import { FeedbackPolicy, MILESTONE_TEXT, normalizeLevel, recordAnnoyance, tabTitleFor } from "./feedback.js";
 
 // Self-hosted under docs/app/vendor/ (see vendor/README.md for versions and hashes).
 const TASKS_VISION = new URL("./vendor", import.meta.url).href;
@@ -667,7 +700,7 @@ function relaxStep(landmarks, state, now) {
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
 // Settings rows that start something need frames from the camera or the demo.
-const NEEDS_TRACKING = ["row-posture", "row-break", "break-btn"];
+const NEEDS_TRACKING = ["row-posture", "row-break", "break-btn", "test-start"];
 function setTrackingControls(on) {
   for (const id of NEEDS_TRACKING) {
     const el = $(id);
@@ -774,6 +807,11 @@ function setBreakReminders(on) {
 function breaksTakenToday() {
   const b = store.breaksToday;
   return b && b.day === todayKey() ? b.n : 0;
+}
+/** A finished eye, move, stretch or jaw break: reset its timer and count it for today. */
+function tookBreak(kind) {
+  breaks.taken(kind);
+  countBreak();
 }
 function countBreak() {
   store.breaksToday = { day: todayKey(), n: breaksTakenToday() + 1 };
@@ -987,7 +1025,7 @@ function eyeCardStep(now) {
     card.finished = true;
     activity.stop(ACTIVITY.EYE_BREAK, now, "completed");
     card.text = BREAK_LINES.eyeDone;
-    breaks.taken("eye");
+    tookBreak("eye");
     renderCard();
     sayPrompt(BREAK_LINES.eyeDone);
   }
@@ -1075,9 +1113,9 @@ $("prompt-action").addEventListener("click", () => {
   } else startGuide();
 });
 $("prompt-done").addEventListener("click", () => {
-  if (card && (card.id === "move" || card.id === "stretch" || card.id === "jaw")) breaks.taken(card.id);
+  if (card && (card.id === "move" || card.id === "stretch" || card.id === "jaw")) tookBreak(card.id);
   // Water resets only through "I drank" (drank()), never through Done.
-  if (card && card.static && card.kind !== "water") breaks.taken(card.kind);
+  if (card && card.static && card.kind !== "water") tookBreak(card.kind);
   endCard("done");
 });
 $("prompt-snooze").addEventListener("click", () => {
@@ -1135,7 +1173,7 @@ function demoStep(first = false) {
     if (!card.finished) {
       card.finished = true;
       activity.stop(ACTIVITY.DEMO, clockS(), "completed");
-      if (card.kind !== "water") breaks.taken(card.kind);
+      if (card.kind !== "water") tookBreak(card.kind);
       if (DEMO_DONE[card.kind]) {
         card.text = DEMO_DONE[card.kind];
         sayPrompt(card.text);
@@ -1177,9 +1215,6 @@ function drank() {
   showRelaxBanner(`${n} ${n === 1 ? "drink" : "drinks"} today`);
   endCard("done");
 }
-
-/** Settings → Take a break now, and the header break button: stand up and move (#98 v3). */
-const takeBreakNow = () => openBreak("move");
 
 // -- sponsor card (lowest priority prompt, never spoken, at most 3 times ever) -----
 // A small non-modal card under the main screen, never over the video. Gating is in sponsor.js; the
@@ -1316,10 +1351,6 @@ function resetPromptSession() {
   plast = null;
 }
 
-// The silent test ("Test me") has no entry point since #98 v3: it is not a Settings row.
-// Results already in store.tests are still exported. activity.js keeps the state.
-store.tests = store.tests || [];
-
 const DAY_SAVE_S = 15;
 let lastDaySave = 0;
 
@@ -1369,13 +1400,20 @@ function accountDay(state, now, dt) {
   } // keep daily totals across reloads
 }
 
-/** Route the frame's time by the activity: "day" tallies,
+/** Route the frame's time by the activity: "day" tallies, "test" feeds the silent test,
  *  "none" (practice, the eye break, demos, the breathing guide) records nothing and
  *  leaves the streak where it is. */
 function account(state, now) {
   if (session.lastT !== null) {
     const dt = Math.min(1, Math.max(0, now - session.lastT)); // cap gaps (sleep, hidden stalls)
     const route = rules().score;
+    if (route === "test" && test) {
+      accountTest(state, dt);
+      session.lastT = now;
+      if (test.elapsed >= test.minutes * 60) finishTest(false);
+      else if (!$("test-view").hidden) renderTest();
+      return;
+    }
     if (route === "day") accountDay(state, now, dt);
   }
   session.lastT = now;
@@ -1397,11 +1435,12 @@ function renderStats() {
   $("reminder-count").textContent = String(reminderCount);
   const next = breaks.nextIn();
   $("break-ring-arc").setAttribute("stroke-dashoffset", String(RING_LEN * (next ? 1 - next.fraction : 1)));
-  $("break-in").textContent = !next
-    ? "breaks off"
-    : next.seconds < 60
-      ? "break now"
-      : `break in ${Math.round(next.seconds / 60)} min`;
+  // The number in the ring is breaks taken today (restored after #98 v3 dropped it).
+  const taken = breaksTakenToday();
+  $("breaks-today").textContent = String(taken);
+  const when = !next ? "breaks off" : next.seconds < 60 ? "break now" : `break in ${Math.round(next.seconds / 60)} min`;
+  $("break-in").textContent = when;
+  $("break-in").title = `${taken} ${taken === 1 ? "break" : "breaks"} taken today`;
   if (performance.now() - lastTimelineRender < 1000) return;
   lastTimelineRender = performance.now();
   $("timeline").replaceChildren(
@@ -1416,6 +1455,103 @@ function renderStats() {
     const t = new Date(Date.now() - (performance.now() / 1000 - timeline.start) * 1000);
     $("timeline-start").textContent = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
+}
+
+// -- silent test ("Test me", under Help & more) ---------------------------------------
+// A retention test in motor-learning terms: same tracking and state machine, but every cue
+// is withheld (no sounds, speech, banners, needle or fill), so the score reflects the habit
+// rather than the reminders. Results are kept per test; coached time keeps feeding store.days.
+store.tests = store.tests || [];
+let test = null; // { minutes, elapsed, good, bad } while a test runs
+const pctOf = (r) => (r.good + r.bad > 0 ? Math.round((100 * r.good) / (r.good + r.bad)) : null);
+
+function startTest() {
+  if (test) return finishTest(true);
+  if (practice) stopPractice();
+  if (!activity.start(ACTIVITY.SILENT_TEST, clockS())) {
+    $("test-status").textContent = "Resume tracking first.";
+    return;
+  }
+  test = { minutes: Number($("test-minutes").dataset.value) || 10, elapsed: 0, good: 0, bad: 0 };
+  breath.cancel();
+  cancelPrompts();
+  stopSpeech();
+  document.body.classList.add("testing");
+  $("banner").classList.remove("show");
+  setSettingsOpen(false); // the test runs on the main screen; Settings shows its progress
+  renderTest();
+}
+
+function finishTest(stoppedEarly) {
+  const t = test;
+  test = null;
+  activity.stop(ACTIVITY.SILENT_TEST, clockS(), stoppedEarly ? "cancelled" : "completed");
+  document.body.classList.remove("testing");
+  const tracked = t.good + t.bad;
+  if (!stoppedEarly && tracked >= 30) {
+    store.tests.push({
+      at: new Date().toISOString(),
+      minutes: t.minutes,
+      good: Math.round(t.good),
+      bad: Math.round(t.bad),
+    });
+    store.tests = store.tests.slice(-50);
+    save();
+    $("test-status").textContent = `Done: ${pctOf(t)}% good posture with no reminders.`;
+    showRelaxBanner(`Silent test: ${pctOf(t)}% good`);
+    renderProgress();
+    playGood();
+  } else {
+    $("test-status").textContent = stoppedEarly
+      ? "Test stopped, not saved."
+      : "Not enough tracked time to score; not saved.";
+  }
+  renderTest();
+}
+
+function renderTest() {
+  setRowValue("test-minutes", $("test-minutes").dataset.value || 10, `${$("test-minutes").dataset.value || 10} min`);
+  $("test-start").textContent = test ? "Stop test" : "Start silent test";
+  $("test-progress-wrap").style.display = test ? "" : "none";
+  $("test-value").textContent = test ? "Running" : "";
+  if (test) {
+    const left = Math.max(0, test.minutes * 60 - test.elapsed);
+    $("test-status").textContent = `Running: ${mmss(left)} left. Sit and work as usual.`;
+    $("test-progress").style.width = `${Math.min(100, (100 * test.elapsed) / (test.minutes * 60)).toFixed(1)}%`;
+  }
+  const tests = store.tests;
+  const coached = Object.values(store.days).reduce((a, d) => ({ good: a.good + d.good, bad: a.bad + d.bad }), {
+    good: 0,
+    bad: 0,
+  });
+  const parts = [];
+  if (tests.length) {
+    const first = tests[0];
+    const last = tests[tests.length - 1];
+    parts.push(
+      tests.length === 1
+        ? `Last test: ${pctOf(last)}% good`
+        : `First test ${pctOf(first)}%, latest ${pctOf(last)}% (${tests.length} tests)`,
+    );
+    if (coached.good + coached.bad > 0) parts.push(`with coaching: ${pctOf(coached)}%`);
+  }
+  $("test-compare").textContent = parts.join(" \u00b7 ");
+}
+$("test-minutes").addEventListener("click", () => {
+  if (test) return; // the length is fixed once a test runs
+  const v = cycleValue($("test-minutes"));
+  setRowValue("test-minutes", v, `${v} min`);
+});
+$("test-start").addEventListener("click", () => {
+  ensureAudio();
+  startTest();
+});
+
+/** Silent test time: counted to the test only, never to the daily totals. */
+function accountTest(state, dt) {
+  test.elapsed += dt;
+  if (state === State.GOOD) test.good += dt;
+  else if (state === State.BAD_CHIME || state === State.BAD_VOICE) test.bad += dt;
 }
 
 // -- rendering ----------------------------------------------------------------
@@ -1526,12 +1662,16 @@ function renderBadge(transition, result, held, label, zone) {
     badge.textContent = "slipping"; // amber with the needle and skeleton (frame 05, #98)
     badge.className = "badge drift";
   }
-  const settling = !practice && !held && badge.textContent === "settling in";
+  const settling = !test && !practice && !held && badge.textContent === "settling in";
   $("settling-note").hidden = !settling;
   badge.title = settling ? $("settling-note").textContent : "";
   if (held) {
     badge.textContent = label;
     badge.className = "badge activity";
+  }
+  if (test) {
+    badge.textContent = "silent test";
+    badge.className = "badge testing";
   }
   if (practice) {
     badge.textContent = "practice";
@@ -1817,70 +1957,275 @@ function renderRows() {
   $("row-sayfix").checked = settings.mode === "chime_and_voice";
   $("row-breaks").checked = breakRemindersOn();
   $("row-shoulders").checked = settings.relaxReminders && hasConsent(store);
+  $("breaks-value").textContent = breakRemindersOn() ? "On" : "Off";
+  $("shoulders-value").textContent = settings.relaxReminders && hasConsent(store) ? "On" : "Off";
   $("settings-dot").hidden = [...shown].every((k) => store.rowsSeen.includes(k));
   $("sound-btn").setAttribute("aria-pressed", String(settings.mode === "silent"));
   $("sound-btn").setAttribute("aria-label", settings.mode === "silent" ? "Sound off" : "Sound on");
 }
 
-function setSettingsOpen(open) {
-  if (open === !$("settings-view").hidden) return;
+function setSettingsOpen(open, view = "settings-list") {
+  if (open === !$("settings-view").hidden) {
+    if (open) showView(view);
+    return;
+  }
   if (!open) {
     // Closing marks what was on show as seen: the green rows and the dot go.
     store.rowsSeen = [...new Set([...store.rowsSeen, ...rowsShown()])];
     save();
   }
-  showWeek(false);
   $("settings-view").hidden = !open;
   $("settings-scrim").hidden = !open;
   $("settings-btn").setAttribute("aria-expanded", String(open));
+  showView(open ? view : "settings-list", false);
   renderRows();
-  if (open) $("settings-title").focus();
-  else $("settings-btn").focus({ preventScroll: true });
+  if (open && view === "settings-list") $("settings-title").focus();
+  if (!open) $("settings-btn").focus({ preventScroll: true });
 }
+
+// One page of the side panel at a time: the list, or a sub-page reached from a row with an
+// arrow (data-view). A sub-page's back arrow returns to the page and row that opened it.
+let currentView = "settings-list";
+function showView(id, focus = true) {
+  currentView = id;
+  for (const v of document.querySelectorAll("#settings-view .side-view")) v.hidden = v.id !== id;
+  if (id === "week-view") renderProgress();
+  if (id === "breaks-view" || id === "shoulders-view") renderPromptSettings();
+  if (id === "more-view") renderMore();
+  if (id === "test-view") renderTest();
+  if (id === "break-view") renderBreakMenu();
+  if (focus) $(id).querySelector("h2")?.focus();
+}
+function backFrom(id) {
+  const opener = $($(id).dataset.back);
+  const parent = opener?.closest(".side-view")?.id || "settings-list";
+  showView(parent, false);
+  opener?.focus();
+}
+for (const row of document.querySelectorAll("#settings-view [data-view]"))
+  row.addEventListener("click", () => showView(row.dataset.view));
+for (const back of document.querySelectorAll("#settings-view .side-view .back"))
+  back.addEventListener("click", () => backFrom(back.closest(".side-view").id));
+/** Kept for callers from before the sub-pages: My week on or off. */
 function showWeek(on) {
-  $("week-view").hidden = !on;
-  $("settings-list").hidden = on;
-  if (on) {
-    renderProgress();
-    $("week-title").focus();
-  }
+  showView(on ? "week-view" : "settings-list", on);
 }
 $("settings-btn").addEventListener("click", () => setSettingsOpen($("settings-view").hidden));
 $("settings-close").addEventListener("click", () => setSettingsOpen(false));
 $("settings-scrim").addEventListener("click", () => setSettingsOpen(false));
-$("week-close").addEventListener("click", () => {
-  showWeek(false);
-  $("row-week").focus();
-});
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || $("settings-view").hidden || document.querySelector("dialog[open]")) return;
-  if (!$("week-view").hidden) {
-    showWeek(false);
-    $("row-week").focus();
-  } else setSettingsOpen(false);
+  if (currentView !== "settings-list") backFrom(currentView);
+  else setSettingsOpen(false);
 });
+
+// Rows tapped to change their value (no dropdowns, frames 08 to 12): the value shows on the right.
+function cycleValue(el) {
+  return nextOption(el.dataset.options.split(","), el.dataset.value);
+}
+function setRowValue(id, value, text) {
+  const el = $(id);
+  el.dataset.value = String(value);
+  el.querySelector(".value").textContent = text;
+  el.setAttribute("aria-label", `${el.querySelector("span").textContent}: ${text}. Tap to change.`);
+}
+
 $("row-chime").addEventListener("change", (e) => setMode(MODE_FOR(e.target.checked, $("row-sayfix").checked)));
 $("row-sayfix").addEventListener("change", (e) =>
   setMode(MODE_FOR(e.target.checked || $("row-chime").checked, e.target.checked)),
 );
-$("row-breaks").addEventListener("change", (e) => setBreakReminders(e.target.checked));
-$("row-shoulders").addEventListener("change", (e) => setShoulders(e.target.checked));
+$("row-breaks").addEventListener("change", (e) => {
+  setBreakReminders(e.target.checked);
+  renderPromptSettings();
+});
+$("row-shoulders").addEventListener("change", (e) => {
+  setShoulders(e.target.checked);
+  renderPromptSettings();
+});
 $("row-posture").addEventListener("click", () => {
   setSettingsOpen(false);
   engine.calibration.start("good");
 });
-$("row-break").addEventListener("click", () => {
-  setSettingsOpen(false);
-  takeBreakNow();
-});
-$("row-week").addEventListener("click", () => showWeek(true));
-// Header icons (frame 04): sound on/off is the Chime row; the cup is Take a break now.
+// Header icons (frame 04): sound on/off is the Chime row; the cup opens Take a break.
 $("sound-btn").addEventListener("click", () => setMode(MODE_FOR(settings.mode === "silent", true)));
-$("break-btn").addEventListener("click", () => takeBreakNow());
+$("break-btn").addEventListener("click", () => setSettingsOpen(true, "break-view"));
 $("row-help").addEventListener("click", () => {
   setSettingsOpen(false);
   openHelp();
 });
+
+// -- Break reminders sub-page ---------------------------------------------------------
+function renderPromptSettings() {
+  $("row-breaks").checked = breakRemindersOn();
+  $("breaks-detail").hidden = !breakRemindersOn();
+  $("eye-breaks").checked = settings.eyeBreaks && !dismissed.eye;
+  setRowValue(
+    "move-minutes",
+    dismissed.move ? 0 : settings.moveBreakMinutes,
+    minutesLabel(dismissed.move ? 0 : settings.moveBreakMinutes),
+  );
+  for (const [id, key, d] of [
+    ["stretch-minutes", "stretchMinutes", "stretch"],
+    ["water-minutes", "waterMinutes", "water"],
+    ["jaw-minutes", "jawMinutes", "jaw"],
+  ]) {
+    const v = dismissed[d] ? 0 : settings[key];
+    setRowValue(id, v, minutesLabel(v));
+  }
+  $("prompts-reset").hidden = !Object.keys(dismissed).length;
+  const consent = hasConsent(store);
+  $("row-shoulders").checked = settings.relaxReminders && consent;
+  $("breathing-moments").checked = settings.breathingMoments && !dismissed.breathing && consent;
+  $("breathe-cues").checked = settings.breatheCues;
+  $("consent-withdraw").hidden = !consent;
+  renderRows();
+}
+function savePromptSettings() {
+  store.eyeBreaks = settings.eyeBreaks;
+  store.moveBreakMinutes = settings.moveBreakMinutes;
+  store.stretchMinutes = settings.stretchMinutes;
+  store.waterMinutes = settings.waterMinutes;
+  store.jawMinutes = settings.jawMinutes;
+  store.breathingMoments = settings.breathingMoments;
+  store.breatheCues = settings.breatheCues;
+  store.promptsDismissed = { ...dismissed };
+  save();
+  renderPromptSettings();
+}
+$("eye-breaks").addEventListener("change", (e) => {
+  settings.eyeBreaks = e.target.checked;
+  if (e.target.checked) delete dismissed.eye;
+  breaks.setEyeBreaks(settings.eyeBreaks);
+  savePromptSettings();
+});
+const INTERVAL_ROWS = [
+  ["move-minutes", "moveBreakMinutes", "move", (v) => breaks.setMoveMinutes(v), () => breaks.moveMinutes],
+  ["stretch-minutes", "stretchMinutes", "stretch", (v) => breaks.setStretchMinutes(v), () => breaks.stretchMinutes],
+  ["water-minutes", "waterMinutes", "water", (v) => breaks.setWaterMinutes(v), () => breaks.waterMinutes],
+  ["jaw-minutes", "jawMinutes", "jaw", (v) => breaks.setJawMinutes(v), () => breaks.jawMinutes],
+];
+for (const [id, key, d, set, get] of INTERVAL_ROWS) {
+  $(id).addEventListener("click", () => {
+    set(cycleValue($(id)));
+    settings[key] = get();
+    if (key === "moveBreakMinutes" && settings[key] > 0) store.lastMoveMinutes = settings[key];
+    if (settings[key] > 0) delete dismissed[d];
+    savePromptSettings();
+  });
+}
+$("prompts-reset").addEventListener("click", () => {
+  for (const k of Object.keys(dismissed)) delete dismissed[k];
+  breaks.setEyeBreaks(settings.eyeBreaks);
+  savePromptSettings();
+});
+
+// -- Shoulders & breathing sub-page ------------------------------------------------------
+$("breathing-moments").addEventListener("change", (e) => {
+  const on = e.target.checked;
+  const apply = () => {
+    settings.breathingMoments = on;
+    if (on) delete dismissed.breathing;
+    savePromptSettings();
+  };
+  if (on && !requireConsent(apply)) {
+    renderPromptSettings(); // stays off until the dialog is agreed
+    return;
+  }
+  apply();
+});
+$("breathe-cues").addEventListener("change", (e) => {
+  settings.breatheCues = e.target.checked;
+  savePromptSettings();
+});
+$("breath-check").addEventListener("click", () => {
+  setSettingsOpen(false);
+  startBreathCheck(); // asks for consent first when needed
+});
+$("consent-withdraw").addEventListener("click", () => {
+  settings.relaxReminders = false;
+  store.relaxReminders = false;
+  settings.breathingMoments = false;
+  store.breathingMoments = false;
+  withdrawShoulders();
+  renderPromptSettings();
+});
+
+// -- Take a break sub-page (the cup icon): pick the kind of break -----------------------------
+function renderBreakMenu() {
+  const n = breaksTakenToday();
+  const water = store.water?.[todayKey()] || 0;
+  const parts = [];
+  if (n) parts.push(`${n} ${n === 1 ? "break" : "breaks"} today`);
+  if (water) parts.push(`${water} ${water === 1 ? "drink" : "drinks"}`);
+  $("break-menu-note").textContent = parts.join(" \u00b7 ");
+  const off = !loopsStarted;
+  for (const id of ["break-eye", "break-move", "break-stretch", "breathe-with-me", "break-water", "breath-check"]) {
+    $(id).disabled = off;
+    if (off) $(id).title = NEEDS_TRACKING_TIP;
+    else $(id).removeAttribute("title");
+  }
+}
+for (const kind of ["eye", "move", "stretch", "water"]) {
+  $(`break-${kind}`).addEventListener("click", () => {
+    setSettingsOpen(false);
+    openBreak(kind);
+  });
+}
+$("breathe-with-me").addEventListener("click", () => {
+  setSettingsOpen(false);
+  startGuide(); // asks for consent first when needed
+});
+
+// -- Help & more sub-page: sounds and voice, coaching level, offline copy -------------------
+const PACK_NAME = { clean: "Clean", spooky: "Spooky" };
+/** Voices to step through: the recorded ones, then the best few system voices. */
+function voiceChoices() {
+  return [...kokoroVoices().map((id) => KOKORO + id), ...voices.slice(0, 4).map((v) => v.name)];
+}
+function voiceName(v) {
+  if (v?.startsWith(KOKORO)) return VOICES[v.slice(KOKORO.length)] || "Natural";
+  return v ? `${v} (system)` : "None";
+}
+function renderMore() {
+  setRowValue("sound-pack", settings.soundPack, PACK_NAME[settings.soundPack] || settings.soundPack);
+  const v = selectedVoice();
+  $("voice-pick").dataset.options = voiceChoices().join(",");
+  setRowValue("voice-pick", v, voiceName(v));
+  $("voice-pick").disabled = voiceChoices().length < 2;
+  $("spoken-praise").checked = settings.spokenPraise;
+  setRowValue("coaching-level", settings.coachingLevel, settings.coachingLevel === "light" ? "Light" : "Standard");
+  $("test-value").textContent = test ? "Running" : "";
+  renderOffline();
+}
+$("sound-pack").addEventListener("click", () => {
+  const next = cycleValue($("sound-pack"));
+  settings.soundPack = SOUND_PACKS[next] ? next : "clean";
+  store.soundPack = settings.soundPack;
+  save();
+  renderMore();
+  playBad(); // a preview of the new pack's reminder
+});
+$("voice-pick").addEventListener("click", () => {
+  const next = cycleValue($("voice-pick"));
+  if (!next) return;
+  store.voiceName = next;
+  save();
+  renderMore();
+  speak(TEST_LINE); // hear the new voice
+});
+$("spoken-praise").addEventListener("change", (e) => {
+  settings.spokenPraise = e.target.checked;
+  store.spokenPraise = settings.spokenPraise;
+  save();
+});
+function setCoachingLevel(level) {
+  settings.coachingLevel = normalizeLevel(level);
+  policy.setLevel(settings.coachingLevel);
+  store.coachingLevel = settings.coachingLevel;
+  save();
+  if (!$("more-view").hidden) renderMore();
+}
+$("coaching-level").addEventListener("click", () => setCoachingLevel(cycleValue($("coaching-level"))));
 
 // The unlock card (frame 07): one line, one switch (or an arrow for My week), x. One per session,
 // and x or using it means it is not shown again. The row stays in Settings either way.
@@ -2784,6 +3129,7 @@ function renderPracticeStep() {
 function startPractice() {
   if (!loopsStarted) return "Start the webcam or the demo first, then you can practise the cues.";
   if (isPaused()) return "Resume tracking first.";
+  if (test) return "Stop the silent test first.";
   if (practice) return "";
   if (!activity.start(ACTIVITY.PRACTICE, clockS())) return "Finish the current activity first.";
   $("practice-breath").hidden = true;
@@ -2908,7 +3254,204 @@ function renderProgress() {
       return col;
     }),
   );
+  renderWeekStats(s);
 }
+
+const minutesText = (sec) =>
+  sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.round(sec / 60)} min`;
+
+/** Three numbers under the bars (frame 12 plus the totals people missed): good time so far,
+ *  the latest silent test, and water this week. A missing number shows a dash. */
+function renderWeekStats(s) {
+  const n = s.tests.length;
+  const latest = !n ? "-" : n === 1 ? `${s.tests[0].pct}%` : `${s.tests[0].pct}\u2192${s.tests[n - 1].pct}%`;
+  const cells = [
+    [s.empty ? "-" : minutesText(s.cumulative_good_s), "good so far"],
+    [latest, n > 1 ? "silent tests" : "silent test"],
+    [String(s.water_7d || 0), "drinks this week"],
+  ];
+  $("week-stats").replaceChildren(
+    ...cells.map(([value, label]) => {
+      const d = document.createElement("div");
+      const b = document.createElement("b");
+      b.textContent = value;
+      const span = document.createElement("span");
+      span.textContent = label;
+      d.append(b, span);
+      return d;
+    }),
+  );
+  const suggest = s.try_light && settings.coachingLevel !== "light";
+  $("progress-suggest").textContent = suggest
+    ? "Your latest silent test is as good as your coached time. You could try light coaching."
+    : "";
+  $("progress-light").hidden = !suggest;
+}
+$("progress-light").addEventListener("click", () => {
+  setCoachingLevel("light");
+  renderProgress();
+  $("progress-msg").textContent = "Switched to light coaching. Change it under Help & more.";
+});
+
+// -- import ------------------------------------------------------------------------------
+let pendingImport = null;
+$("progress-import").addEventListener("click", () => $("progress-import-file").click());
+$("progress-import-file").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  if (file.size > IMPORT_MAX_BYTES) {
+    $("progress-msg").textContent = "Not imported: the file is larger than 1 MB.";
+    return;
+  }
+  let parsed;
+  try {
+    parsed = parseImport(await file.text());
+  } catch {
+    parsed = { ok: false, error: "The file could not be read." };
+  }
+  if (!parsed.ok) {
+    $("progress-msg").textContent = `Not imported: ${parsed.error}`;
+    return;
+  }
+  pendingImport = parsed;
+  const p = previewImport(parsed);
+  $("import-preview").textContent =
+    p.days || p.tests
+      ? `${p.days} day${p.days === 1 ? "" : "s"}${p.first ? ` (${p.first} to ${p.last})` : ""}, ${minutesText(p.good_s)} of good posture, ${p.tests} silent test${p.tests === 1 ? "" : "s"}.`
+      : "The file has no days or tests.";
+  $("import-dialog").showModal();
+});
+function finishImport(mode) {
+  if (pendingImport) {
+    applyImport(store, pendingImport, mode);
+    save();
+    $("progress-msg").textContent =
+      mode === "replace" ? "Replaced your progress with the file." : "Merged the file into your progress.";
+    renderProgress();
+  }
+  pendingImport = null;
+  $("import-dialog").close();
+}
+$("import-merge").addEventListener("click", () => finishImport("merge"));
+$("import-replace").addEventListener("click", () => finishImport("replace"));
+$("import-cancel").addEventListener("click", () => {
+  pendingImport = null;
+  $("import-dialog").close();
+});
+
+// -- share my week (a link with one record, no server, opt-in) ------------------------------
+// Nothing is sent. The record is packed into a link the person copies and sends themselves;
+// a friend's link opens in the same dialog. See consent.js and share.js.
+const appBaseUrl = () => {
+  const u = new URL(location.href);
+  u.search = "";
+  u.hash = "";
+  return u.href;
+};
+const thisWeek = () => summarizeWeeks(store, Date.now()).at(-1);
+function currentPeerRecord(week, nickname) {
+  if (!week) return null;
+  return peerRecord({
+    nickname,
+    week: week.week,
+    tracked_s: week.tracked_s,
+    score: consistencyScore(week),
+    breaks: week.breaks,
+  });
+}
+function renderPeer() {
+  if (document.activeElement !== $("peer-nickname")) $("peer-nickname").value = store.shareNickname || "";
+  const rec = currentPeerRecord(thisWeek(), $("peer-nickname").value);
+  $("peer-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+function openPeer() {
+  $("peer-link").hidden = $("peer-copy").hidden = true;
+  $("peer-msg").textContent = "";
+  renderPeer();
+  $("peer-dialog").showModal();
+}
+$("share-week").addEventListener("click", () => {
+  if (hasShareConsent(store)) {
+    openPeer();
+    return;
+  }
+  $("share-consent-nick").value = store.shareNickname || "";
+  $("share-consent-check").checked = false;
+  $("share-consent-agree").disabled = true;
+  $("share-consent-msg").textContent = "";
+  renderShareConsentPreview();
+  $("share-consent-dialog").showModal();
+});
+$("peer-nickname").addEventListener("input", renderPeer);
+$("peer-create").addEventListener("click", () => {
+  const nick = cleanNickname($("peer-nickname").value);
+  const rec = currentPeerRecord(thisWeek(), nick);
+  if (!rec) {
+    $("peer-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  store.shareNickname = nick;
+  save();
+  $("peer-link").value = peerLink(rec, appBaseUrl());
+  $("peer-link").hidden = $("peer-copy").hidden = false;
+  $("peer-msg").textContent = "Link created. It holds only the record above. Copy it and send it yourself.";
+});
+$("peer-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("peer-link").value);
+    $("peer-msg").textContent = "Copied.";
+  } catch {
+    $("peer-link").select();
+    $("peer-msg").textContent = "Copy was blocked. The link is selected: press Ctrl+C (or Cmd+C).";
+  }
+});
+$("peer-view").addEventListener("click", () => {
+  const rec = readPeerLink($("peer-paste").value);
+  if (!rec) {
+    $("peer-msg").textContent = "That is not a BackUp share link.";
+    return;
+  }
+  $("peer-msg").textContent = "";
+  showPeer(rec);
+});
+$("peer-close").addEventListener("click", () => $("peer-dialog").close());
+$("peer-stop").addEventListener("click", () => {
+  withdrawShareConsent(store);
+  save();
+  $("peer-dialog").close();
+  $("progress-msg").textContent = "Sharing is off. Links you already sent still work for whoever has them.";
+});
+function renderShareConsentPreview() {
+  const rec = currentPeerRecord(thisWeek(), $("share-consent-nick").value);
+  $("share-consent-preview").textContent = rec ? JSON.stringify(rec, null, 2) : "Choose a nickname to see the record.";
+}
+$("share-consent-title").textContent = SHARE_CONSENT_TITLE;
+$("share-consent-label").append(SHARE_CONSENT_CHECKBOX);
+$("share-consent-list").replaceChildren(
+  ...SHARE_CONSENT_POINTS.map((t) => {
+    const li = document.createElement("li");
+    li.textContent = t;
+    return li;
+  }),
+);
+$("share-consent-nick").addEventListener("input", renderShareConsentPreview);
+$("share-consent-check").addEventListener("change", (e) => {
+  $("share-consent-agree").disabled = !e.target.checked;
+});
+$("share-consent-agree").addEventListener("click", () => {
+  const nick = cleanNickname($("share-consent-nick").value);
+  if (!nick) {
+    $("share-consent-msg").textContent = "Pick a nickname of 1 to 20 letters or digits. No @, no email.";
+    return;
+  }
+  recordShareConsent(store);
+  store.shareNickname = nick;
+  save();
+  $("share-consent-dialog").close();
+  openPeer();
+});
+$("share-consent-cancel").addEventListener("click", () => $("share-consent-dialog").close());
 
 function showPeer(rec) {
   $("peer-view-body").textContent =
@@ -2938,9 +3481,30 @@ $("progress-delete").addEventListener("click", () => {
   removeOfflineCopy().finally(() => location.reload());
 });
 
-// ---- Offline copy: no longer offered (#98 v3). A copy made before is still removed by
-// Delete my data, and sw.js keeps serving it until then.
+// ---- Offline mode (opt-in; sw.js caches the files listed in precache.json) ----
 const offlineSupported = "serviceWorker" in navigator && "caches" in window;
+const offline = {
+  downloading: false,
+  error: false,
+  percent: 0,
+  totalBytes: 0,
+  ready: false,
+  registered: false,
+  stale: false,
+};
+
+function renderOffline() {
+  const state = offlineState({ supported: offlineSupported, ...offline });
+  $("offline-status").textContent = offlineMessage(state, offline);
+  $("offline-enable").hidden = !offlineSupported || state === "ready" || state === "downloading";
+  // A button you press, never automatic: the copy is about 32 MB (#98 v3 removed it; restored on request).
+  $("offline-enable").querySelector("span").textContent =
+    state === "update-available" ? "Update offline copy" : state === "error" ? "Try again" : "Make available offline";
+  $("offline-remove").hidden = !offlineSupported || !(offline.registered || offline.ready);
+  $("offline-bar").hidden = state !== "downloading";
+  $("offline-fill").style.width = `${offline.percent}%`;
+}
+
 async function removeOfflineCopy() {
   if (!offlineSupported) return;
   try {
@@ -2950,6 +3514,111 @@ async function removeOfflineCopy() {
     /* nothing more to remove */
   }
 }
+
+async function refreshOffline() {
+  if (!offlineSupported) return renderOffline();
+  try {
+    offline.registered = !!(await navigator.serviceWorker.getRegistration());
+    // precache.json always comes from the network; skip it when offline.
+    let pre = null;
+    if (navigator.onLine) pre = await (await fetch("./precache.json", { cache: "no-cache" })).json();
+    // Prefer the cache for the current release, else any complete older one (then stale).
+    let cache = null,
+      meta = null;
+    const names = (await caches.keys()).filter((k) => k.startsWith(CACHE_PREFIX)); // caches.open would create an empty one
+    if (pre) names.sort((a, b) => (b === cacheNameFor(pre.version)) - (a === cacheNameFor(pre.version)));
+    for (const k of names) {
+      const c = await caches.open(k);
+      const res = await c.match(META_URL);
+      const m = res ? await res.json().catch(() => null) : null;
+      if (m) {
+        cache = c;
+        meta = m;
+        break;
+      }
+    }
+    if (!pre && meta)
+      pre = {
+        version: meta.version,
+        totalBytes: offline.totalBytes,
+        files: Object.keys(meta.hashes).map((url) => ({ url })),
+      };
+    if (!pre) throw new Error("offline and nothing cached");
+    offline.totalBytes = pre.totalBytes;
+    const base = new URL("./", location.href).href;
+    const cached = cache
+      ? (await cache.keys()).map((r) => (r.url.startsWith(base) ? r.url.slice(base.length) : r.url))
+      : [];
+    offline.ready = isOfflineReady(pre, cached, meta?.version);
+    offline.stale = offline.registered && !offline.ready;
+  } catch {
+    // Offline and not cached, or precache.json unreadable: keep whatever we knew.
+  }
+  renderOffline();
+}
+
+if (offlineSupported) {
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const m = e.data || {};
+    if (m.type === "offline-progress") {
+      offline.downloading = true;
+      offline.error = false;
+      offline.totalBytes = m.totalBytes || offline.totalBytes;
+      offline.percent = m.percent;
+      renderOffline();
+    } else if (m.type === "offline-ready") {
+      offline.downloading = false;
+      offline.percent = 100;
+      refreshOffline();
+    } else if (m.type === "offline-error") {
+      offline.downloading = false;
+      offline.error = true;
+      renderOffline();
+    }
+  });
+}
+
+$("offline-enable").addEventListener("click", async () => {
+  offline.downloading = true;
+  offline.error = false;
+  offline.percent = progressPercent(0, 1);
+  renderOffline();
+  try {
+    const reg = await navigator.serviceWorker.register("./sw.js");
+    await reg.update(); // picks up a newer sw.js; no-op when already current
+    const sw = reg.installing || reg.waiting;
+    if (sw) {
+      await new Promise((resolve, reject) => {
+        const check = () => {
+          if (sw.state === "activated") resolve();
+          else if (sw.state === "redundant") reject(new Error("install failed"));
+          else return false;
+          return true;
+        };
+        if (!check()) sw.addEventListener("statechange", check); // it may already be done
+      });
+    }
+    offline.downloading = false;
+  } catch {
+    offline.downloading = false;
+    offline.error = true;
+  }
+  await refreshOffline();
+});
+
+$("offline-remove").addEventListener("click", async () => {
+  await removeOfflineCopy();
+  offline.ready = false;
+  offline.registered = false;
+  offline.stale = false;
+  offline.error = false;
+  offline.downloading = false;
+  await refreshOffline();
+  $("offline-status").textContent = "Offline copy removed. The app needs a network connection again.";
+});
+
+renderOffline();
+refreshOffline();
 
 renderCalibration();
 renderStats();

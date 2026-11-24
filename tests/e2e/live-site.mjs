@@ -170,14 +170,14 @@ async function newPage(
 // does the same around any action on a control inside #settings-view, so the checks
 // can keep naming controls directly and the main screen is back afterwards.
 function useSettings(page) {
-  // Returns "closed" (Settings must open), "week" (open, but My week must show), or "" (as is).
+  // Returns "closed" (Settings must open), "page" (open, but a sub-page must show), or "" (as is).
   const needs = (sel) =>
     page
       .evaluate((s) => {
         const e = document.querySelector(s);
         if (!e?.closest("#settings-view")) return "";
         if (document.getElementById("settings-view").hidden) return "closed";
-        return e.closest("#week-view") && document.getElementById("week-view").hidden ? "week" : "";
+        return e.closest(".side-view")?.hidden ? "page" : "";
       }, sel)
       .catch(() => "");
   for (const name of ["click", "check", "uncheck", "selectOption", "fill", "setInputFiles"]) {
@@ -188,7 +188,14 @@ function useSettings(page) {
       // Before tracking the header button is not shown yet; the panel itself still works.
       await page.evaluate((s) => {
         if (document.getElementById("settings-view").hidden) document.getElementById("settings-btn").click();
-        if (document.querySelector(s)?.closest("#week-view")) document.getElementById("row-week").click();
+        // Open the sub-page that holds the control: follow the openers (data-back) from the list.
+        const chain = [];
+        for (let v = document.querySelector(s)?.closest(".side-view"); v?.dataset.back; ) {
+          const opener = document.getElementById(v.dataset.back);
+          chain.unshift(opener);
+          v = opener.closest(".side-view");
+        }
+        for (const opener of chain) opener.click();
       }, sel);
       try {
         return await orig(sel, ...rest);
@@ -581,7 +588,7 @@ try {
       { timeout: 120000, polling: 50 },
     );
     const before = await snap();
-    await page.evaluate(() => document.getElementById("row-break").click());
+    await page.evaluate(() => document.getElementById("break-move").click());
     const samples = [];
     while (phase((await snap()).t) < 25) {
       samples.push(await snap());
@@ -628,7 +635,7 @@ try {
     check("activity: a reminder comes back after the grace window while the slouch continues", resumed, await snap());
     // A reminder banner on screen when a break starts is taken down at once.
     const bannerUp = (await snap()).banner;
-    await page.evaluate(() => document.getElementById("row-break").click());
+    await page.evaluate(() => document.getElementById("break-move").click());
     const bannerGone = await page
       .waitForFunction(() => !document.getElementById("banner").classList.contains("show"), null, {
         timeout: 1500,
@@ -901,11 +908,13 @@ try {
       Object.keys(exported),
     );
     check(
-      "My week: Export and Delete my data are its only controls",
+      "My week: back, Export, Import, Share my week and Delete my data are its controls",
       await page.evaluate(
         () =>
-          [...document.querySelectorAll("#week-view button")].map((b) => b.id).join() ===
-          "week-close,progress-export,progress-delete",
+          [...document.querySelectorAll("#week-view button")]
+            .filter((b) => !b.hidden)
+            .map((b) => b.id)
+            .join() === "week-close,progress-export,progress-import,share-week,progress-delete",
       ),
     );
     page.once("dialog", (d) => d.accept());
@@ -1923,12 +1932,12 @@ try {
       "needle-text",
       "row-chime",
       "row-sayfix",
-      "row-breaks",
-      "row-shoulders",
+      "row-breaks-open",
+      "row-shoulders-open",
       "row-posture",
       "row-break",
       "row-week",
-      "row-help",
+      "row-more",
       "progress-export",
       "progress-delete",
     ];
@@ -2596,7 +2605,8 @@ try {
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
     await page.click("#settings-btn");
-    await page.click("#row-break");
+    await page.click("#row-break"); // the Take a break page: Look away, Stand and move, ...
+    await page.click("#break-move");
     check(
       "take a break now: closes Settings and shows the stand-and-move steps at once under reduced motion",
       await page.evaluate(
@@ -2613,6 +2623,77 @@ try {
       await page.evaluate(() => !document.getElementById("prompt-card").classList.contains("show")),
     );
     check("take a break now: no page errors", errors.length === 0, errors);
+    await page.close();
+  }
+
+  // 4i. Restored features on Settings sub-pages: Take a break menu (the cup), break intervals,
+  // Test me, sounds and coaching, My week totals and the breaks-today count.
+  {
+    const { page, errors } = await newPage(browser, { extra: { revealAll: true, tests: [] } });
+    await page.goto(`${base}app/${bust}`);
+    await page.click("#start-demo");
+    await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
+      timeout: 20000,
+    });
+    await page.click("#break-btn");
+    const menu = await page.evaluate(() =>
+      [...document.querySelectorAll("#break-view .row")].filter((b) => !b.disabled).map((b) => b.id),
+    );
+    check(
+      "take a break: the cup opens a page with Look away, Stand and move, Stretch, Breathe with me and Drink water",
+      menu.join() === "break-eye,break-move,break-stretch,breathe-with-me,break-water",
+      menu,
+    );
+    await page.click("#break-eye");
+    check(
+      "take a break: Look away starts the 20 s eye break and closes Settings",
+      await page.evaluate(
+        () =>
+          document.getElementById("settings-view").hidden &&
+          document.getElementById("prompt-card").dataset.prompt === "eye",
+      ),
+    );
+    await page.click("#prompt-notnow");
+    await page.click("#water-minutes");
+    const water = await page.evaluate(() => ({
+      text: document.querySelector("#water-minutes .value").textContent,
+      stored: JSON.parse(localStorage.getItem("posture-guard:v1")).waterMinutes,
+    }));
+    check(
+      "break reminders: tapping Drink water sets an interval and saves it",
+      water.text === "Every 30 min" && water.stored === 30,
+      water,
+    );
+    await page.click("#coaching-level");
+    check(
+      "help & more: Coaching steps to Light and saves it",
+      (await page.evaluate(() => JSON.parse(localStorage.getItem("posture-guard:v1")).coachingLevel)) === "light",
+    );
+    await page.click("#test-start");
+    await page
+      .waitForFunction(() => document.getElementById("state-badge").textContent === "silent test", null, {
+        timeout: 5000,
+      })
+      .catch(() => {});
+    const testing = await page.evaluate(() => ({
+      badge: document.getElementById("state-badge").textContent,
+      settingsClosed: document.getElementById("settings-view").hidden,
+    }));
+    check(
+      "test me: the silent test starts from Help & more",
+      testing.badge === "silent test" && testing.settingsClosed,
+      testing,
+    );
+    await page.click("#test-start"); // stop it, not saved
+    await page.click("#row-week");
+    const stats = await page.evaluate(() => document.getElementById("week-stats").textContent);
+    check(
+      "my week: shows good time so far, the silent test and drinks",
+      /good so far/.test(stats) && /silent test/.test(stats) && /drinks/.test(stats),
+      stats,
+    );
+    check("today: the break ring shows breaks taken today", /^\d+$/.test(await page.textContent("#breaks-today")));
+    check("restored features: no page errors", errors.length === 0, errors);
     await page.close();
   }
 
