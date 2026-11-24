@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; media-src 'self' blob: data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-<title>BackUp — Posture to Die For</title>
+<title>BackUp: Posture to Die For</title>
 <meta name="description" content="Leave this tab open: your webcam, MediaPipe Pose and a posture state machine run entirely in your browser and chime when you slouch.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="BackUp: Posture to Die For">
@@ -35,6 +35,10 @@
   .badge.drift { background: var(--warn); color: #3a2503; }
   .badge.unreliable { background: #4a3a20; color: var(--warn); }
   .badge.paused, .badge.testing, .badge.activity { background: #2c3a52; color: #b9cdf0; }
+  /* #104: paused reads as paused, not as a frozen slouch. */
+  body.is-paused #overlay, body.is-paused #needle-rotor { opacity: 0.3; filter: grayscale(1); }
+  body.is-paused #gauge-svg path { filter: grayscale(1); opacity: 0.45; }
+  body.is-paused #gauge-bar, body.is-paused #gauge-praise { visibility: hidden; }
   /* Silent test: hide everything that would coach the user. */
   body.testing .coaching { display: none; }
   body.testing #banner, body.testing #warnings { display: none; }
@@ -172,6 +176,8 @@
   .break-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
   .break-menu button { width: 100%; }
   #prompt-card.show { visibility: visible; opacity: 1; }
+  /* #111: during a break the posture is paused; the card lets the dimmed skeleton show through. */
+  #prompt-card[data-prompt="demo"], #prompt-card[data-prompt="guide"], #prompt-card[data-prompt="eye"] { background: rgba(20, 23, 28, 0.62); }
   /* The sponsor card is a rare, dismissable prompt: under the main screen, never on the video (#92). */
   body > #sponsor-card { max-width: 1240px; margin: 0 auto 16px; }
   #prompt-text { font-weight: 600; font-size: 14px; }
@@ -576,6 +582,7 @@
 </dialog>
 <footer>
   <span id="safety-footer">Wellness tool, not medical advice.</span>
+  <a href="#" id="intro-link" role="button">Intro</a> &middot;
   <a href="#" id="safety-link" role="button">Safety</a> &middot;
   <a href="#" id="about-link" role="button">About &amp; credits</a>
 </footer>

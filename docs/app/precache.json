@@ -1,6 +1,6 @@
 {
-  "version": "fc2633026262e652",
-  "totalBytes": 33408605,
+  "version": "32e82cb9e2307db8",
+  "totalBytes": 33413794,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 109723,
-      "sha256": "378bbc97464e6de1c343186e4627a43c278ef063fb662ae3d9c600cb41578f05"
+      "size": 112478,
+      "sha256": "f986eb493efe9e653c5e7b80e85c524ca15e791799f442442e5f6739383b4a8b"
     },
     {
       "url": "breaks.js",
@@ -34,8 +34,8 @@
     },
     {
       "url": "demo-pose.js",
-      "size": 1054,
-      "sha256": "9005116aba5ce1272d4c8d11b58eeb0e6c398aaf90efe5684f19bec42af136f3"
+      "size": 2063,
+      "sha256": "49f4ab2aa80d67ce83bfc2103d4c59c71f21a8f4c53517f0fd9e4f2040741397"
     },
     {
       "url": "feedback.js",
@@ -44,8 +44,8 @@
     },
     {
       "url": "index.html",
-      "size": 49888,
-      "sha256": "e2370df2bd55d2e21100c2b4b26ec8e3c728817d5fd3cbc9a801d528d75e49ea"
+      "size": 50505,
+      "sha256": "e6ccdce9daa0eb7a7f6990e1bfe0b871002f9112ced37ecd5a9e0ca98736894a"
     },
     {
       "url": "loading.js",
@@ -104,13 +104,13 @@
     },
     {
       "url": "settings.js",
-      "size": 3803,
-      "sha256": "c16b3e0a3974f7bc1003c55225db538a932dbf051a6f255d0324166ce03464e6"
+      "size": 4620,
+      "sha256": "8b4b1f4c9a6210c95a05194a2aa136274faf23dafc99f5563647e52d77222813"
     },
     {
       "url": "share.js",
-      "size": 7766,
-      "sha256": "0803cc9f2200d09a9211c086ae4b4b75838a18c201b0286f5ce8093b549db28c"
+      "size": 7757,
+      "sha256": "0d26e6961dfd2efc1a644fe4bbc884bd3974e546ad12087aba34e3b1bb2f5a74"
     },
     {
       "url": "sound-packs.js",

@@ -81,3 +81,12 @@ to fix it.
 ### Requirement 9: Privacy of diagnostics
 1. THE SetupCheck SHALL use only reason, state, fps and a boolean. It SHALL NOT store or transmit frames or landmarks.
 2. THE bug-report link SHALL stay a user-initiated link with prefilled text and no automatic upload.
+
+### Requirement: Nov 23 live UX audit fixes (#102 to #112, implemented)
+1. Camera start errors SHALL name the problem: permission denied (with the lock or camera icon steps), no camera, or camera in use. On a camera problem the model steps SHALL hide and the demo SHALL become the primary button (#102).
+2. WHILE Learn the cues runs in the demo, THE demo SHALL show the pose the step teaches; the setup card SHALL wait while the practice panel's closing offer is up (#103).
+3. WHILE paused, THE skeleton and gauge SHALL dim, the gauge SHALL read "paused", the badge SHALL count the paused time, and the button's description SHALL say "Resume tracking and sounds" (#104).
+4. THE footer SHALL have an Intro link that shows the welcome and safety notice again, before starting too; the full safety notice SHALL be open on the step that asks for the acknowledgement (#106, #108).
+5. Save my posture again SHALL show a countdown while it records and say what changed when it is saved (#107).
+6. THE break card's button SHALL read "End break"; the card SHALL let the dimmed skeleton show through; right after a break the badge SHALL read "back from break" while tracking settles (#111).
+7. THE app and landing titles SHALL both read "BackUp: Posture to Die For" (#112).

@@ -41,11 +41,11 @@
 //    every scenario already asserts are empty.
 // Screenshots and a JSON report go to <out-dir> (uploaded as an artifact).
 
-import { chromium } from "playwright";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { chromium } from "playwright";
 
 const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
