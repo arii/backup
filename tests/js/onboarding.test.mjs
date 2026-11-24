@@ -21,6 +21,7 @@ import {
   setupProgress,
   skipAll,
   skipStep,
+  undoStep,
   viewSetupStep,
   SAFETY_SHORT,
   SETUP,
@@ -144,8 +145,14 @@ test("the framing advice follows the configured shoulder band", () => {
 test("setup text: versions stay at 1 so existing seeds keep working, no em dash", () => {
   assert.equal(ONBOARDING_VERSION, 1);
   assert.equal(ACK_VERSION, 1);
-  const done = SETUP_STEPS.find((x) => x.key === "done").intro;
-  for (const re of [/Leave this tab open/, /Pause any time/, /optional/]) assert.match(done, re);
+  assert.deepEqual(
+    SETUP_STEPS.map((x) => [x.title, x.action]),
+    [
+      ["Head and shoulders in frame", "Continue"],
+      ["Sit comfortably", "Save my posture"],
+    ],
+    "frames 02 and 03: one line and one button each",
+  );
   assert.doesNotMatch(JSON.stringify(SETUP_STEPS), /\u2014/);
 });
 
@@ -160,15 +167,30 @@ test("setup steps: unique keys, framing and calibrate first, stages never go dow
 test("nextSetupStep waits for the reveal stage of each step", () => {
   const store = {};
   assert.equal(nextSetupStep(store, 0), null);
-  assert.equal(nextSetupStep(store, 1), null);
-  assert.equal(nextSetupStep(store, 2), "framing");
+  assert.equal(nextSetupStep(store, 1), "framing", "step 1 shows while tracking settles");
   completeStep(store, "framing");
+  assert.equal(nextSetupStep(store, 1), null, "step 2 waits for the gauge");
   assert.equal(nextSetupStep(store, 2), "calibrate");
   completeStep(store, "calibrate");
-  assert.equal(nextSetupStep(store, 2), "done");
-  completeStep(store, "done");
   assert.equal(nextSetupStep(store, 5), null, "settings never become automatic setup tasks");
   assert.equal(reopenSetupStep(store), null, "nothing optional is left in the sequence (#96)");
+});
+
+test("undoStep offers a done step again (posture saved only in the demo), but never a skipped one", () => {
+  const store = {};
+  completeStep(store, "framing");
+  completeStep(store, "calibrate");
+  assert.equal(store.setupDone, true);
+  undoStep(store, "calibrate");
+  assert.equal(store.setupDone, false);
+  assert.equal(nextSetupStep(store, 2), "calibrate", "the camera session asks for the posture again");
+  assert.deepEqual(setupProgress(store).done, ["framing"]);
+  const skipped = {};
+  skipStep(skipped, "framing");
+  skipStep(skipped, "calibrate");
+  undoStep(skipped, "calibrate");
+  assert.equal(skipped.setupDone, true, "a skip is the person's choice and stays");
+  assert.equal(nextSetupStep(skipped, 2), null);
 });
 
 test("a skipped step is not offered again on its own but stays reachable", () => {
@@ -234,6 +256,6 @@ test("setupProgress ignores junk in the store", () => {
     skipped: ["framing"],
   });
   const store = {};
-  viewSetupStep(store, "done");
-  assert.equal(setupProgress(store).step, "done");
+  viewSetupStep(store, "calibrate");
+  assert.equal(setupProgress(store).step, "calibrate");
 });

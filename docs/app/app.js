@@ -25,7 +25,8 @@ import { SOUND_PACKS, playSpooky } from "./sound-packs.js";
 import { BREAKS, BreakTracker } from "./breaks.js";
 import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
 import { PromptScheduler } from "./prompts.js";
-import { angleTransform, gaugeView, ZONE_COLOR } from "./mini-view.js";
+import { angleTransform, gaugeView, tileStates, ZONE_COLOR } from "./mini-view.js";
+import { SessionTimeline } from "./timeline.js";
 import { demoPose } from "./demo-pose.js";
 import {
   DIAGNOSIS_TEXT,
@@ -84,8 +85,8 @@ import {
   nextSetupStep,
   SETUP_STEPS,
   setupProgress,
-  skipAll,
   skipStep,
+  undoStep,
   viewSetupStep,
 } from "./onboarding.js";
 import {
@@ -472,8 +473,11 @@ function renderCalibration() {
   calibWasActive = !!c.active;
   if (engine.calibration.version !== savedCalVersion) {
     savedCalVersion = engine.calibration.version;
+    // A posture saved on the demo's scripted poses is not the person's: keep it for this
+    // session only, so a later camera session doesn't measure from it.
     if (c.good || c.bad) {
-      store.calibration = { good: c.good, bad: c.bad, good_samples: c.good_samples, bad_samples: c.bad_samples };
+      if (!demo)
+        store.calibration = { good: c.good, bad: c.bad, good_samples: c.good_samples, bad_samples: c.bad_samples };
     } else delete store.calibration;
     save();
   }
@@ -649,7 +653,7 @@ function relaxStep(landmarks, state, now) {
 
 // Controls that need frames from the camera or the demo stay disabled until tracking starts.
 // Settings rows that start something need frames from the camera or the demo.
-const NEEDS_TRACKING = ["row-posture", "row-break"];
+const NEEDS_TRACKING = ["row-posture", "row-break", "break-btn"];
 function setTrackingControls(on) {
   for (const id of NEEDS_TRACKING) {
     const el = $(id);
@@ -1365,12 +1369,39 @@ function account(state, now) {
 
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+// The Today panel (frame 04, #98): good % today, best streak, the next break, reminders, and a
+// colour timeline of this session. The timeline lives in memory only.
+const timeline = new SessionTimeline();
+const RING_LEN = 2 * Math.PI * 16;
+let lastTimelineRender = 0;
 function renderStats() {
-  const tracked = session.good + session.bad;
-  const pct = tracked > 0 ? Math.round((100 * session.good) / tracked) : null;
+  const day = store.days[todayKey()];
+  const tracked = day ? day.good + day.bad : 0;
+  const pct = tracked > 0 ? Math.round((100 * day.good) / tracked) : null;
   $("good-pct").textContent = pct === null ? "-" : `${pct}%`;
-  $("best-streak").textContent = mmss(session.best);
+  $("best-streak").textContent = mmss(Math.max(session.best, day?.best || 0));
   $("reminder-count").textContent = String(reminderCount);
+  const next = breaks.nextIn();
+  $("break-ring-arc").setAttribute("stroke-dashoffset", String(RING_LEN * (next ? 1 - next.fraction : 1)));
+  $("break-in").textContent = !next
+    ? "breaks off"
+    : next.seconds < 60
+      ? "break now"
+      : `break in ${Math.round(next.seconds / 60)} min`;
+  if (performance.now() - lastTimelineRender < 1000) return;
+  lastTimelineRender = performance.now();
+  $("timeline").replaceChildren(
+    ...timeline.segments().map((seg) => {
+      const el = document.createElement("div");
+      el.className = seg.zone;
+      el.style.flex = `${seg.fraction} 0 0`;
+      return el;
+    }),
+  );
+  if (timeline.start !== null && !$("timeline-start").textContent) {
+    const t = new Date(Date.now() - (performance.now() / 1000 - timeline.start) * 1000);
+    $("timeline-start").textContent = t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
 }
 
 // -- rendering ----------------------------------------------------------------
@@ -1475,7 +1506,7 @@ function renderBadge(transition, result, held, label, zone) {
       ? "settling in"
       : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
-  if (transition.state === State.GOOD && zone === "drift") {
+  if (zone === "drift") {
     badge.textContent = "slipping"; // amber with the needle and skeleton (frame 05, #98)
     badge.className = "badge drift";
   }
@@ -1493,28 +1524,42 @@ function renderBadge(transition, result, held, label, zone) {
   syncTabTitle();
 }
 
-function renderMetrics(result) {
-  const cfg = DEFAULTS.scoring;
+/** Body-part tiles (frames 04 to 06, #98): the angle, and the icon colour from tileStates.
+ *  Both use the angles from the saved posture, the same ones the reminders use, so a tile
+ *  can't be amber while the gauge is green because of where the camera sits. */
+function renderMetrics(relative, zone, cue) {
+  const values = {};
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
-    const el = $(`m-${key}`);
-    let v = result.kind === "scored" ? result[key] : null;
-    if (key === "trunk_lean_deg" && result.kind === "scored" && !result.trunk_lean_available) v = null;
-    el.textContent = v === null ? "-" : `${Math.round(v)}\u00b0`;
-    el.classList.toggle("over", v !== null && Math.abs(v) > cfg[key]);
+    let v = relative ? relative[key] : null;
+    if (key === "trunk_lean_deg" && relative && !relative.trunk_lean_available) v = null;
+    values[key] = v;
+    $(`m-${key}`).textContent = v === null ? "-" : `${Math.abs(Math.round(v))}\u00b0`; // how far off, either way
+  }
+  const states = tileStates(zone, cue?.metric ?? null, values, DEFAULTS.scoring);
+  for (const [metric, st] of Object.entries(states)) {
+    const tile = $(`t-${metric}`);
+    tile.classList.toggle("warn", st === "warn");
+    tile.classList.toggle("bad", st === "bad");
+    tile.classList.toggle("cued", st !== "ok" && cue?.metric === metric);
   }
 }
 
 /** Needle, label and skeleton colour from one zone (mini-view.js), so they always agree (#97). */
 function renderNeedle(view, held) {
-  if (view.angle !== null) $("needle-rotor").setAttribute("transform", angleTransform(view.angle));
+  const rotor = $("needle-rotor");
+  // No zone (settling in, not tracked): no needle, so it can't point into an arc the label
+  // and skeleton don't show, and no leftover "slouching" from before.
+  const zoned = view.zone !== "none" && view.angle !== null;
+  rotor.style.visibility = zoned || held ? "" : "hidden";
+  if (zoned) rotor.setAttribute("transform", angleTransform(view.angle));
   if (held) setGaugeLabel("posture paused");
-  else if (view.label) setGaugeLabel(view.label); // one word; the cue itself is the banner on the video
+  else setGaugeLabel(view.label ?? "settling in"); // one word; the cue itself is the banner on the video
 }
 
 // Under the gauge (K1, K2 in #98): while good, "Looking good" and a green fill toward the
 // next praise; while slipping, an amber fill that is full when the chime plays. The bar
 // stays full for a moment on the chime frame, then hides: no fill while slouching.
-const CHIME_FULL_MS = 600;
+const CHIME_FULL_MS = 300;
 let chimeFullUntil = -Infinity;
 function renderGaugeStatus(zone, hold, nudge) {
   const now = performance.now();
@@ -1558,10 +1603,11 @@ function render(out, landmarks) {
     if (transition.state !== State.NO_PERSON) markLoad("settled");
   }
   if (practice) renderPractice(result);
-  const view = gaugeView(transition.state, result.kind === "scored", out.cue != null, needle);
+  const view = gaugeView(transition.state, result.kind === "scored", out.hold?.kind === "slipping", needle);
   renderBadge(transition, result, held, label, view.zone);
   $("warnings").textContent = causeFor(result, landmarks);
-  renderMetrics(result);
+  renderMetrics(out.relative, held ? "none" : view.zone, held ? null : out.cue);
+  if (result.kind === "scored" || held) timeline.add(held ? "break" : view.zone, performance.now() / 1000);
   renderNeedle(view, held);
   // Praise on the video goes as soon as posture leaves the green zone (frame 05, #98).
   const banner = $("banner");
@@ -1570,14 +1616,10 @@ function render(out, landmarks) {
     banner.classList.add("cut");
     banner.classList.remove("show");
   }
-  renderGaugeStatus(
-    view.zone,
-    held || activity.inGrace(clockS()) || !!practice ? null : out.hold,
-    out.transition.nudge,
-  );
+  renderGaugeStatus(view.zone, held || activity.inGrace(clockS()) || practice ? null : out.hold, out.transition.nudge);
   drawSkeleton(landmarks, held ? ZONE_COLOR.none : view.color);
   renderCalibration();
-  updateFirstRunLive(result, landmarks);
+  updateFirstRunLive();
   renderStats();
   if (Date.now() - lastProgressRender > 10000) renderProgress();
 }
@@ -1630,7 +1672,7 @@ function setPaused(on) {
     fpsEma = 0;
     setup.reset();
   }
-  $("pause").textContent = on ? "Resume" : "Pause";
+  $("pause").setAttribute("aria-label", on ? "Resume" : "Pause");
   $("pause").setAttribute("aria-pressed", String(on));
 }
 
@@ -1661,8 +1703,13 @@ function currentStage() {
 function applyReveal() {
   const stage = currentStage();
   for (const el of document.querySelectorAll("[data-stage]")) el.hidden = Number(el.dataset.stage) > stage;
+  // "Finding you" holds the gauge's place until tracking settles (frame 02).
+  $("finding").hidden = stage !== STAGES.tracking;
   // Learn the cues uses the main gauge and its tiles, even before tracking has settled.
-  if (document.body.classList.contains("practicing")) $("gauge").hidden = false;
+  if (document.body.classList.contains("practicing")) {
+    $("gauge").hidden = $("body-panel").hidden = false;
+    $("finding").hidden = true;
+  }
   return stage;
 }
 
@@ -1671,7 +1718,10 @@ function revealStep(out) {
   const { changed } = reveal.update(
     {
       scored,
-      present: scored && out.transition.state !== State.NO_PERSON,
+      // Any scored person counts, whatever their posture: someone sitting in the band between
+      // good and slouched (often the camera angle, before Save my posture) stays in the
+      // NO_PERSON start state, and used to wait forever for the "Sit comfortably" card.
+      present: scored,
       paused: isPaused(),
       silentTest: activity.isActive(ACTIVITY.SILENT_TEST),
       practice: activity.isActive(ACTIVITY.PRACTICE),
@@ -1733,7 +1783,8 @@ function renderRows() {
   $("row-breaks").checked = breakRemindersOn();
   $("row-shoulders").checked = settings.relaxReminders && hasConsent(store);
   $("settings-dot").hidden = [...shown].every((k) => store.rowsSeen.includes(k));
-  $("sound-btn")?.setAttribute("aria-pressed", String(settings.mode === "silent"));
+  $("sound-btn").setAttribute("aria-pressed", String(settings.mode === "silent"));
+  $("sound-btn").setAttribute("aria-label", settings.mode === "silent" ? "Sound off" : "Sound on");
 }
 
 function setSettingsOpen(open) {
@@ -1788,6 +1839,9 @@ $("row-break").addEventListener("click", () => {
   takeBreakNow();
 });
 $("row-week").addEventListener("click", () => showWeek(true));
+// Header icons (frame 04): sound on/off is the Chime row; the cup is Take a break now.
+$("sound-btn").addEventListener("click", () => setMode(MODE_FOR(settings.mode === "silent", true)));
+$("break-btn").addEventListener("click", () => takeBreakNow());
 $("row-help").addEventListener("click", () => {
   setSettingsOpen(false);
   openHelp();
@@ -1906,7 +1960,7 @@ function step() {
   relaxStep(landmarks, out.transition.state, now);
   promptStep(out.transition.state, now, present);
   revealStep(out);
-  setupStep(out.transition.state);
+  setupStep();
   if (lastFrameT !== null) {
     const inst = 1 / Math.max(1e-3, now - lastFrameT);
     fpsEma = fpsEma ? 0.9 * fpsEma + 0.1 * inst : inst;
@@ -2234,6 +2288,7 @@ function begin(source) {
   $("state-badge").focus(); // the Start button is gone: move focus to the status badge
   if (loopsStarted) return; // a retry after stopCamera reuses the running loops
   loopsStarted = true;
+  if (source !== "demo" && !store.calibration) undoStep(store, "calibrate"); // saved only in the demo: ask again
   recordSession(store, Date.now());
   save();
   resetPromptSession();
@@ -2388,59 +2443,25 @@ $("start-demo").addEventListener("click", () => {
   begin("demo");
 });
 
-// -- setup sequence ("Set up as you go") -----------------------------------------
-// One small card at a time in #first-run: framing, comfortable posture, then done.
-// Reminder style, voice and break preferences are manual personalization. The steps and the
-// reveal stage that unlocks each one are in onboarding.js (SETUP_STEPS); progress
-// is in store.setup. Every card has Skip this step and Skip all, use defaults.
-// Skip all records no consent and turns nothing on. The sequence waits while a
-// posture reminder, a pause, a silent test, practice or a breath check is on
-// (it does not queue behind the prompt scheduler). Settings → Personalize and
-// "Show the intro again" open it by hand. Focus moves only after a button press.
+// -- first session (storyboard v3 frames 02 and 03, #98) -------------------------------------
+// Two cards in #first-run, one line and one button each, x to skip: "Head and shoulders in
+// frame" while tracking settles, then "Sit comfortably" with Save my posture, which closes the
+// card when the posture is saved. The header icons show once the card has gone
+// (body.getting-started). The sequence waits while a posture reminder, a pause, practice or
+// a breath check is on. "Show the intro again" (Not working?) reopens it by hand.
 
 const firstRun = { step: 0, open: false, manual: false };
-let firstRunLive = null; // the element updated every frame on the current step
-
-function firstRunButton(label, onClick, secondary = true) {
-  const b = document.createElement("button");
-  b.textContent = label;
-  if (secondary) b.className = "secondary";
-  b.addEventListener("click", onClick);
-  return b;
-}
 
 function renderFirstRun() {
   const step = SETUP_STEPS[firstRun.step];
-  const steps = SETUP_STEPS;
-  $("first-run-count").textContent = `Step ${steps.indexOf(step) + 1} of ${steps.length}`;
+  $("first-run-count").textContent = `${firstRun.step + 1} of ${SETUP_STEPS.length}`;
   $("first-run-heading").textContent = step.title;
-  const body = $("first-run-body");
-  const intro = document.createElement("div");
-  intro.className = "note";
-  intro.style.marginTop = "0";
-  intro.textContent = step.intro;
-  const parts = [intro];
-  firstRunLive = null;
-  if (step.key === "framing") {
-    firstRunLive = document.createElement("div");
-    firstRunLive.className = "framing";
-    firstRunLive.setAttribute("aria-live", "polite");
-    parts.push(firstRunLive);
-  } else if (step.key === "calibrate") {
-    firstRunLive = document.createElement("div");
-    firstRunLive.className = "note";
-    firstRunLive.setAttribute("aria-live", "polite");
-    const row = document.createElement("div");
-    row.className = "btn-row";
-    row.append(firstRunButton("Save my comfortable posture", () => engine.calibration.start("good"), false));
-    parts.push(row, firstRunLive);
-  }
-  body.replaceChildren(...parts);
-  const last = (!firstRun.manual && step.key === "done") || firstRun.step === SETUP_STEPS.length - 1;
-  $("first-run-back").hidden = firstRun.step === 0;
-  $("first-run-next").textContent = last ? "Keep working" : "Continue";
+  $("first-run-next").textContent = step.action;
   $("first-run-next").disabled = false;
-  $("first-run-skip").hidden = last;
+}
+
+function setGettingStarted(on) {
+  document.body.classList.toggle("getting-started", on);
 }
 
 function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
@@ -2450,13 +2471,20 @@ function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
   viewSetupStep(store, key);
   save();
   $("first-run").hidden = false;
+  setGettingStarted(!manual);
+  if (!manual) activity.start(ACTIVITY.SETUP, clockS()); // no reminders, praise or prompts until set up
   renderFirstRun();
+  // Getting started hides the badge that Start focused (frame 02): rather than leave focus
+  // nowhere, put it on the card. Focus anywhere else that is still on screen stays put.
+  const active = document.activeElement;
+  if (!manual && (!active || active === document.body || !active.getClientRects().length)) focusFirstRunHeading();
 }
 
 function closeFirstRun() {
   firstRun.open = false;
-  firstRunLive = null;
   $("first-run").hidden = true;
+  setGettingStarted(false);
+  activity.stop(ACTIVITY.SETUP, clockS(), "completed");
   if (!store.firstRunDone) {
     store.firstRunDone = true;
     save();
@@ -2465,9 +2493,11 @@ function closeFirstRun() {
 
 /** After a card is done or skipped: the next one, or close. Returns true when a card is showing. */
 function advanceSetup() {
+  // Straight on to the next card, even before tracking has settled: closing in between showed
+  // the header icons and started coaching, then hid them again when "Sit comfortably" came.
   const key = firstRun.manual
     ? SETUP_STEPS.slice(firstRun.step + 1).find((s) => !setupProgress(store).done.includes(s.key))?.key
-    : nextSetupStep(store, currentStage());
+    : nextSetupStep(store, STAGES.settled);
   if (!key) {
     closeFirstRun();
     return false;
@@ -2481,16 +2511,20 @@ function focusFirstRunHeading() {
   $("first-run-heading").focus();
 }
 
-/** True while something else owns the screen: the sequence hides and waits. */
-function setupBlocked(state) {
-  return !rules().setupCards || state === State.BAD_CHIME || state === State.BAD_VOICE;
+/** True while something else owns the screen (a pause, the silent test, practice, a break):
+ *  the sequence hides and waits. A slouch reading no longer hides it: during getting started
+ *  (ACTIVITY.SETUP) there are no reminders to make room for. */
+function setupBlocked() {
+  return !rules().setupCards;
 }
 
 /** Runs every tracked frame: opens the next due card on its own (no focus move), hides it while blocked. */
-function setupStep(state) {
-  const blocked = setupBlocked(state);
+function setupStep() {
+  const blocked = setupBlocked();
   if (firstRun.open) {
     $("first-run").hidden = blocked;
+    // A pause ends ACTIVITY.SETUP; when the card shows again, so does its quiet.
+    if (!blocked && !firstRun.manual && !activity.isActive(ACTIVITY.SETUP)) activity.start(ACTIVITY.SETUP, clockS());
     return;
   }
   if (blocked || !loopsStarted) return;
@@ -2498,50 +2532,38 @@ function setupStep(state) {
   if (key) openFirstRun(key);
 }
 
-/** Per-frame text for the guide: live framing on step 1, calibration status on step 2. */
-function updateFirstRunLive(result, landmarks) {
-  if (!firstRun.open || !firstRunLive) return;
-  const key = SETUP_STEPS[firstRun.step].key;
-  if (key === "framing") {
-    const ok = result.kind === "scored";
-    firstRunLive.className = ok ? "framing ok" : "framing";
-    firstRunLive.textContent = ok
-      ? "Head and shoulders in view \u2713"
-      : causeFor(result, landmarks) || "Looking for you...";
-  } else if (key === "calibrate") {
-    const c = engine.calibration.status;
-    firstRunLive.textContent = c.active
-      ? `Saving your posture… hold comfortably (${c.remaining_s.toFixed(1)} s)`
-      : c.error ||
-        (c.good ? "Saved. Continue whenever you’re ready." : "Hold comfortably for 3 seconds when you save.");
-    $("first-run-next").disabled = !!c.active;
+/** Step 2: Save my posture records, then the card closes by itself once the posture is saved. */
+let firstRunSaving = false;
+function updateFirstRunLive() {
+  if (!firstRun.open || SETUP_STEPS[firstRun.step].key !== "calibrate") return;
+  const c = engine.calibration.status;
+  $("first-run-next").disabled = !!c.active;
+  if (firstRunSaving && !c.active) {
+    firstRunSaving = false;
+    if (c.good && !c.error) finishFirstRunStep();
   }
 }
 
-$("first-run-next").addEventListener("click", () => {
-  const finished = !firstRun.manual && SETUP_STEPS[firstRun.step].key === "done";
+function finishFirstRunStep() {
   completeStep(store, SETUP_STEPS[firstRun.step].key);
-  if (finished) store.setupDone = true;
   save();
   if (advanceSetup()) focusFirstRunHeading();
   else $("state-badge").focus();
-});
-$("first-run-back").addEventListener("click", () => {
-  const key = SETUP_STEPS[Math.max(0, firstRun.step - 1)].key;
-  openFirstRun(key, firstRun.manual);
-  focusFirstRunHeading();
+}
+
+$("first-run-next").addEventListener("click", () => {
+  if (SETUP_STEPS[firstRun.step].key === "calibrate") {
+    firstRunSaving = true;
+    engine.calibration.start("good");
+    return;
+  }
+  finishFirstRunStep();
 });
 $("first-run-skip").addEventListener("click", () => {
   skipStep(store, SETUP_STEPS[firstRun.step].key);
   save();
   if (advanceSetup()) focusFirstRunHeading();
   else $("state-badge").focus();
-});
-$("first-run-skip-all").addEventListener("click", () => {
-  skipAll(store);
-  save();
-  closeFirstRun();
-  $("state-badge").focus();
 });
 $("intro-again").addEventListener("click", () => {
   if (!loopsStarted) {
@@ -2587,8 +2609,7 @@ function renderOnboardingStep() {
 function showStartControls() {
   const need = shouldShowOnboarding(store);
   $("onboarding").hidden = !need;
-  $("start-intro").hidden = need;
-  $("start-title").hidden = $("start-tagline").hidden = need; // make room for the card
+  $("start-title").hidden = need; // make room for the card
   $("start-actions").hidden = need;
   if (need) renderOnboardingStep();
 }
@@ -2629,7 +2650,6 @@ function openHelp() {
   $("help-msg").textContent = "";
   $("help-dialog").showModal();
 }
-$("help-btn").addEventListener("click", openHelp);
 $("help-close").addEventListener("click", () => $("help-dialog").close());
 $("help-notworking").addEventListener("click", () => {
   $("help-dialog").close();
@@ -2643,7 +2663,7 @@ $("setup-close").addEventListener("click", () => {
   setSetupReason("asked", false);
   $("practice-msg").textContent = "";
   if (!$("setup-panel").hidden) return;
-  $("help-btn").focus();
+  $("settings-btn").focus();
 });
 $("help-practice").addEventListener("click", () => {
   const msg = startPractice();

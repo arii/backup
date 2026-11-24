@@ -57,7 +57,7 @@ frame rate, so small movements never cause chatter.
 1. THE System SHALL publish `needle.value` in `[-1.0, 1.0]` on the `/ws` payload: -1 upright, +1 at the thresholds (or at the recorded slouch once calibrated).
 2. FOR ANY input, including NaN/inf landmarks, THE needle SHALL be `None` (before the first scored frame) or a finite float in `[-1, 1]`.
 3. THE needle SHALL be smoothed with time constant `needle.tau_s` and SHALL hold its value through unscoreable frames.
-4. ON EVERY rendered frame, THE browser gauge's needle zone, its label and the skeleton colour SHALL agree (#97). They come from one zone (`gaugeZone` in `docs/app/mini-view.js`): a reminder state (`bad_chime`, `bad_voice`) is red and "slouching" until recovery is confirmed; good posture is green and "upright"; good posture with a cue, or settling in, is amber and "drifting". The needle value is drawn inside its zone's arc (green 0–60°, amber 60–120°, red 120–180°), so it still moves with posture but never contradicts the label. `needle.value` itself, the thresholds and the state machine are unchanged. The header badge follows the same zone: green "good posture", amber "slipping", red "sit up" (#98 v3).
+4. ON EVERY rendered frame, THE browser gauge's needle zone, its label and the skeleton colour SHALL agree (#97). They come from one zone (`gaugeZone` in `docs/app/mini-view.js`): a reminder state (`bad_chime`, `bad_voice`) is red and "slouching" until recovery is confirmed; good posture is green and "upright"; a slouch counting toward the chime (the engine's `hold.kind === "slipping"`, the same time the amber fill runs) is amber and "drifting"; settling in and unscored frames have no zone: grey, "settling in", and no needle. The needle value is drawn inside its zone's arc (green 0–60°, amber 60–120°, red 120–180°), so it still moves with posture but never contradicts the label. `needle.value` itself, the thresholds and the state machine are unchanged. The header badge follows the same zone: green "good posture", amber "slipping", red "sit up" (#98 v3).
 5. UNDER the gauge (#98 K1, K2): while good, "Looking good" and a thin green bar filling toward the next praise; while slipping (a slouch counting toward the chime), an amber bar ending at a bell that is full when the chime plays. No text inside either bar, and no bar while slouching. A praise banner on the video is removed as soon as posture leaves the green zone.
 6. THE reminder banner on the video SHALL show one short cue (the cue title, for example "Head forward", or "Sit up"); the voice says the full fix (#98 K5).
 
@@ -71,6 +71,8 @@ and the deviation check fit my desk.
 3. WHEN fewer than `calibration.min_samples` frames are scored in the window, OR the two centroids are identical, THE System SHALL report an error and keep the threshold mapping.
 4. THE baseline anchor SHALL survive NO_PERSON resets. `DELETE /calibrate` SHALL clear everything.
 5. Calibration SHALL stay in memory; no frame or landmark leaves the machine.
+6. ONCE a good posture is saved, THE thresholds SHALL be measured from it (`postureZero` in `posture-core.js`): each metric's zero is the saved value, capped at that metric's threshold, so a camera off to one side doesn't read as a slouch for ever, and a slouch saved by mistake hides at most one threshold of it. The cue, the threshold needle and the body-part tiles use the same zero. The demo (drift baseline off) ignores it, and a posture saved during the demo is not stored.
+7. A change from the running baseline SHALL count only when it takes a metric further from its zero than the baseline is, and the metric is itself outside its exit band. Moving back toward level is never a fault (#97: after minutes at -5 degrees, a level 2.9 degree pose read as "Shoulders uneven").
 
 ### Requirement 6: Good and bad sounds
 **User Story:** As a user, I want to use my own sounds and preview them.
@@ -102,7 +104,7 @@ coached to better posture with nothing to install.
 it ("your neck is too far forward"), not just "fix your posture".
 
 #### Acceptance Criteria
-1. ON every scored frame, THE System SHALL pick the metric furthest past its band, as a multiple of its threshold, using the raw angle and the drift from the slow baseline, and SHALL produce a cue with a title, a fix and a spoken sentence. WHEN every metric is inside its exit band, THERE SHALL be no cue.
+1. ON every scored frame, THE System SHALL pick the metric furthest past its threshold, as a multiple of it, using the angle from the zero point (Requirement 5.6) and a move away from the slow baseline (Requirement 5.7), and SHALL produce a cue with a title, a fix and a spoken sentence. A cue SHALL name a metric only while it is past its threshold on that frame, so it goes as soon as the metric is back in range (#97).
 2. Sides in a cue SHALL be the person's own left and right, and SHALL NOT change when the camera image is mirrored.
 3. WHEN a chime or voice reminder fires and a cue exists, THE reminder banner SHALL show it; WHEN `audio.specific_cues` (browser: *Say what to fix*) is on, THE spoken prompt SHALL be the cue's sentence, otherwise `audio.voice_text`.
 4. THE dashboard and browser app SHALL show the cue live while a reminder is active or a metric is past its threshold.

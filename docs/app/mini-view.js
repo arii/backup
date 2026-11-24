@@ -29,15 +29,17 @@ const LABEL = Object.freeze({ good: "upright", drift: "drifting", bad: "slouchin
 /**
  * One zone per frame, so the needle, the label and the skeleton always agree (#97).
  * The zone follows the state machine: a reminder state is "bad" even if only one metric
- * is past its threshold, and stays "bad" until recovery is confirmed. Good posture with a
- * cue (a metric past its exit band, against the threshold or the drift baseline) is "drift".
- * Anything else that is scored (settling in) is "drift" too; unscored frames have no zone.
+ * is past its threshold, and stays "bad" until recovery is confirmed. "drift" is the
+ * slouch building toward the reminder (the engine's hold.kind "slipping"), the same
+ * time the amber fill runs, so amber always comes with the fill (frame 05, #98).
+ * Settling in (scored but not yet good or slouched) and unscored frames have no zone: grey.
  */
-export function gaugeZone(state, scored, drifting) {
+export function gaugeZone(state, scored, slipping) {
   if (state === State.BAD_CHIME || state === State.BAD_VOICE) return "bad";
   if (!scored) return "none";
-  if (state === State.GOOD && !drifting) return "good";
-  return "drift";
+  if (slipping) return "drift";
+  if (state === State.GOOD) return "good";
+  return "none"; // settling in: grey (frame 02, #98)
 }
 
 /**
@@ -59,8 +61,8 @@ export function zoneOfAngle(deg) {
 }
 
 /** Label, angle and colour for a frame. */
-export function gaugeView(state, scored, drifting, needle) {
-  const zone = gaugeZone(state, scored, drifting);
+export function gaugeView(state, scored, slipping, needle) {
+  const zone = gaugeZone(state, scored, slipping);
   return {
     zone,
     label: LABEL[zone] ?? null,
@@ -72,4 +74,28 @@ export function gaugeView(state, scored, drifting, needle) {
 /** SVG rotate() about the dial centre (100, 100) for an angle in degrees. */
 export function angleTransform(deg) {
   return `rotate(${deg.toFixed(1)} 100 100)`;
+}
+
+const TILE_METRICS = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
+
+/**
+ * Body-part tile colours (frames 04 to 06, #98): the metric being cued takes the zone's colour
+ * (amber while slipping, red while slouching); any other metric past its threshold is amber;
+ * everything else is green. Returns { metric: "ok" | "warn" | "bad" } and the cued metric.
+ */
+export function tileStates(zone, cueMetric, metrics, cfg) {
+  const out = {};
+  for (const m of TILE_METRICS) {
+    const v = metrics?.[`${m}_deg`];
+    const past = Number.isFinite(v) && Math.abs(v) > cfg[`${m}_deg`];
+    out[m] =
+      m === cueMetric && (zone === "bad" || zone === "drift")
+        ? zone === "bad"
+          ? "bad"
+          : "warn"
+        : past
+          ? "warn"
+          : "ok";
+  }
+  return out;
 }

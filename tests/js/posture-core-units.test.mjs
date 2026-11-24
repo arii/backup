@@ -29,6 +29,7 @@ import {
   lowVisibilityDetail,
   mirrorSign,
   postureCue,
+  postureZero,
   rawNeedle,
   scorePose,
   scored,
@@ -316,26 +317,68 @@ test("glitch frames hold good, keep the bad streak and keep the baseline", () =>
   assert.equal(sm.baseline.metrics, before);
 });
 
-test("a posture far from the slow baseline breaches while raw angles stay good", () => {
+test("moving further from level than the slow baseline breaches while raw angles stay under the threshold", () => {
   const sm = machine();
-  sm.setBaselineAnchor(metrics(-9));
-  assert.equal(zoneOf(GOOD, CFG), "good");
-  const out = run(sm, GOOD, 0, 5);
+  sm.setBaselineAnchor(metrics(0, 0, 0, -2));
+  const worse = metrics(0, 0, 0, 4.5); // 6.5 degrees from the baseline, further from level
+  assert.equal(zoneOf(worse, CFG), "neutral");
+  const out = run(sm, worse, 0, 5);
   assert.ok(out.some(([, n]) => n === Nudge.CHIME));
   const plain = machine();
-  assert.equal(run(plain, GOOD, 0, 5).length, 0);
+  assert.equal(run(plain, worse, 0, 5).length, 0);
 });
 
-test("demo started during its slouch half can never return to good until the drift baseline is off (#67)", () => {
+test("moving back toward level from the slow baseline never breaches (#97)", () => {
+  const sm = machine();
+  sm.setBaselineAnchor(metrics(-9));
+  assert.equal(run(sm, GOOD, 0, 5).length, 0);
+  assert.equal(sm.state, State.GOOD);
+});
+
+test("#97: minutes at -5 degree shoulders, then a level 2.9 degree pose is good and has no cue", () => {
+  const sm = machine();
+  run(sm, metrics(0, 0, 0, -5), 0, 600, 0.5); // the baseline drifts to about -5
+  assert.ok(sm.baseline.metrics.shoulder_level_deg < -4.5, "the baseline drifted");
+  const level = metrics(0, 0, 0, 2.9);
+  const out = run(sm, level, 600, 620, 0.1);
+  assert.equal(out.filter(([, n]) => n === Nudge.CHIME || n === Nudge.VOICE).length, 0, "no reminder for a level pose");
+  assert.equal(sm.state, State.GOOD);
+  assert.equal(postureCue(level, CFG, sm.baseline.metrics), null, "no 'Shoulders uneven'");
+});
+
+test("property: no baseline history makes a level pose (every |angle| < 3) read bad or get a cue", () => {
+  let seed = 97;
+  const rnd = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 2 ** 32;
+  };
+  const any = (span) => (rnd() * 2 - 1) * span;
+  for (let trial = 0; trial < 200; trial++) {
+    const sm = machine();
+    let t = 0;
+    for (let k = 0; k < 20; k++) {
+      const m = metrics(any(30), any(30), any(30), any(30));
+      run(sm, m, t, t + 5 + rnd() * 60, 0.5);
+      t += 70;
+    }
+    const level = metrics(any(2.9), any(2.9), any(2.9), any(2.9));
+    const ref = sm.baseline.metrics;
+    run(sm, level, t, t + 10, 0.1);
+    assert.notEqual(sm.history.at(-1)[1], "bad", `trial ${trial}: zone`);
+    assert.equal(postureCue(level, CFG, ref), null, `trial ${trial}: cue`);
+  }
+});
+
+test("a drift baseline seeded from a slouch no longer traps the machine in bad (#67)", () => {
   // The demo alternates a fixed good pose and a fixed slouch pose. Pressing
   // its button during the slouch half seeds the drift baseline from a slouch
-  // frame; after that, every good phase scores as a deviation from that seed
-  // and the machine stays bad for the whole demo.
-  const stuck = machine();
-  run(stuck, BAD, 0, 5); // demo's slouch pose is what tracking sees first
-  assert.equal(stuck.state, State.BAD_CHIME);
-  run(stuck, GOOD, 5.1, 12); // demo's good pose, well past recovery_good_s
-  assert.notEqual(stuck.state, State.GOOD);
+  // frame. Sitting up moves back toward level, which never counts against the
+  // baseline (#97), so the machine recovers.
+  const seeded = machine();
+  run(seeded, BAD, 0, 5); // demo's slouch pose is what tracking sees first
+  assert.equal(seeded.state, State.BAD_CHIME);
+  run(seeded, GOOD, 5.1, 12); // demo's good pose, well past recovery_good_s
+  assert.equal(seeded.state, State.GOOD);
 
   // The demo disables the drift baseline, so absolute angles classify it and
   // the same sequence recovers as soon as the good pose is held.
@@ -565,12 +608,72 @@ test("the metric furthest past its band wins", () => {
   assert.equal(postureCue(metrics(10, 0, 0, 7), CFG).metric, "head_forward");
 });
 
-test("drift from the baseline is reported with its own sign; trunk ignored without hips", () => {
-  const baseline = metrics(0, 0, 0, -10);
-  const cue = postureCue(metrics(0, 0, 0, 0), CFG, baseline);
+test("drift away from the baseline is reported with its own sign; back toward level is not; trunk ignored without hips", () => {
+  const cue = postureCue(metrics(0, 0, 0, 4), CFG, metrics(0, 0, 0, -3));
   assert.equal(cue.metric, "shoulder_level");
   assert.equal(cue.side, "right");
+  assert.equal(postureCue(metrics(0, 0, 0, 0), CFG, metrics(0, 0, 0, -10)), null);
   assert.equal(postureCue(metrics(0, 40, 0, 0, false), CFG), null);
+});
+
+test("a cue names a metric only past its threshold on that frame, and goes when it is back in range (#97)", () => {
+  // 7 degrees is inside the hysteresis band (exit 5, threshold 8): no cue.
+  assert.equal(postureCue(metrics(7), CFG), null);
+  assert.equal(postureCue(metrics(8.5), CFG).metric, "head_forward");
+  assert.equal(postureCue(metrics(0, 0, 0, 5.9), CFG), null, "5.9 degree shoulders are not 'uneven'");
+});
+
+// -- zero point (the saved good posture) -------------------------------------------
+
+test("postureZero caps each metric at its threshold and drops an unavailable trunk", () => {
+  const z = postureZero(metrics(10, 3, -2, 20, false), CFG);
+  assert.deepEqual(z, { head_forward_deg: 8, head_tilt_deg: -2, shoulder_level_deg: 6, trunk_lean_deg: 0 });
+  assert.equal(postureZero(null, CFG), null);
+});
+
+/** An engine with a saved good posture; the zero applies on the next frame. */
+function calibratedAt(good) {
+  const e = new PostureEngine();
+  e.calibration.load({ good, good_samples: 10 });
+  e.process(null, -1);
+  return e;
+}
+
+test("after saving a posture 10 degrees off (camera to one side), sitting that way is good; 10 more reminds", () => {
+  const saved = metrics(10);
+  const e = calibratedAt(saved);
+  const out = run(e.machine, saved, 0, 60);
+  assert.ok(!out.some(([, n]) => n === Nudge.CHIME), "no reminder at the saved posture");
+  assert.equal(e.machine.state, State.GOOD);
+  assert.equal(postureCue(saved, CFG, null, 1, e.machine.activeZero), null);
+  assert.equal(postureCue(metrics(20), CFG, null, 1, e.machine.activeZero).metric, "head_forward");
+  const slouch = run(e.machine, metrics(20), 60, 66);
+  assert.ok(
+    slouch.some(([, n]) => n === Nudge.CHIME),
+    "a real slouch past the saved posture still reminds",
+  );
+  // Without the zero the saved posture itself is past the 8 degree threshold.
+  assert.ok(run(machine(), saved, 0, 6).some(([, n]) => n === Nudge.CHIME));
+});
+
+test("a slouch saved by mistake hides at most one threshold of it", () => {
+  const e = calibratedAt(metrics(30));
+  assert.equal(e.machine.activeZero.head_forward_deg, CFG.head_forward_deg);
+  const out = run(e.machine, metrics(30), 0, 6);
+  assert.ok(out.some(([, n]) => n === Nudge.CHIME));
+});
+
+test("the engine reports metrics from the zero point, and the demo (drift baseline off) ignores it", () => {
+  const e = calibratedAt(metrics(6, 0, 2, 0));
+  const out = e.process(pose(), 0.1);
+  near(out.relative.head_forward_deg, -6);
+  near(out.relative.head_tilt_deg, -2);
+  e.setDriftBaselineEnabled(false);
+  assert.equal(e.machine.activeZero, null);
+  near(e.process(pose(), 0.2).relative.head_forward_deg, 0);
+  e.setDriftBaselineEnabled(true);
+  assert.equal(e.machine.activeZero.head_forward_deg, 6);
+  assert.equal(e.hold(pose(), 0.3).relative, null);
 });
 
 // -- hold (activities that suppress posture feedback) -------------------------

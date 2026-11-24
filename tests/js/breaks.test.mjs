@@ -135,3 +135,16 @@ test("two minutes away restarts the jaw timer", () => {
   run(tr, t, 2 * 60, true);
   assert.deepEqual(tr.due(true), []);
 });
+
+test("nextIn: the sooner of the eye and move breaks, null when both are off (#98 frame 04)", () => {
+  const b = new BreakTracker({ eyeBreaks: true, moveBreakMinutes: 60 });
+  b.update(true, 0);
+  b.update(true, 600);
+  const n = b.nextIn();
+  assert.equal(n.seconds, BREAKS.eye_after_s - 600);
+  assert.ok(Math.abs(n.fraction - (BREAKS.eye_after_s - 600) / BREAKS.eye_after_s) < 1e-9);
+  b.taken("eye");
+  assert.equal(b.nextIn().seconds, BREAKS.eye_after_s, "after the eye break, the next one is 20 min away");
+  const off = new BreakTracker({ eyeBreaks: false, moveBreakMinutes: 0 });
+  assert.equal(off.nextIn(), null);
+});
