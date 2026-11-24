@@ -912,7 +912,7 @@ try {
       await page.evaluate(
         () =>
           [...document.querySelectorAll("#week-view button")]
-            .filter((b) => !b.hidden)
+            .filter((b) => !b.hidden && b.id !== "progress-light") // the light-coaching suggestion comes and goes
             .map((b) => b.id)
             .join() === "week-close,progress-export,progress-import,share-week,progress-delete",
       ),
