@@ -254,7 +254,9 @@
     /* Frame 14: the header stays one row on a phone. */
     header { flex-wrap: nowrap; gap: 6px; }
     header h1 { font-size: 16px; }
-    #state-badge { padding: 3px 9px; font-size: 11px; white-space: nowrap; }
+    /* The badge gives way first (ellipsis) so the row never overflows 320 px, whatever the font. */
+    #state-badge { padding: 3px 9px; font-size: 11px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    header h1, .header-spacer { flex-shrink: 0; }
     .icon-btn { width: 32px; height: 32px; flex: none; }
     .stage { aspect-ratio: auto; min-height: 560px; }
     .stage:has(#onboarding:not([hidden])) { min-height: 540px; }
@@ -264,7 +266,7 @@
     .stage:has(.overlay-msg.compact) video { position: relative; inset: auto; height: auto; aspect-ratio: 4 / 3; flex: none; }
     .stage:has(.overlay-msg.compact) canvas { height: auto; aspect-ratio: 4 / 3; bottom: auto; }
     .stage:has(.overlay-msg.compact) .overlay-msg.compact { position: static; max-height: none; }
-    header { padding: 10px 12px; gap: 8px; }
+    header { padding: 10px 12px; gap: 6px; }
     .stage .overlay-msg { padding: 12px; }
     .overlay-msg h2 { font-size: 20px; }
     .tile .value { font-size: 20px; }
