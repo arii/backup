@@ -57,6 +57,9 @@ frame rate, so small movements never cause chatter.
 1. THE System SHALL publish `needle.value` in `[-1.0, 1.0]` on the `/ws` payload: -1 upright, +1 at the thresholds (or at the recorded slouch once calibrated).
 2. FOR ANY input, including NaN/inf landmarks, THE needle SHALL be `None` (before the first scored frame) or a finite float in `[-1, 1]`.
 3. THE needle SHALL be smoothed with time constant `needle.tau_s` and SHALL hold its value through unscoreable frames.
+4. ON EVERY rendered frame, THE browser gauge's needle zone, its label and the skeleton colour SHALL agree (#97). They come from one zone (`gaugeZone` in `docs/app/mini-view.js`): a reminder state (`bad_chime`, `bad_voice`) is red and "slouching" until recovery is confirmed; good posture is green and "upright"; good posture with a cue, or settling in, is amber and "drifting". The needle value is drawn inside its zone's arc (green 0–60°, amber 60–120°, red 120–180°), so it still moves with posture but never contradicts the label. `needle.value` itself, the thresholds and the state machine are unchanged. The header badge follows the same zone: green "good posture", amber "slipping", red "sit up" (#98 v3).
+5. UNDER the gauge (#98 K1, K2): while good, "Looking good" and a thin green bar filling toward the next praise; while slipping (a slouch counting toward the chime), an amber bar ending at a bell that is full when the chime plays. No text inside either bar, and no bar while slouching. A praise banner on the video is removed as soon as posture leaves the green zone.
+6. THE reminder banner on the video SHALL show one short cue (the cue title, for example "Head forward", or "Sit up"); the voice says the full fix (#98 K5).
 
 ### Requirement 5: Relative calibration
 **User Story:** As a user, I want to record my good and slouched posture so the needle

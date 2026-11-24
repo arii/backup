@@ -31,7 +31,8 @@
   header h1 { font-size: 17px; font-weight: 800; letter-spacing: 0.01em; margin: 0; color: var(--text); }
   .badge { padding: 4px 14px; border-radius: 999px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; background: #3a4250; }
   .badge.good { background: var(--good); color: #0b2412; }
-  .badge.bad_chime, .badge.bad_voice { background: var(--warn); color: #3a2503; }
+  .badge.bad_chime, .badge.bad_voice { background: var(--bad); color: #2b0707; }
+  .badge.drift { background: var(--warn); color: #3a2503; }
   .badge.unreliable { background: #4a3a20; color: var(--warn); }
   .badge.paused, .badge.testing, .badge.activity { background: #2c3a52; color: #b9cdf0; }
   /* Silent test: hide everything that would coach the user. */
@@ -53,6 +54,14 @@
      status line changed length (for example during a breath check). */
   .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr)); gap: 0 16px; align-items: start; }
   .gauge { margin-bottom: 16px; }
+  .gauge-status { max-width: 320px; margin: 8px auto 0; min-height: 40px; }
+  .gauge-line { display: flex; align-items: center; gap: 6px; color: var(--good); font-weight: 700; font-size: 15px; }
+  .gauge-bar { position: relative; height: 8px; margin-top: 6px; border-radius: 999px; background: #111419; border: 1px solid var(--line); }
+  #gauge-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; background: var(--good); transition: width 0.1s linear; }
+  .gauge-bar.warn #gauge-fill { background: var(--warn); }
+  #gauge-bell { display: none; position: absolute; right: -22px; top: -5px; color: var(--warn); }
+  .gauge-bar.warn #gauge-bell { display: block; }
+  .gauge-bar.warn { margin-right: 22px; }
   #session-line { margin-top: 12px; }
   body.practice-done #practice-panel { display: block; }
   .session-line span + span::before { content: "\00b7"; margin: 0 6px; }
@@ -69,8 +78,9 @@
   .stage .overlay-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; background: rgba(20, 23, 28, 0.92); }
   .overlay-msg h2 { margin: 0; font-size: 22px; }
   .overlay-msg p { margin: 0; color: var(--muted); max-width: 440px; }
-  #banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 8px 18px; border-radius: 999px; background: var(--warn); color: #3a2503; font-weight: 700; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+  #banner { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 8px 18px; border-radius: 999px; background: var(--bad); color: #2b0707; font-weight: 700; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
   #banner.show { opacity: 1; }
+  #banner.cut { transition: none; visibility: hidden; }
   #banner.positive { background: var(--good); color: #0b2412; }
   #banner.relax { background: #6b8fd6; color: #0d1830; }
   /* Breaks and breathing prompts (one at a time, see prompts.js). visibility keeps the hidden buttons out of the tab order. */
@@ -364,6 +374,15 @@
         <circle cx="100" cy="100" r="7" fill="#e8ebf0"/>
         <text id="needle-text" x="100" y="124" text-anchor="middle" font-size="14" fill="#e8ebf0">--</text>
       </svg>
+      <!-- K1/K2 (#98): "Looking good" with a green fill toward the next praise, or an amber
+           fill that reaches the bell when the chime plays. No text inside the bar. -->
+      <div class="gauge-status">
+        <div id="gauge-praise" class="gauge-line" hidden><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Looking good</div>
+        <div id="gauge-bar" class="gauge-bar" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="gauge-fill"></div>
+          <svg id="gauge-bell" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.5a4 4 0 0 0-4 4V9L2.5 11v1h11v-1L12 9V5.5a4 4 0 0 0-4-4zM6.5 13a1.5 1.5 0 0 0 3 0z" fill="currentColor"/></svg>
+        </div>
+      </div>
       <div class="tiles" id="posture-tiles" style="margin-top:8px">
         <div class="tile" id="t-head_forward"><div class="label">Head forward</div><div class="value" id="m-head_forward_deg">-</div></div>
         <div class="tile" id="t-head_tilt"><div class="label">Head tilt</div><div class="value" id="m-head_tilt_deg">-</div></div>
