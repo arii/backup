@@ -241,20 +241,42 @@ try {
     check(
       "landing: subtitle, demo link, privacy line and sponsor disclosure are visible",
       /A private webcam posture coach/.test(text) &&
-        /Try the demo \(no camera\)/.test(text) &&
+        /try the demo/i.test(text) &&
         /Camera frames never leave this tab/.test(text) &&
-        /never gates features/.test(text),
+        /never gate features/.test(text),
     );
     check("landing: WebGL warning is not in the page text when WebGL works", !/WebGL is turned off/.test(text));
     check(
       "landing: WebGL warning is hidden by default",
       await page.evaluate(() => document.getElementById("webgl-warning").hidden),
     );
-    check("landing: feature list has 5 cards", (await page.locator("#features .card").count()) === 5);
+    // Issue #96: the pitch and two buttons. No disclosures, at most 60 visible words outside the footer.
+    const pitch = await page.evaluate(() => {
+      let words = 0;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        const p = t.parentElement;
+        if (!p || ["SCRIPT", "STYLE"].includes(p.tagName) || p.closest("footer") || !p.offsetParent) continue;
+        words += t.textContent.trim().split(/\s+/).filter(Boolean).length;
+      }
+      return {
+        words,
+        details: document.querySelectorAll("details").length,
+        buttons: [...document.querySelectorAll(".cta-row a")].map((a) => a.textContent.trim()),
+        demoIsLink: !document.querySelector('.cta-row a[href="./app/?demo"]').classList.contains("btn"),
+        shots: document.querySelectorAll('.hero-shot img[loading="eager"]').length,
+        healthLink: !!document.querySelector('footer a[href="privacy.html#consumer-health-data"]'),
+      };
+    });
     check(
-      "landing: hero image is eager and Known limitations is present",
-      (await page.locator('.hero-shot img[loading="eager"]').count()) === 1 &&
-        (await page.locator("#limitations summary").innerText()) === "Known limitations",
+      "landing (#98 frame 13): the pitch, one button and a demo link, no disclosures, at most 60 words, one screenshot",
+      pitch.words <= 60 &&
+        pitch.details === 0 &&
+        pitch.buttons.join("|") === "Try it in your browser|or try the demo" &&
+        pitch.demoIsLink &&
+        pitch.shots === 1 &&
+        pitch.healthLink,
+      pitch,
     );
     await page.close();
   }

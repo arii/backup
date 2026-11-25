@@ -45,7 +45,6 @@
     padding: 1px 6px;
     font-size: 0.9em;
   }
-  main { max-width: 1060px; margin: 0 auto; padding: 0 20px 72px; }
 
   /* Hero */
   header.hero {
@@ -61,11 +60,12 @@
   }
   .tagline {
     font-size: clamp(22px, 3.4vw, 30px);
-    font-weight: 600;
-    color: var(--warn);
+    font-weight: 700;
+    color: var(--good);
     margin: -6px 0 18px;
   }
-  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .cta-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  .demo-link { color: var(--good); font-size: 15px; }
   .btn {
     display: inline-block;
     padding: 11px 20px;
@@ -109,49 +109,9 @@
     .hero-grid { grid-template-columns: 1fr; gap: 24px; }
   }
 
-  /* Feature grid */
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 14px;
-  }
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 18px;
-  }
-  .card h3 {
-    margin: 0 0 8px;
-    font-size: 16px;
-    color: var(--accent);
-  }
-  .card p { margin: 0; font-size: 14.5px; color: var(--muted); }
-  .card p b { color: var(--text); font-weight: 600; }
 
   figure { margin: 0; }
 
-  /* Privacy band */
-  .privacy {
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 18px 22px;
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-  }
-  .privacy .dot {
-    flex: none;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--good);
-    margin-top: 6px;
-    box-shadow: 0 0 10px rgba(76, 195, 106, 0.7);
-  }
-  .privacy p { margin: 0; }
-  .privacy .muted { font-size: 14px; }
 
   footer {
     max-width: 1060px;
@@ -164,7 +124,6 @@
   @media (max-width: 560px) {
     header.hero { padding-top: 48px; }
     .btn { width: 100%; text-align: center; }
-    .card { padding: 15px; }
   }
   .requirements { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
   .subtitle { font-size: clamp(18px, 2.6vw, 22px); color: var(--muted); margin: 0 0 8px; }
@@ -176,10 +135,6 @@
   #webgl-warning ul { margin: 6px 0 0; padding-left: 20px; }
   #webgl-warning li { margin: 4px 0; }
   #webgl-warning code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
-  details { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-top: 12px; }
-  summary { cursor: pointer; font-weight: 600; }
-  details[open] > summary { margin-bottom: 12px; }
-  .quick { margin: 18px 0; padding-left: 20px; color: var(--muted); }
   .cta-row { margin-bottom: 28px; }
   header.hero { padding-bottom: 16px; }
 </style>
@@ -194,14 +149,9 @@
       <p class="tagline">Posture to Die For.</p>
       <div class="cta-row">
         <a class="btn primary" href="./app/">Try it in your browser</a>
-        <a class="btn" href="./app/?demo">Try the demo (no camera)</a>
+        <a class="demo-link" href="./app/?demo">or try the demo</a>
       </div>
-      <p class="proof">Camera frames never leave this tab; check the Network tab or use offline mode.
-        Occasional sponsor nudge, never gates features.</p>
-      <ul class="quick">
-        <li>Chimes when you slouch, then says the fix.</li>
-        <li>Quiet when you sit up.</li>
-      </ul>
+      <p class="proof">Camera frames never leave this tab. Sponsor nudges never gate features.</p>
       <p class="requirements" id="safety-note">BackUp is a wellness tool, not medical advice or a medical device.
         Do not hold a rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.</p>
       <div id="webgl-warning" role="alert" hidden>
@@ -215,60 +165,13 @@
       </div>
     </div>
     <figure class="hero-shot">
-      <img src="assets/app-desktop.png" width="1280" height="800"
-           alt="The BackUp browser app in demo mode: a skeleton outline, a posture needle in the slouching zone, and the advice 'Head forward: tuck your chin and bring your ears back over your shoulders'"
+      <img src="assets/app-desktop.png" width="1280" height="673"
+           alt="The BackUp app in demo mode: the camera view with a green skeleton outline, the posture gauge reading upright, and one line of session stats"
            loading="eager" fetchpriority="high">
     </figure>
   </div>
 </header>
 
-<main>
-  <details id="requirements">
-    <summary>What you need</summary>
-    <p>A webcam and a recent desktop Chrome, Edge or Firefox. Turn on hardware acceleration (WebGL) for best accuracy. Without it the webcam uses a simpler, slower fallback.</p>
-    <p>Safari and phones: not tested and not supported yet. Best on a laptop or desktop. The camera can stop when the tab is in the background on iOS Safari, so a phone is a poor fit. The demo needs no camera and works in any modern browser.</p>
-  </details>
-
-  <details id="features">
-    <summary>All features</summary>
-    <div class="features">
-      <div class="card"><h3>Posture needle</h3><p>Shows how far you are from your own good posture. No score number.</p></div>
-      <div class="card"><h3>Says what to fix</h3><p>Reminders name the problem and the fix, on screen and out loud.</p></div>
-      <div class="card"><h3>Silent test</h3><p>A short test with no chime or voice, compared with your coached score.</p></div>
-      <div class="card"><h3>No-penalty progress</h3><p>The last 7 days in a progress panel. No streaks to lose.</p></div>
-      <div class="card"><h3>Local data</h3><p>Settings and history stay in your browser. Export or delete any time.</p></div>
-    </div>
-  </details>
-
-  <details id="how">
-    <summary>Under the hood</summary>
-    <p class="muted">Place the camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you. Press Start, sit naturally and record your good posture once.</p>
-    <p class="muted">Bad posture must hold about 2 seconds before a chime. A spoken prompt follows about 10 seconds later and repeats at most every 30 seconds.</p>
-  </details>
-
-  <details id="limitations">
-    <summary>Known limitations</summary>
-    <ul class="muted">
-      <li>Glasses: glare or reflections can confuse the pose model.</li>
-      <li>Low light: tracking gets jumpy. Put light in front of you.</li>
-      <li>Side-angle or off-center cameras: readings assume the camera faces you.</li>
-      <li>Partial framing: head and both shoulders need to be in view.</li>
-      <li>One person only.</li>
-      <li>A webcam gives approximate estimates. Nothing here is clinically validated.</li>
-    </ul>
-  </details>
-
-  <details id="privacy-details">
-    <summary>Privacy</summary>
-    <div class="privacy">
-      <span class="dot" aria-hidden="true"></span>
-      <p>
-        <b>Your camera feed is analyzed in this tab and never uploaded or saved.</b>
-        <span class="muted">The pose model and its runtime are served from this site, and GitHub hosts the site, so GitHub sees your IP address like any website. No other server is contacted. Settings, calibration, scores, usage counts for the sponsor prompt (kept locally, never sent) and any sounds you upload stay in your browser's local storage until you delete them. Like any website, your browser may keep the pose model in its normal HTTP cache after you start the app, and also after you point at, focus or press the "Open the app" link, even if you never start it. This is not the Offline mode and holds no video. The shoulder and breathing features ask for your OK first. If you opt in to offline mode, the app's own files are also cached on your device (no video, ever) until you remove them. <a href="privacy.html">Read the full privacy page</a>.</span>
-      </p>
-    </div>
-  </details>
-</main>
 
 <footer>
   <a href="privacy.html">Privacy</a> &middot;
