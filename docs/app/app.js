@@ -1646,7 +1646,7 @@ function syncTabTitle() {
 }
 
 /** The badge: the state, or the activity while one holds posture feedback. */
-function renderBadge(transition, result, held, label, zone) {
+function renderBadge(transition, result, held, label, zone, hold) {
   const badge = $("state-badge");
   // NO_PERSON is also the start state: it lasts until posture is clearly good
   // or clearly bad, so a tracked person sitting in the in-between band would
@@ -1663,8 +1663,17 @@ function renderBadge(transition, result, held, label, zone) {
     badge.className = "badge drift";
   }
   const settling = !test && !practice && !held && badge.textContent === "settling in";
+  // #105: while good posture is being confirmed the note counts down and a small bar
+  // fills; before any timer runs it says why the badge waits.
+  const confirming = settling && hold && hold.kind === "confirm";
+  const noteText = confirming
+    ? `Settling in: hold still ~${Math.max(1, Math.ceil(hold.remaining))}s`
+    : "Settling in: waiting for a clear good or slouched posture.";
   $("settling-note").hidden = !settling;
-  badge.title = settling ? $("settling-note").textContent : "";
+  $("settling-text").textContent = noteText;
+  badge.title = settling ? noteText : "";
+  $("settling-bar").hidden = !confirming;
+  if (confirming) $("settling-fill").style.width = `${(hold.fraction * 100).toFixed(0)}%`;
   if (held) {
     badge.textContent = label;
     badge.className = "badge activity";
@@ -1760,7 +1769,7 @@ function render(out, landmarks) {
   }
   if (practice) renderPractice(result);
   const view = gaugeView(transition.state, result.kind === "scored", out.hold?.kind === "slipping", needle);
-  renderBadge(transition, result, held, label, view.zone);
+  renderBadge(transition, result, held, label, view.zone, out.hold);
   $("warnings").textContent = causeFor(result, landmarks);
   renderMetrics(out.relative, held ? "none" : view.zone, held ? null : out.cue);
   if (result.kind === "scored" || held) timeline.add(held ? "break" : view.zone, performance.now() / 1000);
@@ -1773,6 +1782,12 @@ function render(out, landmarks) {
     banner.classList.remove("show");
   }
   renderGaugeStatus(view.zone, held || activity.inGrace(clockS()) || practice ? null : out.hold, out.transition.nudge);
+  // #105/#110: the specific cue while slipping or slouching, so the offending angle is
+  // named on the main screen, not only inside Learn the cues.
+  const cueLine = $("gauge-cue");
+  const cueVisible = !held && !test && !practice && out.cue && (view.zone === "drift" || view.zone === "bad");
+  cueLine.hidden = !cueVisible;
+  if (cueVisible) cueLine.textContent = CUE_SHORT[out.cue.metric] || "Sit up";
   drawSkeleton(landmarks, held ? ZONE_COLOR.none : view.color);
   renderCalibration();
   updateFirstRunLive();
