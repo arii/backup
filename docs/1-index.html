@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BackUp: Posture to Die For</title>
+<meta name="description" content="Posture to die for. Leave a browser tab open; BackUp watches you through your webcam and chimes when you slouch. Everything runs on your computer.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="BackUp: Posture to Die For">
+<meta property="og:description" content="A free webcam posture coach that runs in your browser. Nothing is uploaded.">
+<meta property="og:url" content="https://arii.github.io/posture-guard/">
+<meta property="og:image" content="https://arii.github.io/posture-guard/assets/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="BackUp showing a posture needle and live coaching in the browser.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="BackUp: Posture to Die For">
+<meta name="twitter:description" content="A free webcam posture coach that runs in your browser. Nothing is uploaded.">
+<meta name="twitter:image" content="https://arii.github.io/posture-guard/assets/og-image.png">
+<style>
+  :root {
+    --bg: #14171c;
+    --panel: #1d222a;
+    --panel-2: #232935;
+    --line: #2c333e;
+    --text: #e8ebf0;
+    --muted: #8b95a3;
+    --good: #4cc36a;
+    --warn: #ffb340;
+    --accent: #57d97a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(ellipse 1200px 600px at 100% 0, #1a2a3a 0%, var(--bg) 65%) fixed,
+      var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  a { color: var(--accent); }
+  code {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.9em;
+  }
+
+  /* ── Hero ── */
+  header.hero {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 72px 24px 32px;
+  }
+  h1 {
+    font-size: clamp(38px, 6.5vw, 62px);
+    line-height: 1.08;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+  }
+  .tagline {
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 700;
+    color: var(--good);
+    margin: 0 0 22px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    font-size: clamp(16px, 2.2vw, 20px);
+    color: var(--muted);
+    margin: 0 0 20px;
+    font-weight: 400;
+  }
+  .cta-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .demo-link { color: var(--good); font-size: 15px; }
+  .btn {
+    display: inline-block;
+    padding: 13px 26px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 16px;
+    border: 1px solid var(--line);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(76,195,106,0.18); }
+  .btn.primary {
+    background: var(--good);
+    border-color: var(--good);
+    color: #0a1f10;
+    box-shadow: 0 2px 12px rgba(76,195,106,0.25);
+  }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+
+  /* ── Hero grid: text left, big screenshot right ── */
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: 48px;
+    align-items: center;
+  }
+  figure { margin: 0; }
+  .hero-shot {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px;
+    box-shadow:
+      0 0 0 1px rgba(76,195,106,0.08),
+      0 24px 48px rgba(0,0,0,0.5),
+      0 4px 16px rgba(0,0,0,0.4);
+  }
+  .hero-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+  }
+  .hero-shot figcaption {
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 8px 6px 2px;
+    text-align: center;
+  }
+
+  /* ── Proof & safety ── */
+  .proof {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: var(--muted);
+    max-width: 36em;
+    line-height: 1.5;
+  }
+  .requirements {
+    font-size: 13.5px;
+    color: var(--muted);
+    max-width: 36em;
+    line-height: 1.5;
+    margin: 0;
+    padding-top: 2px;
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+
+  /* ── WebGL warning ── */
+  #webgl-warning[hidden] { display: none; }
+  #webgl-warning { display: none; margin-top: 16px; max-width: 560px; background: var(--panel); border: 1px solid var(--warn); border-radius: 10px; padding: 14px 18px; font-size: 14px; }
+  #webgl-warning.show { display: block; }
+  #webgl-warning b { color: var(--warn); }
+  #webgl-warning ul { margin: 6px 0 0; padding-left: 20px; }
+  #webgl-warning li { margin: 4px 0; }
+  #webgl-warning code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+  /* ── Footer ── */
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    margin-top: 16px;
+  }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--text); }
+
+  /* ── Responsive ── */
+  @media (max-width: 860px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+    /* On mobile: screenshot comes first for visual impact */
+    .hero-shot { order: -1; }
+    header.hero { padding-top: 36px; }
+  }
+  @media (max-width: 560px) {
+    header.hero { padding: 28px 16px 24px; }
+    .btn { width: 100%; text-align: center; }
+    .cta-row { flex-direction: column; align-items: stretch; }
+    .demo-link { text-align: center; }
+    footer { padding: 16px 16px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-grid">
+    <div>
+      <h1>BackUp</h1>
+      <p class="subtitle">A private webcam posture coach</p>
+      <p class="tagline">Posture to Die For.</p>
+      <div class="cta-row">
+        <a class="btn primary" href="./app/">Try it in your browser</a>
+        <a class="demo-link" href="./app/?demo">or try the demo</a>
+      </div>
+      <p class="proof">Camera frames never leave this tab. Sponsor nudges never gate features.</p>
+      <p class="requirements" id="safety-note">BackUp is a wellness tool, not medical advice or a medical device.
+        Do not hold a rigid posture. Stop and see a clinician if you have pain, numbness or dizziness.</p>
+      <div id="webgl-warning" role="alert" hidden>
+        <b>WebGL is turned off in this browser.</b> The webcam will still work, with a simpler, less accurate pose model on your CPU. For the best results, turn it on:
+        <ul>
+          <li><b>GPU access is disabled in chrome://settings</b> (the most common cause): open <code>chrome://settings/system</code>, turn on <i>Use graphics acceleration when available</i>, click <i>Relaunch</i>, then check <code>chrome://gpu</code>.</li>
+          <li><b>Linux / Wayland:</b> start the browser with <code>--ozone-platform=x11</code>.</li>
+          <li><b>Firefox:</b> open <code>about:config</code> and set <code>webgl.disabled</code> to <code>false</code>.</li>
+        </ul>
+        <p style="margin-top:8px">Or <a href="./app/">open the app</a>: the webcam fallback and the demo both work without WebGL.</p>
+      </div>
+    </div>
+    <figure class="hero-shot">
+      <img src="assets/app-desktop.png" width="1280" height="673"
+           alt="The BackUp app in demo mode: the camera view with a green skeleton outline, the posture gauge reading upright, and one line of session stats"
+           loading="eager" fetchpriority="high">
+      <figcaption>Live demo — camera stays in your browser</figcaption>
+    </figure>
+  </div>
+</header>
+
+
+<footer>
+  <a href="privacy.html">Privacy</a> &middot;
+  <a href="privacy.html#consumer-health-data">Consumer Health Data Privacy Policy</a> &middot;
+  <a href="https://github.com/arii/posture-guard">GitHub</a> &middot;
+  <a href="https://github.com/sponsors/arii" style="color:inherit">&hearts; Sponsor</a> &middot;
+  <a href="https://github.com/arii/posture-guard/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a> &middot;
+  <a href="https://github.com/arii/posture-guard/blob/main/LICENSE">MIT License</a>
+</footer>
+
+<script src="prefetch.js" defer></script>
+<script>
+// Same probe as webglCanvas() in app/app.js: warn before the visitor clicks in.
+(function () {
+  function works(canvas) {
+    try { return Boolean(canvas.getContext("webgl2") || canvas.getContext("webgl")); } catch (e) { return false; }
+  }
+  var ok = (typeof OffscreenCanvas !== "undefined" && works(new OffscreenCanvas(1, 1))) ||
+    works(document.createElement("canvas"));
+  if (!ok) {
+    var w = document.getElementById("webgl-warning");
+    w.hidden = false;
+    w.classList.add("show");
+  }
+})();
+</script>
+</body>
+</html>
