@@ -58,7 +58,6 @@
   #sound-btn .i-off, #sound-btn[aria-pressed=true] .i-on { display: none; }
   #sound-btn[aria-pressed=true] .i-off { display: block; }
   body.getting-started header .icon-btn, body.getting-started #state-badge { display: none; }
-  #settling-note { display: none; }
   main { grid-template-columns: minmax(min(320px, 100%), 3fr) minmax(min(280px, 100%), 2fr); gap: 20px; padding: 20px; }
   main .panel { background: linear-gradient(#212733, #1b2029); border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); margin-bottom: 14px; }
   .stage { border-radius: 14px; }
@@ -71,13 +70,13 @@
   .body-tile .value { font-size: 15px; font-weight: 700; }
   .body-tile.warn .tile-icon { color: var(--warn); }
   .body-tile.bad .tile-icon { color: var(--bad); }
-  .body-tile.cued.warn { border-color: var(--warn); }
-  .body-tile.cued.bad { border-color: var(--bad); }
+  .body-tile.cued.warn { border-color: var(--warn); background: rgba(255, 179, 64, 0.1); }
+  .body-tile.cued.bad { border-color: var(--bad); background: rgba(255, 92, 92, 0.1); }
   .body-tile.focus { border-color: var(--warn); }
   .today-cols { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; text-align: center; }
   .today-cols > div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .today-cols b { font-size: 22px; }
-  .today-cols span { font-size: 12.5px; color: var(--muted); }
+  .today-cols b { font-size: 24px; }
+  .today-cols span { font-size: 13px; color: #a9b2bf; }
   .timeline { display: flex; height: 10px; margin-top: 16px; border-radius: 999px; overflow: hidden; background: #111419; gap: 1px; }
   .timeline div { height: 100%; min-width: 1px; }
   .timeline .good { background: var(--good); }
@@ -326,6 +325,10 @@
   #first-run .framing { font-weight: 600; }
   #first-run .framing.ok { color: var(--good); }
   #settling-note { color: var(--muted); font-size: 13px; }
+  #settling-bar { display: inline-block; width: 72px; height: 5px; margin-left: 6px; vertical-align: 2px; border-radius: 999px; background: #111419; border: 1px solid var(--line); overflow: hidden; }
+  #settling-fill { display: block; height: 100%; width: 0; background: var(--good); transition: width 0.1s linear; }
+  .gauge-line.cue { color: var(--warn); }
+  #demo-note { color: #d4dae2; background: rgba(0, 0, 0, 0.6); padding: 2px 8px; border-radius: 4px; }
   #sponsor-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--bg); }
   #sponsor-card .btn-row a.btn { flex: 1 1 auto; text-align: center; padding: 6px 12px; border-radius: 6px; background: var(--good); color: #0b2412; font-weight: 600; font-size: 13px; text-decoration: none; }
   #sponsor-card button { padding: 6px 12px; font-size: 13px; }
@@ -340,7 +343,7 @@
 <header>
   <h1>BackUp</h1>
   <span id="state-badge" class="badge post-start" tabindex="-1">waiting</span>
-  <span id="settling-note" hidden>Settling in: waiting for a clear good or slouched posture.</span>
+  <span id="settling-note" hidden><span id="settling-text">Settling in: waiting for a clear good or slouched posture.</span><span id="settling-bar" hidden><span id="settling-fill"></span></span></span>
   <span class="header-spacer"></span>
   <!-- Frame 04 header (#92): four round icon buttons, no text labels. Help is a Settings row. -->
   <button class="icon-btn post-start" id="pause" disabled aria-label="Pause" aria-pressed="false"><svg class="i-pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg><svg class="i-play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg></button>
@@ -441,6 +444,9 @@
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
         <path d="M57 25.5 A 86 86 0 0 1 143 25.5" fill="none" stroke="#ffb340" stroke-width="14"/>
         <path d="M143 25.5 A 86 86 0 0 1 186 100" fill="none" stroke="#ff5c5c" stroke-width="14"/>
+        <text x="41" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Good</text>
+        <text x="100" y="28" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Drift</text>
+        <text x="159" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Bad</text>
         <g id="needle-rotor" transform="rotate(0 100 100)"><line x1="100" y1="100" x2="34" y2="100" stroke="#e8ebf0" stroke-width="5" stroke-linecap="round"/></g>
         <circle cx="100" cy="100" r="7" fill="#e8ebf0"/>
         <text id="needle-text" x="100" y="124" text-anchor="middle" font-size="14" fill="#e8ebf0">--</text>
@@ -449,6 +455,7 @@
            fill that reaches the bell when the chime plays. No text inside the bar. -->
       <div class="gauge-status">
         <div id="gauge-praise" class="gauge-line" hidden><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Looking good</div>
+        <div id="gauge-cue" class="gauge-line cue" hidden></div>
         <div id="gauge-bar" class="gauge-bar" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div id="gauge-fill"></div>
           <svg id="gauge-bell" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.5a4 4 0 0 0-4 4V9L2.5 11v1h11v-1L12 9V5.5a4 4 0 0 0-4-4zM6.5 13a1.5 1.5 0 0 0 3 0z" fill="currentColor"/></svg>

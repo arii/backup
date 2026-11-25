@@ -14,8 +14,8 @@ export function demoPose(t) {
   const wobble = Math.sin(t * 1.7) * 0.003;
   lm[11] = { x: 0.6 + wobble, y: 0.62, visibility: 0.99 }; // unmirrored: left shoulder on the right
   lm[12] = { x: 0.4 + wobble, y: 0.62, visibility: 0.99 };
-  lm[23] = { x: 0.56, y: 0.95, visibility: 0.9 };
-  lm[24] = { x: 0.44, y: 0.95, visibility: 0.9 };
+  lm[23] = { x: 0.56, y: 0.92, visibility: 0.9 }; // #109: off the bottom edge, so the hip dots are never clipped
+  lm[24] = { x: 0.44, y: 0.92, visibility: 0.9 };
   const ex = slouch ? -0.02 : 0;
   const ey = slouch ? 0.09 : 0;
   lm[7] = { x: 0.54 + ex + wobble, y: 0.46 + ey, visibility: 0.99 };

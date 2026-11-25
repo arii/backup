@@ -1,6 +1,6 @@
 {
-  "version": "cc5bc7e7773a5e6c",
-  "totalBytes": 33449927,
+  "version": "76618b26afbfa6ef",
+  "totalBytes": 33451947,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 137626,
-      "sha256": "2c35dd1c709c76eb6e83ed4fe0c0237abdfcff7e632c6b901ea96a3a33d9f549"
+      "size": 138594,
+      "sha256": "2e2c1093d9363db2646fdf82c162a776cd5063200f8b6c883c3a235c9a2d2b85"
     },
     {
       "url": "breaks.js",
@@ -34,8 +34,8 @@
     },
     {
       "url": "demo-pose.js",
-      "size": 2063,
-      "sha256": "49f4ab2aa80d67ce83bfc2103d4c59c71f21a8f4c53517f0fd9e4f2040741397"
+      "size": 2127,
+      "sha256": "ef8df181d414c82f04735fb46a3658f6e4a98538bd4449b941a38abae6e506e1"
     },
     {
       "url": "feedback.js",
@@ -44,8 +44,8 @@
     },
     {
       "url": "index.html",
-      "size": 60403,
-      "sha256": "ecc134444ccb5d88ba3628ab1de712ba8ec0bc10eeacf8ce2c0591a1cfe4abe6"
+      "size": 61391,
+      "sha256": "92382c193ca7daf78d811a254dc5f4ca377ef3715335d82b807fcf9f7194bfbb"
     },
     {
       "url": "loading.js",
