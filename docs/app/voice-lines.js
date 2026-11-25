@@ -11,7 +11,7 @@
 import { CUE_METRICS, cueText } from "./posture-core.js";
 
 export const DEFAULT_PROMPT = "Please fix your posture";
-const TEST_LINE = "Hi. I'll let you know when you slouch.";
+export const TEST_LINE = "Hi. I'll let you know when you slouch.";
 
 // Rotating praise: varied wording keeps it from fading into background noise
 // (repeating one identical phrase habituates fastest).

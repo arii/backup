@@ -12,6 +12,8 @@ import {
   cameraProblem,
   isDeviceGoneError,
   isPauseShortcut,
+  minutesLabel,
+  nextOption,
   resolveSettings,
 } from "../../docs/app/settings.js";
 
@@ -112,4 +114,14 @@ test("a missing or unusable remembered camera is retried, a refusal is not", () 
   for (const name of ["NotAllowedError", "SecurityError", "TypeError"])
     assert.equal(isDeviceGoneError({ name }), false);
   assert.equal(isDeviceGoneError(null), false);
+});
+
+test("tap-to-change rows step through their options and wrap round", () => {
+  assert.equal(nextOption([30, 45, 60, 90, 0], 60), 90);
+  assert.equal(nextOption([30, 45, 60, 90, 0], 0), 30);
+  assert.equal(nextOption(["standard", "light"], "light"), "standard");
+  assert.equal(nextOption([5, 10, 20], "10"), 20, "values read from the DOM are strings");
+  assert.equal(nextOption([5, 10, 20], "nope"), 5);
+  assert.equal(minutesLabel(45), "Every 45 min");
+  assert.equal(minutesLabel(0), "Off");
 });

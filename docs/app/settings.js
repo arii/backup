@@ -94,3 +94,15 @@ export function isDeviceGoneError(err) {
   const name = err?.name;
   return name === "OverconstrainedError" || name === "NotFoundError" || name === "NotReadableError";
 }
+
+/** The value after `current` in `options`, wrapping round: a Settings row that is tapped to
+ *  change its value (storyboard v3 has no dropdowns). An unknown current gives the first. */
+export function nextOption(options, current) {
+  const i = options.findIndex((o) => String(o) === String(current));
+  return options[(i + 1) % options.length];
+}
+
+/** Text for a reminder interval in minutes: "Every 45 min", or "Off" for 0. */
+export function minutesLabel(min) {
+  return Number(min) > 0 ? `Every ${Number(min)} min` : "Off";
+}
