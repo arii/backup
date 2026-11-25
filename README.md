@@ -138,6 +138,14 @@ simpler fallback (TF.js MoveNet on the WASM/CPU backend). It is less accurate an
 and an on-screen notice says so. *Try the demo* works either way.
 Safari and phones are not tested or supported yet. Use a laptop or desktop; iOS
 Safari can stop the camera when the tab is in the background.
+
+**Known limitations:**
+- Glasses: glare or reflections can confuse the pose model.
+- Low light: tracking gets jumpy. Put light in front of you.
+- Side-angle or off-center cameras: readings assume the camera faces you.
+- Partial framing: head and both shoulders need to be in view.
+- One person only.
+- A webcam gives approximate estimates. Nothing here is clinically validated.
 To turn it on in Chrome or Edge, open `chrome://settings/system`, enable *Use
 graphics acceleration when available*, relaunch, and check `chrome://gpu`. On
 Linux/Wayland you may also need `--ozone-platform=x11`. In Firefox, set
