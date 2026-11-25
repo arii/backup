@@ -1,21 +1,21 @@
 {
-  "version": "72d29f7a006435a4",
-  "totalBytes": 33393258,
+  "version": "fc2633026262e652",
+  "totalBytes": 33408605,
   "files": [
     {
       "url": "activity.js",
-      "size": 7423,
-      "sha256": "cc8252f0db82e89423179398816ee6ba034fe7e18e7cd6059c85374567ee9cd7"
+      "size": 7841,
+      "sha256": "116bc6c17d44d7a987521a86cdda4e07a003b3888c5785fcb7e4591fd8d77dff"
     },
     {
       "url": "app.js",
-      "size": 107724,
-      "sha256": "02d93336ee85a55575421fe1b3f9e5e18b667f2f94dc953449af189ce27674e6"
+      "size": 109723,
+      "sha256": "378bbc97464e6de1c343186e4627a43c278ef063fb662ae3d9c600cb41578f05"
     },
     {
       "url": "breaks.js",
-      "size": 4500,
-      "sha256": "0e21a479c85d1c81955c0a66e761f18012dd0831777f762d1b8f61877a3ef785"
+      "size": 5170,
+      "sha256": "49bcc2338cb4d3b6f3747a2e33551d05e5f929638c24e74d62d3c270fb780c57"
     },
     {
       "url": "breathing.js",
@@ -44,8 +44,8 @@
     },
     {
       "url": "index.html",
-      "size": 43671,
-      "sha256": "70615daec388fca37f4810cfe9a7c08eaf5bb616e57253b8ae4bfafe1594e29e"
+      "size": 49888,
+      "sha256": "e2370df2bd55d2e21100c2b4b26ec8e3c728817d5fd3cbc9a801d528d75e49ea"
     },
     {
       "url": "loading.js",
@@ -54,8 +54,8 @@
     },
     {
       "url": "mini-view.js",
-      "size": 2714,
-      "sha256": "2664348f584a53fbef45a685edeeb5ed82b31a5421b09768f61e2cdfd4f26cdb"
+      "size": 3642,
+      "sha256": "8fa20adf38fa65db9aaced1a7601ec7db3a3e8bdf7fbc66cf19dd8f2b357e7ac"
     },
     {
       "url": "movenet-adapter.js",
@@ -69,13 +69,13 @@
     },
     {
       "url": "onboarding.js",
-      "size": 11525,
-      "sha256": "92d35740c7fe2093e16493d7054c9f1c6a7f9b91f94f5f2704021448eed9907f"
+      "size": 11553,
+      "sha256": "1ae2550c7102fa54de1104608e9d53b8cd4fea008f0a52bec24f194b251755ba"
     },
     {
       "url": "posture-core.js",
-      "size": 31714,
-      "sha256": "192a58820bb1a20e78f5d27777805dcfec1b92c28064816535f5c3f60736729d"
+      "size": 34963,
+      "sha256": "82d6ea4f58f4468abfe06320a2c53cfb576d94d39d0c27db1ec93aeac935c498"
     },
     {
       "url": "privacy.js",
@@ -99,8 +99,8 @@
     },
     {
       "url": "reveal.js",
-      "size": 6250,
-      "sha256": "e0b26aa7b87aaef80255068d8ca9dbafeb0cf1a5f2dfc14ca1e261e9d4a340a1"
+      "size": 6252,
+      "sha256": "6a155995c0f7b768d5ebbd2c2ecfc3e5b9ea90bc904bb9d469fc7ee31391cd2c"
     },
     {
       "url": "settings.js",
@@ -121,6 +121,11 @@
       "url": "sponsor.js",
       "size": 4167,
       "sha256": "9007007de520172fca44cfae169e123f92e36869c08668ebf8010fc4af969435"
+    },
+    {
+      "url": "timeline.js",
+      "size": 1836,
+      "sha256": "481d132679d6d769417cf98ed53d88b0f9d03192bda20d45f2ba32c24988cad3"
     },
     {
       "url": "vendor/LICENSE",

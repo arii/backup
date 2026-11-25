@@ -58,29 +58,14 @@ export const ONBOARDING_STEPS = Object.freeze([
   },
 ]);
 
-/** Closing sentence of the setup sequence (rendered in app.js). */
-const DONE_INTRO =
-  "Leave this tab open while you work. Pause any time. Move often and sit comfortably, not rigidly. " +
-  "Breaks, sounds and progress are optional, under Settings. Help has Learn the cues and Not working?";
-
-/** The first-session sequence. `stage` is the reveal stage (reveal.js) from which the card may
- *  appear on its own. The optional style, voice, breaks and shoulders cards were replaced by
- *  one unlock card per new Settings row (#96, storyboard v3 frame 07). */
+/** The first session (storyboard v3 frames 02 and 03, #98): two cards, one line and one button
+ *  each, x to skip. `stage` is the reveal stage (reveal.js) from which the card may appear on its
+ *  own. The optional style, voice, breaks and shoulders cards became unlock cards (#96, frame 07). */
 export const SETUP_STEPS = Object.freeze([
-  {
-    key: "framing",
-    stage: 2,
-    title: "Get comfortable",
-    intro: "Camera at eye level, about an arm's length away, head and shoulders in frame, light in front of you.",
-  },
-  {
-    key: "calibrate",
-    stage: 2,
-    title: "Remember your comfortable posture",
-    intro:
-      "Relax your shoulders and sit naturally. Save this position so reminders fit you. No need to pose perfectly.",
-  },
-  { key: "done", stage: 2, title: "You’re ready", intro: DONE_INTRO },
+  // Frame 02: shown once tracking starts, while the gauge still reads "Finding you".
+  { key: "framing", stage: 1, title: "Head and shoulders in frame", action: "Continue" },
+  // Frame 03: once tracking has settled; saving the posture closes the card.
+  { key: "calibrate", stage: 2, title: "Sit comfortably", action: "Save my posture" },
 ]);
 
 const stepKeys = SETUP_STEPS.map((s) => s.key);
@@ -133,6 +118,15 @@ export function completeStep(store, key) {
   const p = setupProgress(store);
   const done = p.done.includes(key) ? p.done : [...p.done, key];
   return writeProgress(store, { step: key, done, skipped: p.skipped.filter((k) => k !== key) });
+}
+
+/** Offer a done step again when its result was not kept: "Save my posture" pressed in the
+ *  demo saves nothing (its poses are not yours), so the camera session asks again. */
+export function undoStep(store, key) {
+  const p = setupProgress(store);
+  if (!p.done.includes(key)) return store;
+  store.setupDone = false;
+  return writeProgress(store, { step: p.step, done: p.done.filter((k) => k !== key), skipped: p.skipped });
 }
 
 export function skipStep(store, key) {

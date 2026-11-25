@@ -281,16 +281,53 @@ class PostureBaseline {
   }
 }
 
-function deviationZone(m, baseline, cfg) {
-  const ref = baseline.metrics;
+const METRICS = ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"];
+
+/** The saved good posture as each metric's zero point, capped at the metric's threshold, so
+ *  a camera off to one side doesn't read as a slouch forever, and a slouch saved by mistake
+ *  can hide at most one threshold's worth of it. */
+export function postureZero(good, cfg) {
+  if (good === null || good === undefined) return null;
+  const zero = {};
+  for (const k of METRICS) {
+    const v = k === "trunk_lean_deg" && !good.trunk_lean_available ? 0 : good[k];
+    zero[k] = isFinite_(v) ? Math.max(-cfg[k], Math.min(cfg[k], v)) : 0;
+  }
+  return zero;
+}
+
+/** Metrics measured from the zero point (unchanged without one). */
+function fromZero(m, zero) {
+  if (zero === null) return m;
+  return scored({
+    head_forward_deg: m.head_forward_deg - zero.head_forward_deg,
+    trunk_lean_deg: m.trunk_lean_deg - zero.trunk_lean_deg,
+    head_tilt_deg: m.head_tilt_deg - zero.head_tilt_deg,
+    shoulder_level_deg: m.shoulder_level_deg - zero.shoulder_level_deg,
+    trunk_lean_available: m.trunk_lean_available,
+  });
+}
+
+// A change from the running baseline counts only when it takes the metric further from
+// its zero than the baseline is, and the metric is itself outside its exit band. Moving
+// back toward level, or a pose inside the band, is never a fault: without this, after
+// minutes at -5 degrees a level 2.9 degree pose read as "Shoulders uneven" (#97).
+function awayFromBaseline(m, ref, key, cfg) {
+  const v = m[key];
+  const off = Math.abs(v) > badExit(cfg, cfg[key]) && Math.abs(v) > Math.abs(ref[key]);
+  return off ? v - ref[key] : 0;
+}
+
+/** m and ref are both measured from the zero point. */
+function deviationZone(m, ref, cfg) {
   if (ref === null) return "good";
   const pairs = [
-    [m.head_forward_deg - ref.head_forward_deg, cfg.head_forward_deg],
-    [m.head_tilt_deg - ref.head_tilt_deg, cfg.head_tilt_deg],
-    [m.shoulder_level_deg - ref.shoulder_level_deg, cfg.shoulder_level_deg],
+    [awayFromBaseline(m, ref, "head_forward_deg", cfg), cfg.head_forward_deg],
+    [awayFromBaseline(m, ref, "head_tilt_deg", cfg), cfg.head_tilt_deg],
+    [awayFromBaseline(m, ref, "shoulder_level_deg", cfg), cfg.shoulder_level_deg],
   ];
   if (cfg.trunk_lean_required && m.trunk_lean_available) {
-    pairs.push([m.trunk_lean_deg - ref.trunk_lean_deg, cfg.trunk_lean_deg]);
+    pairs.push([awayFromBaseline(m, ref, "trunk_lean_deg", cfg), cfg.trunk_lean_deg]);
   }
   return classify(pairs, cfg);
 }
@@ -322,10 +359,28 @@ export class PostureStateMachine {
     this.goodStateSince = null;
     this.positiveAt = null;
     this.positiveCount = 0; // praises so far in the current GOOD streak
+    this.zero = null; // the saved good posture (postureZero), or null
+    this.zeroEnabled = true;
   }
 
   setBaselineAnchor(m) {
     if (this.baseline !== null) this.baseline.setAnchor(m);
+  }
+
+  /** Measure every metric from the saved good posture (null: from level). */
+  setZero(good) {
+    this.zero = postureZero(good, this.th);
+  }
+
+  /** The zero point in use: none while the drift baseline is off (the demo's poses). */
+  get activeZero() {
+    return this.zeroEnabled ? this.zero : null;
+  }
+
+  /** The running baseline measured from the zero point, or null. */
+  get baselineFromZero() {
+    if (this.baseline === null || this.baseline.metrics === null) return null;
+    return fromZero(this.baseline.metrics, this.activeZero);
   }
 
   /** Synthetic pose sources (the demo) have no real desk to adapt to. Without
@@ -333,6 +388,7 @@ export class PostureStateMachine {
    *  that frame is a demo slouch pose, every later good phase scores as a
    *  deviation and the machine can never return to good (issue #67). */
   setDriftBaselineEnabled(enabled) {
+    this.zeroEnabled = enabled; // a saved webcam posture says nothing about the demo's poses
     if (!enabled) {
       this.baseline = null;
     } else if (this.baseline === null && this.th.baseline_deviation.enabled) {
@@ -343,10 +399,11 @@ export class PostureStateMachine {
   update(result, now) {
     if (result.kind === "unreliable") return this.onUnreliable(result, now);
     this.absentSince = null;
-    let zone = zoneOf(result, this.th);
+    const m = fromZero(result, this.activeZero);
+    let zone = zoneOf(m, this.th);
     if (this.baseline !== null) {
       this.baseline.update(result, now);
-      const baseZone = deviationZone(result, this.baseline, this.th);
+      const baseZone = deviationZone(m, this.baselineFromZero, this.th);
       if (zone === "bad" || baseZone === "bad") zone = "bad";
       else if (zone === "good" && baseZone === "good") zone = "good";
       else zone = "neutral";
@@ -558,12 +615,13 @@ export function calibratedNeedle(m, cal) {
   return clamp(2.0 * proj - 1.0);
 }
 
-export function rawNeedle(m, cfg, cal = null) {
+/** Without a usable slouch recording, thresholds measured from the zero point. */
+export function rawNeedle(m, cfg, cal = null, zero = null) {
   if (cal !== null) {
     const v = calibratedNeedle(m, cal);
     if (v !== null) return v;
   }
-  return thresholdNeedle(m, cfg);
+  return thresholdNeedle(fromZero(m, zero), cfg);
 }
 
 export class NeedleSmoother {
@@ -780,20 +838,23 @@ function cueSide(metric, signed, mirror) {
   return signed * mirror > 0 ? "right" : "left";
 }
 
-/** What is off and how to fix it, or null. */
-export function postureCue(m, cfg, baseline = null, mirror = 1.0) {
+/** What is off and how to fix it, or null. A metric is named only while it is past its
+ *  threshold on this frame, measured from the zero point or as a move away from the
+ *  running baseline (#97), so a cue never names something that is back in range. */
+export function postureCue(m, cfg, baseline = null, mirror = 1.0, zero = null) {
   const trunkOk = cfg.trunk_lean_required && m.trunk_lean_available;
+  const rel = fromZero(m, zero);
+  const ref = baseline === null ? null : fromZero(baseline, zero);
   let best = null; // [ratio, metric, signed]
   for (const metric of CUE_METRICS) {
     if (metric === "trunk_lean" && !trunkOk) continue;
-    const value = m[`${metric}_deg`];
-    const threshold = cfg[`${metric}_deg`];
+    const key = `${metric}_deg`;
+    const threshold = cfg[key];
     if (threshold <= 0) continue;
-    const exitAt = badExit(cfg, threshold);
-    const candidates = [value];
-    if (baseline !== null) candidates.push(value - baseline[`${metric}_deg`]);
+    const candidates = [rel[key]];
+    if (ref !== null) candidates.push(awayFromBaseline(rel, ref, key, cfg));
     for (const signed of candidates) {
-      if (Math.abs(signed) <= exitAt) continue;
+      if (!(Math.abs(signed) > threshold)) continue;
       const ratio = Math.abs(signed) / threshold;
       if (best === null || ratio > best[0]) best = [ratio, metric, signed];
     }
@@ -825,8 +886,10 @@ export class PostureEngine {
     if (this.calibration.version !== this.calibrationVersion) {
       this.calibrationVersion = this.calibration.version;
       this.machine.setBaselineAnchor(this.calibration.centroids.good);
+      this.machine.setZero(this.calibration.centroids.good);
     }
     const tr = this.machine.update(result, now);
+    const zero = this.machine.activeZero;
     if (result.kind === "scored") {
       const cal = this.calibration.calibration;
       const usable = cal !== null && axisOk(cal);
@@ -834,15 +897,17 @@ export class PostureEngine {
         this.needle.reset();
         this.needleCalibrated = usable;
       }
-      this.needle.update(rawNeedle(result, this.config.scoring, usable ? cal : null), now);
+      this.needle.update(rawNeedle(result, this.config.scoring, usable ? cal : null, zero), now);
     }
     const baseline = this.machine.baseline === null ? null : this.machine.baseline.metrics;
     const cue =
-      result.kind === "scored" ? postureCue(result, this.config.scoring, baseline, mirrorSign(landmarks)) : null;
+      result.kind === "scored" ? postureCue(result, this.config.scoring, baseline, mirrorSign(landmarks), zero) : null;
     const nudges = tr.nudge !== Nudge.NONE ? [tr.nudge] : [];
     if (tr.recovered && this.config.feedback.recovery_chime.enabled) nudges.push(Nudge.RECOVERY);
     const hold = this.machine.holdProgress(now);
-    return { result, transition: tr, needle: this.needle.value, nudges, cue, hold };
+    // `relative`: the metrics as scored, from the zero point (the body-part tiles show these).
+    const relative = result.kind === "scored" ? fromZero(result, zero) : null;
+    return { result, relative, transition: tr, needle: this.needle.value, nudges, cue, hold };
   }
 
   /** A frame while an activity suppresses posture feedback (eye break, demo, breathing
@@ -852,7 +917,16 @@ export class PostureEngine {
   hold(landmarks, _now) {
     const result = scorePose(landmarks, this.config.scoring);
     const tr = transition(this.machine.state, Nudge.NONE);
-    return { result, transition: tr, needle: this.needle.value, nudges: [], cue: null, hold: null, held: true };
+    return {
+      result,
+      relative: null,
+      transition: tr,
+      needle: this.needle.value,
+      nudges: [],
+      cue: null,
+      hold: null,
+      held: true,
+    };
   }
 
   /** Demo poses are synthetic: turn the drift baseline off while they run and

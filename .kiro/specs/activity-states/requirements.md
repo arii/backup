@@ -16,7 +16,7 @@ hurt by looking at something far away.
 ## Requirements
 
 ### Requirement 1: One source of truth
-1. THE App SHALL hold exactly one current activity state, one of: TRACKING, PAUSED, SILENT_TEST, PRACTICE, BREATH_CHECK, BREATHE_GUIDE, EYE_BREAK, DEMO.
+1. THE App SHALL hold exactly one current activity state, one of: TRACKING, PAUSED, SILENT_TEST, PRACTICE, BREATH_CHECK, BREATHE_GUIDE, EYE_BREAK, DEMO, SETUP.
 2. EVERY decision to remind, cue, praise, speak, tally, open a prompt or show a first-run card SHALL read the policy of the current state, not a separate flag.
 3. THE machine SHALL be pure: no DOM, no clock. Every call SHALL take the time as an argument.
 
@@ -29,7 +29,7 @@ hurt by looking at something far away.
 
 ### Requirement 3: Layering and exclusion
 1. PAUSED, SILENT_TEST and PRACTICE are modes. A mode SHALL cancel any running foreground activity and SHALL block starting one.
-2. BREATH_CHECK, BREATHE_GUIDE, EYE_BREAK and DEMO are foreground activities and SHALL be mutually exclusive, with these existing exceptions: starting a demo or an eye break replaces an open eye break or demo, and the breathing guide hands off to the breath check.
+2. BREATH_CHECK, BREATHE_GUIDE, EYE_BREAK, DEMO and SETUP are foreground activities and SHALL be mutually exclusive, with these existing exceptions: starting a demo or an eye break replaces an open eye break or demo, and the breathing guide hands off to the breath check.
 3. THE user SHALL still be able to pause during a silent test. When the pause ends, the test continues.
 4. A silent test and practice SHALL exclude each other, and neither SHALL start while paused.
 5. PAUSED SHALL always win: when paused the policy is the PAUSED policy, whatever else is active.
@@ -56,3 +56,9 @@ hurt by looking at something far away.
 1. WHILE a suppressing activity runs, THE App SHALL show a gentle label (for example "Eye break, posture paused"). It SHALL contain no health claim and no judgement.
 2. THE label SHALL be announced politely (`aria-live`) and SHALL NOT need colour to be understood.
 3. Progress views SHALL NOT count activity time as slouching or as good posture.
+
+### Requirement 8: Getting started (SETUP, implemented)
+1. WHILE the automatic first-session card (`#first-run`, frames 02 and 03 of #98) is open, THE state SHALL be SETUP: the engine tracks (the gauge and *Save my posture* need it), and there SHALL be no reminder, praise, speech or prompt, and no tally.
+2. A slouch reading SHALL NOT hide the card. Before, a reminder state hid it, and since the posture was not yet saved the reading was often the camera angle, so the setup stalled.
+3. A pause SHALL end SETUP like any foreground activity; when the card shows again, SETUP SHALL start again. SETUP SHALL have no grace: coaching starts when the card closes.
+4. The card opened by hand ("Show the intro again") SHALL NOT start SETUP.

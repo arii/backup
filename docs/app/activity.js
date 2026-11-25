@@ -21,6 +21,7 @@ export const ACTIVITY = Object.freeze({
   BREATHE_GUIDE: "breathe_guide",
   EYE_BREAK: "eye_break",
   DEMO: "demo",
+  SETUP: "setup",
 });
 
 // After a suppressing activity ends, reminders, cue and praise stay off for this
@@ -30,7 +31,13 @@ const GRACE_S = 10;
 const REASONS = Object.freeze(["completed", "cancelled", "timeout", "left_frame", "mode"]);
 
 const MODES = Object.freeze([ACTIVITY.PAUSED, ACTIVITY.SILENT_TEST, ACTIVITY.PRACTICE]); // highest priority first
-const FOREGROUND = Object.freeze([ACTIVITY.BREATH_CHECK, ACTIVITY.BREATHE_GUIDE, ACTIVITY.EYE_BREAK, ACTIVITY.DEMO]);
+const FOREGROUND = Object.freeze([
+  ACTIVITY.BREATH_CHECK,
+  ACTIVITY.BREATHE_GUIDE,
+  ACTIVITY.EYE_BREAK,
+  ACTIVITY.DEMO,
+  ACTIVITY.SETUP,
+]);
 
 const OFF = {
   frames: true,
@@ -83,6 +90,11 @@ const TABLE = Object.freeze({
     label: "Break, posture paused",
     graceAfter_s: GRACE_S,
   }),
+  // Getting started (frames 02 and 03): the gauge tracks so the person can see it and save
+  // their posture, but nothing reminds, praises or prompts until they are set up. Before,
+  // a slouch reading (often just the camera angle, before the posture was saved) hid the
+  // card behind a reminder and the setup stalled.
+  [ACTIVITY.SETUP]: row({ setupCards: true }),
 });
 
 // Tracking again, scoring resumed, but nothing that reminds or praises yet.

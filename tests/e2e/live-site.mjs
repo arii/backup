@@ -753,7 +753,7 @@ try {
       demoVisible: document.getElementById("start-demo").offsetParent !== null,
     }));
     check("first run: the acknowledgement persists across a reload", again.cardHidden && again.demoVisible, again);
-    await page.click("#help-btn");
+    await page.click("#row-help"); // Help is the last Settings row since #92
     const help = await page.evaluate(() => ({
       open: document.getElementById("help-dialog").open,
       text: document.getElementById("help-body").textContent,
@@ -783,6 +783,9 @@ try {
       ),
     );
     await page.keyboard.press("Escape");
+    // Frames 02-03: no header icons until the first-session card is done or skipped.
+    await page.click("#first-run-skip"); // 1 of 2
+    await page.click("#first-run-skip"); // 2 of 2
     await page.click("#settings-btn"); // every setting is one click away in Settings
     await page.click("#progress-export", { trial: true });
     await page.screenshot({ path: path.join(outDir, "app-progress-desktop.png"), fullPage: true });
@@ -834,8 +837,7 @@ try {
     await page.waitForFunction(() => document.getElementById("state-badge").textContent === "good posture", null, {
       timeout: 15000,
     });
-    const before = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days));
-    await page.click("#help-btn");
+    await page.click("#row-help"); // Help is the last Settings row since #92
     await page.click("#help-practice");
     await page
       .waitForFunction(() => document.getElementById("state-badge").textContent === "practice", null, { timeout: 5000 })
@@ -846,6 +848,8 @@ try {
       step: document.getElementById("practice-text").textContent,
     }));
     check("practice: Learn the cues starts a silent practice", practice.on && practice.badge === "practice", practice);
+    // Read after practice starts: starting it saves the tracked time from before it, which is not practice time.
+    const before = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("posture-guard:v1")).days));
     await page.click("#practice-next");
     await page.waitForTimeout(300);
     const focus = await page.evaluate(() => document.getElementById("t-head_forward").classList.contains("focus"));
@@ -878,7 +882,7 @@ try {
     await page.click("#practice-stop");
     await page.waitForFunction(() => !document.body.classList.contains("practicing"));
     // Learn the cues ends with a "Try a breath check" button (finishing the last step shows it).
-    await page.click("#help-btn");
+    await page.click("#row-help"); // Help is the last Settings row since #92
     await page.click("#help-practice");
     for (let i = 0; i < 12 && (await page.evaluate(() => document.body.classList.contains("practicing"))); i++) {
       await page.click("#practice-next");
@@ -953,55 +957,63 @@ try {
     check("a11y: banner is a polite status region", pre.bannerRole === "status" && pre.bannerLive === "polite", pre);
     await page.click("#start-demo");
     await page.waitForTimeout(1500);
-    // The guide waits for tracking to settle (stage 2, about 10 s of clear posture).
+    // Frame 02: the first card shows as soon as tracking runs, with "Finding you" in place of the gauge.
     await page.waitForSelector("#first-run:visible", { timeout: 20000 }).catch(() => {});
-    const post = await page.evaluate(() => ({
-      good: document.getElementById("row-posture").disabled,
-      brk: document.getElementById("row-break").disabled,
-      focus: document.activeElement?.id,
-      guide: !document.getElementById("first-run").hidden,
-      framing: document.querySelector("#first-run-body .framing")?.textContent,
-    }));
+    const post = await page.evaluate(() => {
+      const vis = (id) => !!document.getElementById(id)?.offsetParent;
+      return {
+        good: document.getElementById("row-posture").disabled,
+        brk: document.getElementById("row-break").disabled,
+        focus: document.activeElement?.id,
+        count: document.getElementById("first-run-count").textContent,
+        heading: document.getElementById("first-run-heading").textContent,
+        button: document.getElementById("first-run-next").textContent,
+        cardButtons: document.querySelectorAll("#first-run button").length,
+        icons: ["pause", "sound-btn", "break-btn", "settings-btn"].filter(vis),
+        today: vis("today-panel"),
+      };
+    });
     check("controls: enabled after the demo starts", !post.good && !post.brk, post);
-    check("a11y: focus moves to the status badge after Start", post.focus === "state-badge", post);
+    // The badge is hidden during getting started (frame 02), so focus goes to the card heading.
+    check("a11y: focus moves to the first-session card after Start", post.focus === "first-run-heading", post);
     check(
-      "first run: the guide card appears after Start with live framing",
-      post.guide && /in view/.test(post.framing || ""),
+      "first run (frame 02): 1 of 2, one line, Continue and x; no header icons or Today panel",
+      /^1 of 2$/i.test(post.count) &&
+        post.heading === "Head and shoulders in frame" &&
+        post.button === "Continue" &&
+        post.cardButtons === 2 &&
+        post.icons.length === 0 &&
+        !post.today,
       post,
     );
     await page.click("#first-run-next");
-    check(
-      "first run: step 2 offers calibration",
-      (await page.textContent("#first-run-heading")) === "Remember your comfortable posture" &&
-        (await page.isVisible("#first-run-body button")),
+    await page.waitForFunction(
+      () => document.getElementById("first-run-heading").textContent === "Sit comfortably",
+      null,
+      {
+        timeout: 20000,
+      },
     );
     check(
-      "first run: the baseline instructions do not ask for a slouch recording",
-      !/slouch/i.test(await page.textContent("#first-run-body")),
-    );
-    await page.click("#first-run-body button");
-    await page.waitForFunction(() => /Saved/.test(document.querySelector("#first-run-body").textContent));
-    check(
-      "first run: one comfortable-posture recording is enough to continue",
-      !(await page.isDisabled("#first-run-next")) &&
-        (await page.evaluate(() => !!JSON.parse(localStorage.getItem("posture-guard:v1")).calibration.good)),
+      "first run (frame 03): 2 of 2, Sit comfortably, Save my posture",
+      /^2 of 2$/i.test(await page.textContent("#first-run-count")) &&
+        (await page.textContent("#first-run-next")) === "Save my posture",
     );
     await page.click("#first-run-next");
-    check(
-      "first run: the third card finishes setup without adding configuration, and points to Settings and Help",
-      /You’re ready/.test(await page.textContent("#first-run-heading")) &&
-        /Settings/.test(await page.textContent("#first-run-body")) &&
-        /Help/.test(await page.textContent("#first-run-body")) &&
-        /Step 3 of 3/.test(await page.textContent("#first-run-count")) &&
-        (await page.locator("#first-run-body button").count()) === 0,
-    );
-    await page.click("#first-run-next");
+    await page.waitForFunction(() => document.getElementById("first-run").hidden, null, { timeout: 15000 });
     const done = await page.evaluate(() => ({
-      hidden: document.getElementById("first-run").hidden,
+      calibrated: !!JSON.parse(localStorage.getItem("posture-guard:v1")).calibration?.good,
       flag: JSON.parse(localStorage.getItem("posture-guard:v1")).firstRunDone === true,
+      icons: ["pause", "sound-btn", "break-btn", "settings-btn"].filter(
+        (id) => !!document.getElementById(id).offsetParent,
+      ),
     }));
-    check("first run: Done hides the guide and stores the flag", done.hidden && done.flag, done);
-    await page.click("#help-btn");
+    check(
+      "first run: saving the posture closes the card and the header icons appear; a demo posture is not stored",
+      !done.calibrated && done.flag && done.icons.length === 4,
+      done,
+    );
+    await page.click("#row-help"); // Help is the last Settings row since #92
     await page.click("#help-notworking");
     await page.click("#intro-again");
     check(
@@ -1014,7 +1026,7 @@ try {
     // P shortcut: a fixed default since #96 (on), still read from store.pauseShortcut.
     await page.click("#first-run-skip");
     await page.keyboard.press("p");
-    check("shortcut: P pauses by default", (await page.textContent("#pause")) === "Resume");
+    check("shortcut: P pauses by default", (await page.getAttribute("#pause", "aria-label")) === "Resume");
     await page.keyboard.press("p");
     // Reduced motion: no transitions on the hold bar, score bar or banner.
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1056,7 +1068,7 @@ try {
       sm.hidden && sm.mini === 0 && !sm.cameraTip,
       sm,
     );
-    await page.click("#help-btn");
+    await page.click("#row-help"); // Help is the last Settings row since #92
     await page.click("#help-notworking");
     const asked = await page.evaluate(() => ({
       shown: !document.getElementById("setup-panel").hidden,
@@ -1476,7 +1488,7 @@ try {
       });
       check(
         "no WebGL: camera button stays enabled and the notice explains the fallback",
-        !gl && !cam.disabled && /webcam/i.test(cam.text) && cam.help === "block",
+        !gl && !cam.disabled && /camera/i.test(cam.text) && cam.help === "block",
         cam,
       );
       const t0 = Date.now();
@@ -1936,13 +1948,8 @@ try {
         await page.setViewportSize({ width: w, height: h });
         const m = await minimalStart(page);
         check(
-          `minimal start (${w}px): at most 40 words and 5 controls, header is only Help, no status text, Not working? hidden`,
-          m.words <= 40 &&
-            m.controls <= 5 &&
-            m.header.join() === "help-btn" &&
-            !m.leaked &&
-            !m.setupPanel &&
-            m.disclaimer,
+          `minimal start (${w}px, frame 01): at most 40 words and 5 controls, no header buttons, no status text, Not working? hidden`,
+          m.words <= 40 && m.controls <= 5 && m.header.join() === "" && !m.leaked && !m.setupPanel && m.disclaimer,
           m,
         );
       }
@@ -1967,10 +1974,8 @@ try {
       const { page, errors } = await newPage(browser, { extra: { firstRunDone: false } });
       await page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.querySelector("#good-pct").closest("[data-stage]").hidden, null, {
-        timeout: 5000,
-      });
-      check("staged reveal: 'This session' appears with the first scored frame", true);
+      await page.waitForFunction(() => !document.getElementById("finding").hidden, null, { timeout: 5000 });
+      check("staged reveal (frame 02): 'Finding you' holds the gauge's place from the first scored frame", true);
       await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
         timeout: 8000,
       });
@@ -2041,6 +2046,7 @@ try {
               (e) => !e.closest("#start-overlay"),
             ).length,
             mini: document.querySelectorAll(".mini-view").length,
+            unlock: vis(document.getElementById("unlock-card")),
             gaugeLabel: document.getElementById("gauge-svg").getAttribute("aria-label"),
           };
         });
@@ -2065,8 +2071,12 @@ try {
           r.gaugeLabel,
         );
         check(
-          `main screen (${name}): no panels, details or mini views`,
-          r.panels.length === 0 && !r.summaries && !r.mini,
+          `main screen (${name}, frames 04 to 06): the gauge, body-part and Today panels only; no details or mini views`,
+          // Frame 07: an unlock card stands in for the Today panel for that moment.
+          (r.panels.join() === "gauge,body-panel,today-panel" ||
+            (r.panels.join() === "gauge,body-panel" && r.unlock)) &&
+            !r.summaries &&
+            !r.mini,
           r,
         );
         await page.screenshot({ path: path.join(outDir, `main-${name}.png`) });
@@ -2075,8 +2085,8 @@ try {
         [...document.querySelectorAll("header button")].filter((e) => e.offsetParent).map((e) => e.id),
       );
       check(
-        "main screen: the header has Pause, Help and Settings only",
-        header.join() === "pause,help-btn,settings-btn",
+        "main screen (frame 04): the header has the four icon buttons, pause, sound, break and gear",
+        header.join() === "pause,sound-btn,break-btn,settings-btn",
         header,
       );
       await page.click("#settings-btn");
@@ -2139,12 +2149,12 @@ try {
       await page.click("#settings-btn");
       await shot("3-settings");
       await page.click("#settings-close");
-      await page.click("#help-btn");
+      await page.click("#row-help"); // Help is the last Settings row since #92
       await page.click("#help-practice");
       await page.waitForTimeout(800);
       await shot("4-learn-the-cues");
       await page.click("#practice-stop");
-      await page.click("#help-btn");
+      await page.click("#row-help"); // Help is the last Settings row since #92
       await page.click("#help-notworking");
       await shot("5-not-working");
       check(`review screenshots (${width} px): no page errors`, errors.length === 0, errors);
@@ -2307,24 +2317,28 @@ try {
       await page.click("#start-demo");
       await page.waitForFunction(() => !document.getElementById("first-run").hidden, null, { timeout: 20000 });
       check(
-        "setup: the card opens by itself, without taking focus",
-        (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
+        "setup: the card opens by itself and holds the focus the hidden badge had",
+        (await page.evaluate(() => document.activeElement?.id)) === "first-run-heading",
       );
-      check(
-        "setup: every card has Skip this step and Skip all, use defaults",
-        (await visible(page, "#first-run-skip")) &&
-          (await page.textContent("#first-run-skip-all")).trim() === "Skip all, use defaults",
-      );
+      check("setup: every card has x to skip it", await visible(page, "#first-run-skip"));
       const before = await stored(page);
-      await page.click("#first-run-skip-all");
+      await page.click("#first-run-skip");
+      await page.waitForFunction(
+        () => document.getElementById("first-run-heading").textContent === "Sit comfortably",
+        null,
+        {
+          timeout: 20000,
+        },
+      );
+      await page.click("#first-run-skip");
       const after = await stored(page);
       check(
-        "setup: Skip all closes the card and stores setupDone",
+        "setup: x on both cards closes the sequence and stores setupDone",
         !(await visible(page, "#first-run")) && after.setupDone === true,
         after,
       );
       check(
-        "setup: Skip all records no consent and enables nothing that is off by default",
+        "setup: skipping records no consent and enables nothing that is off by default",
         after.consent === undefined &&
           !after.breathingMoments &&
           !after.spokenPraise &&
@@ -2334,14 +2348,14 @@ try {
         after,
       );
       check(
-        "setup: focus goes to the status badge after the user pressed Skip all",
+        "setup: focus goes to the status badge after the last x",
         (await page.evaluate(() => document.activeElement?.id)) === "state-badge",
       );
       check("setup: skipped steps are recorded", after.setup.skipped.includes("framing"), after.setup);
       await page.reload();
       await page.click("#start-demo");
       await page.waitForTimeout(1500);
-      check("setup: after Skip all the card does not return on reload", !(await visible(page, "#first-run")));
+      check("setup: after skipping, the card does not return on reload", !(await visible(page, "#first-run")));
       page.once("dialog", (d) => d.accept());
       await page.click("#progress-delete");
       await page.waitForLoadState("load");

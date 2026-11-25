@@ -14,6 +14,7 @@ import {
   gaugeView,
   gaugeZone,
   ZONE_COLOR,
+  tileStates,
   ZONE_DEGREES,
   zoneAngle,
   zoneOfAngle,
@@ -57,12 +58,13 @@ test("angle transform about the dial centre", () => {
   assert.equal(angleTransform(112.5), "rotate(112.5 100 100)");
 });
 
-test("zones follow the state machine, not the averaged needle", () => {
+test("zones follow the state machine and the slipping hold, not the averaged needle", () => {
   assert.equal(gaugeZone(State.BAD_CHIME, true, false), "bad");
   assert.equal(gaugeZone(State.BAD_VOICE, false, false), "bad", "still bad while nobody is scored");
   assert.equal(gaugeZone(State.GOOD, true, false), "good");
-  assert.equal(gaugeZone(State.GOOD, true, true), "drift");
-  assert.equal(gaugeZone(State.NO_PERSON, true, false), "drift", "settling in is in between");
+  assert.equal(gaugeZone(State.GOOD, true, true), "drift", "slipping toward the chime is amber");
+  assert.equal(gaugeZone(State.NO_PERSON, true, true), "drift", "slipping while settling in is amber too");
+  assert.equal(gaugeZone(State.NO_PERSON, true, false), "none", "settling in is grey (frame 02)");
   assert.equal(gaugeZone(State.NO_PERSON, false, false), "none");
 });
 
@@ -90,7 +92,12 @@ test("golden timeline: needle, label and skeleton agree on every frame (frame 48
   golden.frames.forEach((frame, i) => {
     if (frame.calibrate) engine.calibration.start(frame.calibrate);
     const out = engine.process(landmarksFrom(frame.pose), frame.t);
-    const view = gaugeView(out.transition.state, out.result.kind === "scored", out.cue != null, out.needle);
+    const view = gaugeView(
+      out.transition.state,
+      out.result.kind === "scored",
+      out.hold?.kind === "slipping",
+      out.needle,
+    );
     assertAgrees(view, `frame ${i} t=${frame.t} state=${out.transition.state}`);
     if (view.zone === "bad") sawBad += 1;
     if (i === 48) {
@@ -101,4 +108,18 @@ test("golden timeline: needle, label and skeleton agree on every frame (frame 48
     }
   });
   assert.ok(sawBad > 10, "the fixture has a real slouch to check");
+});
+
+test("body-part tiles: the cued metric takes the zone colour, others amber only past their threshold", () => {
+  const cfg = { head_forward_deg: 8, head_tilt_deg: 8, shoulder_level_deg: 6, trunk_lean_deg: 7 };
+  const m = { head_forward_deg: 15, head_tilt_deg: 3, shoulder_level_deg: 2, trunk_lean_deg: 11 };
+  assert.deepEqual(tileStates("drift", "head_forward", m, cfg), {
+    head_forward: "warn",
+    head_tilt: "ok",
+    shoulder_level: "ok",
+    trunk_lean: "warn",
+  });
+  assert.equal(tileStates("bad", "head_forward", m, cfg).head_forward, "bad", "frame 06: the cued tile is red");
+  assert.equal(tileStates("good", null, { head_forward_deg: 2 }, cfg).head_forward, "ok");
+  assert.equal(tileStates("bad", null, {}, cfg).trunk_lean, "ok", "no reading is not a fault");
 });

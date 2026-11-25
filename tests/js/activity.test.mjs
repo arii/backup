@@ -97,6 +97,27 @@ test("breath check keeps today's scoring but no reminders or praise, and no grac
   assert.equal(m.policy(31).reminders, true);
 });
 
+test("getting started tracks and shows its card, but never reminds, praises or prompts, and has no grace", () => {
+  const m = new ActivityMachine();
+  assert.equal(m.start(A.SETUP, 0), true);
+  const p = m.policy(0);
+  assert.equal(p.engine, "track", "the gauge and Save my posture need live scoring");
+  assert.equal(p.setupCards, true);
+  for (const f of ["reminders", "praise", "prompts", "speak"]) assert.equal(p[f], false, f);
+  assert.equal(p.score, "none", "setup time is not coached time");
+  assert.equal(m.start(A.EYE_BREAK, 1), false, "no break starts on top of getting started");
+  const s = new ActivityMachine();
+  s.start(A.SETUP, 0);
+  assert.equal(s.start(A.PAUSED, 1), true, "a pause still wins and ends it (app.js reopens the card after)");
+  assert.equal(s.isActive(A.SETUP), false);
+  s.stop(A.PAUSED, 2);
+  assert.equal(s.inGrace(2), false, "no grace after getting started");
+  const done = new ActivityMachine();
+  done.start(A.SETUP, 0);
+  done.stop(A.SETUP, 3, "completed");
+  assert.equal(done.policy(3).reminders, true, "coaching starts as soon as setup ends");
+});
+
 test("TRACKING cannot be started and unknown states are refused", () => {
   const m = new ActivityMachine();
   assert.equal(m.start(A.TRACKING, 0), false);
@@ -346,7 +367,9 @@ test("property: reminders and praise are off in every suppressing state, in grac
       }
       if (m.inGrace(now)) assert.equal(p.reminders, false);
       // at most one foreground activity, and none beside a mode
-      const fgCount = [A.BREATH_CHECK, A.BREATHE_GUIDE, A.EYE_BREAK, A.DEMO].filter((s) => m.isActive(s)).length;
+      const fgCount = [A.BREATH_CHECK, A.BREATHE_GUIDE, A.EYE_BREAK, A.DEMO, A.SETUP].filter((s) =>
+        m.isActive(s),
+      ).length;
       assert.ok(fgCount <= 1, `seed ${seed}`);
       if (fgCount === 1) assert.equal(cur !== A.PAUSED && cur !== A.SILENT_TEST && cur !== A.PRACTICE, true);
     }

@@ -116,6 +116,18 @@ export class BreakTracker {
     return out;
   }
 
+  /** The next eye or move break (the two Break reminders, #96): seconds left and the fraction of
+   *  its interval still to go, for the Today panel's ring (frame 04, #98). null when both are off. */
+  nextIn() {
+    const timers = [];
+    if (this.eyeBreaks) timers.push([this.cfg.eye_after_s, this.seated - this.eyeBase]);
+    if (this.moveMinutes > 0) timers.push([this.moveMinutes * 60, this.seated - this.moveBase]);
+    if (!timers.length) return null;
+    const [total, elapsed] = timers.reduce((a, b) => (b[0] - b[1] < a[0] - a[1] ? b : a));
+    const seconds = Math.max(0, total - elapsed);
+    return { seconds, fraction: Math.min(1, seconds / total) };
+  }
+
   /** The user took the break (finished the countdown or pressed Done). */
   taken(kind) {
     if (kind === "eye") this.eyeBase = this.seated;

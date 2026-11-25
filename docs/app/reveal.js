@@ -14,14 +14,14 @@
 export const STAGES = Object.freeze({
   idle: 0, // before tracking: stage, Start buttons, walkthrough, Help
   tracking: 1, // first scored frame: "This session"
-  settled: 2, // posture is good or slouch for settle_s: needle, Explore more
+  settled: 2, // a person scored for settle_s: needle, Explore more
   configured: 3, // config_s of tracking: reminders and calibration (data-stage only)
   comfortable: 4, // comfortable_s of tracking: breaks, relax, test (data-stage only)
   all: 5, // everything: "Show all settings"
 });
 
 export const REVEAL = Object.freeze({
-  settle_s: 10, // seconds of scored good or slouch frames before stage 2
+  settle_s: 10, // seconds of scored frames with a person before stage 2
   gap_s: 3, // unscored time that restarts the settle hold (not the stage)
   config_s: 120, // tracked seconds before stage 3
   comfortable_s: 300, // tracked seconds before stage 4
@@ -43,8 +43,8 @@ export class RevealStages {
   }
 
   /**
-   * frame: { scored, present, paused, silentTest, practice }. present means a scored
-   * frame with a person (not the NO_PERSON start state). now: seconds, monotonic.
+   * frame: { scored, present, paused, silentTest, practice }. present means a person is
+   * being scored (app.js: any scored frame, whatever the posture). now: seconds, monotonic.
    * Returns { stage, changed }.
    */
   update(frame, now) {

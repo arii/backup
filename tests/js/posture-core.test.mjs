@@ -94,7 +94,9 @@ test("golden timeline replays identically", () => {
     if (e.spoken.length) assert.deepEqual(e.spoken, [out.cue.say], `${where} spoken`);
   });
   const cues = new Set(golden.frames.map((f) => f.expect.cue?.id));
-  for (const id of ["head_forward:-", "head_tilt:left", "shoulder_level:right"]) {
+  // The fixture's shoulders never pass 6 degrees, so since #97 (a cue only past its
+  // threshold) it has no shoulder cue; posture-core-units covers that one.
+  for (const id of ["head_forward:-", "head_tilt:left"]) {
     assert.ok(cues.has(id), `golden timeline covers cue ${id}`);
   }
   const all = golden.frames.flatMap((f) => f.expect.nudges);

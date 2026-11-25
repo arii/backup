@@ -24,17 +24,24 @@ test("demo replay at 15 fps: gauge, label and skeleton agree through slouch onse
   let recoveries = 0;
   for (let t = 0; t < 4 * DEMO_CYCLE_S; t += 1 / 15) {
     const out = engine.process(demoPose(t), t);
-    const view = gaugeView(out.transition.state, out.result.kind === "scored", out.cue != null, out.needle);
+    const view = gaugeView(
+      out.transition.state,
+      out.result.kind === "scored",
+      out.hold?.kind === "slipping",
+      out.needle,
+    );
     const where = `t=${t.toFixed(2)} ${out.transition.state}`;
     if (view.zone !== "none" && view.angle !== null) assert.equal(zoneOfAngle(view.angle), view.zone, where);
     if (view.label === "slouching") assert.equal(view.color, ZONE_COLOR.bad, where);
     if (view.zone === "good") assert.equal(view.color, ZONE_COLOR.good, where);
+    // Amber exactly while the fill runs toward the chime (frame 05), never amber without it.
+    if (view.zone !== "bad") assert.equal(view.zone === "drift", out.hold?.kind === "slipping", where);
     if (prev === State.BAD_CHIME || prev === State.BAD_VOICE) {
       if (out.transition.state === State.GOOD) recoveries += 1;
     }
     prev = out.transition.state;
     seen.add(view.zone);
   }
-  assert.ok(seen.has("good") && seen.has("bad"), [...seen].join());
+  assert.ok(seen.has("good") && seen.has("drift") && seen.has("bad"), [...seen].join());
   assert.ok(recoveries >= 1, "the replay covers a recovery");
 });
