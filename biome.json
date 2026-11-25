@@ -12,6 +12,7 @@
       "!docs/app/voice",
       "!docs/app/precache.json",
       "!tests/js/fixtures",
+      "!tests/eval/data",
       "!video/public",
       "!.agents",
       "!e2e-scratch"

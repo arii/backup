@@ -10,3 +10,6 @@ video/public/audio/
 video/public/capture.json
 video/person.y4m
 node_modules/
+
+# Accuracy eval output (tests/eval/README.md)
+tests/eval/results/
