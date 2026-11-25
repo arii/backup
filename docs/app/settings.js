@@ -51,16 +51,31 @@ export function isPauseShortcut(e, enabled) {
 
 export const NEEDS_TRACKING_TIP = "Start the webcam or demo first";
 
+/** Which camera problem an error is (#102): "denied", "none", "busy", or null when the
+ *  error is not about the camera (for example the pose model). */
+export function cameraProblem(err) {
+  const name = err?.name;
+  if (name === "NotAllowedError" || name === "SecurityError") return "denied";
+  if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") return "none";
+  if (name === "NotReadableError" || name === "AbortError" || name === "TrackStartError") return "busy";
+  return null;
+}
+
 /** The message under the Start buttons when the camera could not start. */
 export function cameraErrorMessage(err) {
-  const detail = err?.message || String(err);
-  if (err && err.name === "NotAllowedError") {
+  const kind = cameraProblem(err);
+  if (kind === "denied") {
     return (
-      "Camera permission denied. To allow it, click the camera icon in the address bar " +
+      "Camera permission denied. To allow it, click the lock or camera icon in the address bar " +
       "(or open this site's settings), allow the camera, then reload the page. " +
       "You can also try the demo instead."
     );
   }
+  if (kind === "none") return "No camera found. Connect or turn on a webcam, then Try again, or try the demo.";
+  if (kind === "busy") {
+    return "The camera is in use by another app, such as a video call. Close it, then Try again, or try the demo.";
+  }
+  const detail = err?.message || String(err);
   return `Could not start: ${detail}. Try the demo instead.`;
 }
 

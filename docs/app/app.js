@@ -27,7 +27,7 @@ import { BreatheGuide, BreathingMoments, GUIDE_SAFETY } from "./breathing.js";
 import { PromptScheduler } from "./prompts.js";
 import { angleTransform, gaugeView, tileStates, ZONE_COLOR } from "./mini-view.js";
 import { SessionTimeline } from "./timeline.js";
-import { demoPose } from "./demo-pose.js";
+import { demoPose, practicePose } from "./demo-pose.js";
 import {
   DIAGNOSIS_TEXT,
   Diagnosis,
@@ -46,6 +46,7 @@ import {
   NEEDS_TRACKING_TIP,
   cameraConstraints,
   cameraErrorMessage,
+  cameraProblem,
   isDeviceGoneError,
   isPauseShortcut,
   resolveSettings,
@@ -468,8 +469,21 @@ function fire(nudge, cue) {
 let calibWasActive = false;
 function renderCalibration() {
   const c = engine.calibration.status;
-  if (c.active && !calibWasActive && !firstRun.open) showRelaxBanner("Hold still");
-  if (!c.active && calibWasActive && !firstRun.open) showRelaxBanner(c.error ? "Try again" : "Posture saved");
+  // #107: a countdown while it records, then what changed.
+  if (c.active && !firstRun.open) {
+    const left = Math.max(1, Math.ceil(c.remaining_s ?? 0));
+    const text = `Hold still, saving your posture… ${left}`;
+    if ($("banner").textContent !== text || !calibWasActive) showRelaxBanner(text);
+  }
+  if (!c.active && calibWasActive && !firstRun.open) {
+    showRelaxBanner(
+      c.error
+        ? "Couldn't see you well enough. Try again"
+        : demo
+          ? "Posture saved for this demo only"
+          : "Posture saved. Reminders now measure from it; your stats are kept",
+    );
+  }
   calibWasActive = !!c.active;
   if (engine.calibration.version !== savedCalVersion) {
     savedCalVersion = engine.calibration.version;
@@ -779,11 +793,11 @@ const CARD_UI = {
   stretch: { action: true, actionLabel: "Show me", done: true, snooze: true, never: true },
   water: { action: true, actionLabel: "I drank", snooze: true, never: true },
   jaw: { done: true, snooze: true, never: true },
-  demo: { bar: true, stop: true },
+  demo: { bar: true, stop: "End break" },
   breathing: { action: true, never: true },
   offer: { action: true, never: true },
   breath_intro: { action: true, actionLabel: "Try it" },
-  guide: { bar: true, stop: true },
+  guide: { bar: true, stop: "End breathing" },
 };
 
 function renderCard() {
@@ -807,7 +821,7 @@ function renderCard() {
   $("prompt-snooze").hidden = !ui.snooze || card.finished;
   $("prompt-never").hidden = !ui.never || card.finished;
   $("prompt-notnow").hidden = card.finished;
-  $("prompt-notnow").textContent = ui.stop ? "Stop" : "Not now";
+  $("prompt-notnow").textContent = ui.stop || "Not now"; // #111: it ends the break, not tracking
   el.dataset.prompt = card.id;
   el.classList.add("show");
 }
@@ -1095,7 +1109,7 @@ function startDemo(kind) {
   if (!activity.start(ACTIVITY.DEMO, clockS())) return;
   const still = reducedMotion.matches;
   const finalAct = kind === "water" ? "drink" : "";
-  card = { id: "demo", kind, text: "", t: 0, finished: false, act: finalAct, ui: { bar: !still, stop: true } };
+  card = { id: "demo", kind, text: "", t: 0, finished: false, act: finalAct, ui: { bar: !still, stop: "End break" } };
   if (still) {
     // Reduced motion: every step at once, no timer, the person ends it.
     card.text = demoStaticText(kind);
@@ -1506,6 +1520,8 @@ function renderBadge(transition, result, held, label, zone) {
       ? "settling in"
       : STATE_LABELS[transition.state] || transition.state;
   badge.className = `badge ${transition.state}`;
+  // #111: right after a break the restarted engine settles; say why, without a banner (grace keeps the video quiet).
+  if (badge.textContent === "settling in" && activity.inGrace(clockS())) badge.textContent = "back from break";
   if (zone === "drift") {
     badge.textContent = "slipping"; // amber with the needle and skeleton (frame 05, #98)
     badge.className = "badge drift";
@@ -1662,7 +1678,16 @@ function setPaused(on) {
     badge.className = "badge paused";
     syncTabTitle();
     document.body.dataset.fps = "-";
+    // #104: the frozen gauge and skeleton dim (CSS on body.is-paused), the gauge says so, and
+    // the badge counts the paused time. The count is display only, never read by scoring.
+    setGaugeLabel("paused");
+    pausedAt = performance.now();
+    clearInterval(pausedTimer);
+    pausedTimer = setInterval(() => {
+      if (isPaused()) badge.textContent = `paused ${mmss((performance.now() - pausedAt) / 1000)}`;
+    }, 1000);
   } else {
+    clearInterval(pausedTimer);
     engine.restart();
     bracing.reset();
     relaxLastT = null;
@@ -1672,14 +1697,24 @@ function setPaused(on) {
     fpsEma = 0;
     setup.reset();
   }
+  document.body.classList.toggle("is-paused", on);
   $("pause").setAttribute("aria-label", on ? "Resume" : "Pause");
   $("pause").setAttribute("aria-pressed", String(on));
+  setPauseTitle(on);
+}
+let pausedAt = 0;
+let pausedTimer = null;
+
+function setPauseTitle(paused) {
+  const text = paused ? RESUME_TITLE : PAUSE_TITLE;
+  $("pause").title = settings.pauseShortcut ? `${text} (shortcut: P)` : text;
 }
 
 $("pause").addEventListener("click", () => setPaused(!isPaused()));
 // The P shortcut is a fixed default since #98 v3 (store.pauseShortcut is still honoured).
 const PAUSE_TITLE = "Pause tracking and all sounds";
-$("pause").title = settings.pauseShortcut ? `${PAUSE_TITLE} (shortcut: P)` : PAUSE_TITLE;
+const RESUME_TITLE = "Resume tracking and sounds";
+setPauseTitle(false);
 document.addEventListener("keydown", (e) => {
   if (isPauseShortcut(e, settings.pauseShortcut)) setPaused(!isPaused());
 });
@@ -1911,7 +1946,8 @@ function step() {
   const now = nowMs / 1000;
   let landmarks = null;
   if (demo) {
-    landmarks = demoPose(now);
+    // #103: during Learn the cues the demo shows the step being taught, not its slouch cycle.
+    landmarks = practice ? practicePose(PRACTICE_STEPS[practice.i].metric, now) : demoPose(now);
   } else {
     if (!poseLandmarker || video.readyState < 2) return;
     // detectForVideo needs strictly increasing timestamps.
@@ -2427,6 +2463,11 @@ $("start-camera").addEventListener("click", async () => {
     $("start-camera").disabled = $("start-demo").disabled = false;
     applyWebGLState();
     $("start-camera").textContent = "Try again"; // a retry reuses the model that is already loading
+    // #102: a camera problem is not a model problem: no model steps, and the demo is the way on.
+    const camera = cameraProblem(err) !== null;
+    $("load-steps").hidden = camera;
+    $("start-demo").classList.toggle("text-link", !camera);
+    $("start-camera").classList.toggle("secondary", camera);
   }
 });
 
@@ -2515,7 +2556,9 @@ function focusFirstRunHeading() {
  *  the sequence hides and waits. A slouch reading no longer hides it: during getting started
  *  (ACTIVITY.SETUP) there are no reminders to make room for. */
 function setupBlocked() {
-  return !rules().setupCards;
+  // #103: the Learn the cues panel stays up for its breath-check offer after practice ends;
+  // one card at a time, so the setup card waits until it closes.
+  return !rules().setupCards || document.body.classList.contains("practice-done");
 }
 
 /** Runs every tracked frame: opens the next due card on its own (no focus move), hides it while blocked. */
@@ -2604,10 +2647,13 @@ function renderOnboardingStep() {
   $("ob-back").hidden = ob.step === 0 || ob.ackOnly;
   $("ob-next").hidden = last;
   $("ob-ack").hidden = !last;
+  // #108: the full notice is open on the step that asks for the acknowledgement, so it can't be accepted unseen.
+  $("onboarding").querySelector("details").open = last;
 }
 
+let introAgain = false; // the footer's Intro link (#106): show the welcome again before starting
 function showStartControls() {
-  const need = shouldShowOnboarding(store);
+  const need = introAgain || shouldShowOnboarding(store);
   $("onboarding").hidden = !need;
   $("start-title").hidden = need; // make room for the card
   $("start-actions").hidden = need;
@@ -2625,6 +2671,7 @@ $("ob-back").addEventListener("click", () => {
   $("ob-title").focus();
 });
 $("ob-ack").addEventListener("click", () => {
+  introAgain = false;
   markOnboarded(store);
   save();
   showStartControls();
@@ -2681,6 +2728,19 @@ $("safety-link").addEventListener("click", (e) => {
   $("safety-dialog").showModal();
 });
 $("safety-close").addEventListener("click", () => $("safety-dialog").close());
+// #106: the welcome and safety notice are always reachable, before starting too.
+$("intro-link").addEventListener("click", (e) => {
+  e.preventDefault();
+  if (loopsStarted) {
+    openHelp();
+    return;
+  }
+  introAgain = true;
+  ob.step = 0;
+  ob.ackOnly = false;
+  showStartControls();
+  $("ob-title").focus();
+});
 $("about-link").addEventListener("click", (e) => {
   e.preventDefault();
   $("about-dialog").showModal();

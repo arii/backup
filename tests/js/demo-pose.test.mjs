@@ -6,9 +6,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEMO_CYCLE_S, demoPose } from "../../docs/app/demo-pose.js";
+import { DEMO_CYCLE_S, demoPose, practicePose } from "../../docs/app/demo-pose.js";
 import { gaugeView, ZONE_COLOR, zoneOfAngle } from "../../docs/app/mini-view.js";
-import { DEFAULTS, PostureEngine, State } from "../../docs/app/posture-core.js";
+import { DEFAULTS, PostureEngine, State, scorePose } from "../../docs/app/posture-core.js";
 
 test("the demo alternates good and slouch every cycle", () => {
   const head = (t) => demoPose(t)[7].y;
@@ -44,4 +44,19 @@ test("demo replay at 15 fps: gauge, label and skeleton agree through slouch onse
   }
   assert.ok(seen.has("good") && seen.has("drift") && seen.has("bad"), [...seen].join());
   assert.ok(recoveries >= 1, "the replay covers a recovery");
+});
+
+test("Learn the cues poses show only the taught fault, at any demo time (#103)", () => {
+  const cfg = DEFAULTS.scoring;
+  const keys = ["head_forward", "head_tilt", "shoulder_level", "trunk_lean"];
+  for (const t of [1, DEMO_CYCLE_S + 5, 3 * DEMO_CYCLE_S + 2]) {
+    for (const metric of [null, ...keys]) {
+      const m = scorePose(practicePose(metric, t), cfg);
+      for (const k of keys) {
+        const v = Math.abs(m[`${k}_deg`]);
+        if (k === metric) assert.ok(v > cfg[`${k}_deg`], `${metric} at ${t}: ${v}`);
+        else assert.ok(v < cfg[`${k}_deg`] - cfg.hysteresis_margin_deg, `${metric} at ${t}: ${k} ${v}`);
+      }
+    }
+  }
 });

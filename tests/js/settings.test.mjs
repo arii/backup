@@ -9,6 +9,7 @@ import test from "node:test";
 import {
   cameraConstraints,
   cameraErrorMessage,
+  cameraProblem,
   isDeviceGoneError,
   isPauseShortcut,
   resolveSettings,
@@ -49,10 +50,17 @@ test("a denied camera says how to re-allow it", () => {
   assert.match(msg, /demo/);
 });
 
-test("other camera errors keep their detail", () => {
-  const msg = cameraErrorMessage({ name: "NotFoundError", message: "Requested device not found" });
-  assert.match(msg, /Requested device not found/);
-  assert.match(msg, /demo/);
+test("no camera, a busy camera and other errors each get their own message (#102)", () => {
+  const none = cameraErrorMessage({ name: "NotFoundError", message: "Requested device not found" });
+  assert.match(none, /No camera found/);
+  assert.match(none, /demo/);
+  assert.match(cameraErrorMessage({ name: "NotReadableError", message: "Could not start video source" }), /in use/);
+  const other = cameraErrorMessage({ name: "TypeError", message: "model failed" });
+  assert.match(other, /model failed/);
+  assert.equal(cameraProblem({ name: "NotAllowedError" }), "denied");
+  assert.equal(cameraProblem({ name: "OverconstrainedError" }), "none");
+  assert.equal(cameraProblem({ name: "AbortError" }), "busy");
+  assert.equal(cameraProblem(new Error("x")), null);
 });
 
 test("breaks and prompts defaults: eye breaks on, move break 60, breathing moments opt in", () => {

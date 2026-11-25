@@ -6,14 +6,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SHARE_TEXT, nativeSharePayload, normalizeInstance, shareLinks, shareUrl } from "../../docs/app/share.js";
+import { nativeSharePayload, normalizeInstance, SHARE_TEXT, shareLinks, shareUrl } from "../../docs/app/share.js";
 
 const URL_ = "https://arii.github.io/posture-guard/";
 
 test("share text is the agreed sentence", () => {
   assert.equal(
     SHARE_TEXT,
-    "BackUp — Posture to Die For: a free webcam posture coach that runs in your browser. Nothing is uploaded.",
+    "BackUp: Posture to Die For. A free webcam posture coach that runs in your browser. Nothing is uploaded.",
   );
 });
 
@@ -61,7 +61,7 @@ test("mastodon instance must be a plain hostname", () => {
 });
 
 test("native payload and share URL (no query, no hash)", () => {
-  assert.deepEqual(nativeSharePayload(URL_), { title: "BackUp — Posture to Die For", text: SHARE_TEXT, url: URL_ });
+  assert.deepEqual(nativeSharePayload(URL_), { title: "BackUp: Posture to Die For", text: SHARE_TEXT, url: URL_ });
   assert.equal(shareUrl("https://arii.github.io/posture-guard/app/?clockScale=600#x"), URL_);
 });
 
