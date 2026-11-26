@@ -261,7 +261,7 @@ body. Unlike its namesake, it sits up straight.
 |---|---|---|
 | **Eyes** | Google MediaPipe Pose, compiled to WebAssembly | 33 body landmarks per frame from an ordinary webcam |
 | **Brain** | JavaScript: scoring, reminder state machine, posture needle, calibration (`docs/app/posture-core.js`) | Decides when you are slouching and what to say about it, inside your browser tab |
-| **Spinal cord** | A golden timeline: a scripted 632-frame session recorded once (from the Python original, since removed), replayed by Node | Keeps every decision stable, numbers within 1e-9 |
+| **Spinal cord** | A golden timeline: a scripted session recorded once (from the Python original, since removed), replayed by Node | Keeps every decision stable, numbers within 1e-9 |
 | **Voice** | Web Audio, recorded Kokoro clips and speech synthesis | The chime, then "Head forward. Tuck your chin..." |
 | **Heartbeat** | A Web Worker timer | Keeps tracking at ~5 fps after the browser throttles a background tab |
 | **Memory** | `localStorage` | Your calibration, settings, custom sounds, daily totals, usage counts for the sponsor prompt and your dated consent record |
@@ -275,7 +275,7 @@ Why these parts don't normally fit, and the stitches that hold them:
 - **The brain started life in Python,** which can't run in a browser tab. It was
   ported to JavaScript and the Python original was deleted in Nov 2026. A golden
   timeline recorded from it still pins every state, reminder and word of advice over a
-  scripted 632-frame session.
+  scripted session.
 - **Browsers throttle background tabs to save battery,** which is exactly when a
   posture coach needs to keep working. A Web Worker keeps the pulse going, and the
   state machine is frame-rate independent, so reminders still land on time at 5 fps in
