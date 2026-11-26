@@ -7,7 +7,7 @@ Your camera feed never leaves your browser.
 - **Category:** Frankenstein
 - **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
 - **Code:** <https://github.com/arii/posture-guard> (MIT License)
-- **Kiro artifacts:** [`.kiro/`](.kiro/) (spec, steering, two hooks)
+- **Kiro artifacts:** [`.kiro/`](.kiro/) (spec, steering, one hook)
 
 ## What it does
 
@@ -33,7 +33,7 @@ parts that were never meant to share a body.
 **Short description:** Leave a browser tab open and BackUp watches how you
 sit. Slouch and it chimes; keep slouching and it tells you what's wrong ("Head
 forward: tuck your chin") and how to fix it. MediaPipe eyes, a JavaScript brain
-checked by a 632-frame golden timeline. Runs locally, no install.
+checked by a frame-by-frame golden timeline. Runs locally, no install.
 
 ## Why Frankenstein
 
@@ -47,7 +47,7 @@ brain is now the only one.
 |---|---|---|
 | Eyes | MediaPipe Pose as WebAssembly in the browser (and `mp.solutions.pose` in the Python original) | Both fed the same 33-landmark format into the same scoring |
 | Brain | Python scoring, state machine, needle, calibration (history) | Specified and property-tested; the reference implementation until it was removed |
-| Second brain | JavaScript port in `docs/app/posture-core.js`, now the only brain | A golden timeline: Python recorded 632 frames and Node reproduces every state, reminder, cue and number (within 1e-9). The recording is kept as a frozen fixture in `tests/js/fixtures/`, and a Kiro hook re-runs the tests whenever the app or its tests are saved |
+| Second brain | JavaScript port in `docs/app/posture-core.js`, now the only brain | A golden timeline: Python recorded a scripted session and Node reproduces every state, reminder, cue and number (within 1e-9). The recording is kept as a frozen fixture in `tests/js/fixtures/`, and a Kiro hook re-runs the tests whenever the app or its tests are saved |
 | Voice | Web Audio + speech synthesis (and `paplay` + pico2wave/espeak-ng on the desktop original) | One cue text spoken by either |
 | Heartbeat | A Web Worker timer | Browsers throttle background tabs; the worker keeps ticking and the frame-rate-independent state machine still times reminders correctly at 5 fps |
 | Lab test subject | Playwright, Chromium's fake camera, a Node script | A drawn cartoon figure is turned into a video feed so CI can check the deployed site detects a person |
@@ -64,8 +64,8 @@ with different tools:
 
 | Dates | Built with | What |
 |---|---|---|
-| Nov 13-14 | Other AI coding tools (commits by `Obvious`, `obvious-autobuild[bot]`, one `Antigravity Agent` commit), reviewed and merged by Ariel Anders | **RealSense prototype**: a Linux-only posture corrector that required an Intel RealSense depth camera, a Python dashboard, the original scoring and reminder state machine, and the GitHub Pages landing page |
-| Nov 18 | **Kiro** (commits by `Kiro Agent`), reviewed and merged by Ariel Anders | **Webcam and browser version**: everything below |
+| Nov 13-14 | Other AI coding tools (commits by `Obvious`, `obvious-autobuild[bot]`, one `Antigravity Agent` commit), merged by Ariel Anders | **RealSense prototype**: a Linux-only posture corrector that required an Intel RealSense depth camera, a Python dashboard, the original scoring and reminder state machine, and the GitHub Pages landing page |
+| Nov 18 | **Kiro** (commits by `Kiro Agent`), merged by Ariel Anders | **Webcam and browser version**: everything below |
 
 What the Kiro phase changed (PRs #19 onward):
 
@@ -96,8 +96,8 @@ What the Kiro phase changed (PRs #19 onward):
   (`DEFAULTS` in `posture-core.js`), injected timestamps (no wall-clock reads in the
   logic), frame-rate-independent smoothing, and regenerating the offline precache
   list after every app change. (It originally also covered the Python app.)
-- **Follow-on specs.** Six more spec folders under `.kiro/specs/`
-  (`onboarding-and-setup`, `progress-review`, `wellness-tools`,
+- **Follow-on specs.** Seven more spec folders under `.kiro/specs/`
+  (`activity-states`, `onboarding-and-setup`, `progress-review`, `wellness-tools`,
   `safety-and-disclaimers`, `feedback-design`, `progressive-loading`), each with EARS requirements, a design
   and a task list. Built tasks are checked. Spec-only tasks stay unchecked and are
   labelled.
@@ -123,7 +123,7 @@ What the Kiro phase changed (PRs #19 onward):
   the posture advice. Deliberately broken versions of the
   code (removed glitch hold, broken voice cooldown, shortened sustain, removed
   clamp, doubled recovery chime) were each caught.
-- **Golden timeline.** A scripted 632-frame session was recorded from the real
+- **Golden timeline.** A scripted session was recorded from the real
   Python pipeline (history); `tests/js/fixtures/golden-timeline.json` keeps that
   recording and `tests/js/` requires the browser engine to reproduce it exactly
   (states and reminders identical, numbers within 1e-9).
@@ -146,7 +146,7 @@ What the Kiro phase changed (PRs #19 onward):
 - `live-site` workflow: after each GitHub Pages deploy, Playwright opens the
   deployed app, runs demo mode, then webcam mode with Chromium's fake camera
   playing a drawn cartoon figure, so the real pose model loads from the self-hosted vendor files and
-  detects her. Screenshots are kept as a workflow artifact.
+  detects the figure. Screenshots are kept as a workflow artifact.
 
 ## Known limitations
 
@@ -181,11 +181,11 @@ What the Kiro phase changed (PRs #19 onward):
 | Built during Oct 30 - Dec 4, 2026 | Yes: repo created 2026-11-13 |
 | Public repository | Yes |
 | OSI-approved license, visible | Yes: [MIT](LICENSE) |
-| `.kiro/` committed (not gitignored) | Yes: spec, steering, 1 hook |
+| `.kiro/` committed (not gitignored) | Yes: specs, steering, 1 hook |
 | Working demo link | Yes: <https://arii.github.io/posture-guard/app/> |
 | How Kiro was used | This file and the README's "Built with Kiro" section |
 | Category | Frankenstein |
-| Demo video | Draft rendered by the `demo-video` workflow from real footage of the live site ([`video/`](video/)); add your own webcam clip and voiceover, then upload to YouTube |
+| Demo video | An earlier draft render of real footage of the live site (`video/1-backup-main-v18.mp4`) is in [`video/`](video/); it is not the final cut and is not uploaded to YouTube |
 
 ### Demo video outline (about 3 minutes)
 
@@ -208,7 +208,7 @@ What the Kiro phase changed (PRs #19 onward):
 
 Items only the repository owner can do (from issue #30 and the license review):
 
-- [ ] Switch the repository default branch to `main` (Settings, Branches).
+- [x] Repository default branch is `main` (verified 2026-11-23, see `LAUNCH.md`).
 - [ ] Check WebGL in your own Chrome (`chrome://gpu`) and open the live app once.
 - [ ] Run a manual test with a real webcam: record good posture, slouch, hear the voice.
 - [ ] Record the demo video voiceover and your own webcam clip, then replace the sample photo footage. See the likeness warning in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
