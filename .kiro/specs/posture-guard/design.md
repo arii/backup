@@ -7,7 +7,44 @@
 > behavior they specify lives on in `docs/app/posture-core.js` (tuning defaults in
 > `DEFAULTS`) and is tested by `tests/js/`.
 
-## Architecture
+## Architecture (current: browser app, `docs/app/`)
+
+```
+getUserMedia ──> PoseLandmarker (MediaPipe) ──> PostureEngine.process(landmarks, now)
+ app.js           or MoveNet via                   (posture-core.js: scoring, state machine,
+                  movenet-adapter.js                needle, calibration, cues)
+                                                         │
+                       feedback.js, prompts.js, activity.js, breaks.js, wellness.js
+                       (reminder policy, prompt scheduling, breaks, guided moves)
+                                                         │
+                 timeline.js, progress.js, consistency.js, share.js, mini-view.js
+                 (Today timeline, progress review, weekly consistency, opt-in share link, gauge)
+```
+
+Everything runs in the page. Frames and landmarks stay on the device (see `steering/architecture.md`).
+Pure modules take injected time and have a matching `tests/js/<name>.test.mjs`.
+
+### Module notes
+- `posture-core.js`: pure ES module, a line-for-line port of `scoring.py`, `state.py`,
+  `posture_needle.py`, `calibration.py` and `PosturePipeline.process_once` (as
+  `PostureEngine.process(landmarks, now)`).
+- `app.js`: `getUserMedia` -> `PoseLandmarker.detectForVideo` (tasks-vision 0.10.14
+  self-hosted under docs/app/vendor/, lite model, GPU with CPU fallback) at 15 fps while visible; a
+  Blob worker's `setInterval` drives ~5 fps ticks while hidden (rAF and page timers
+  are throttled in background tabs; the state machine is frame-rate independent).
+  Missing `visibility` on a landmark is treated as 1.
+- Golden timeline: recorded once from the real Python pipeline (history) and kept as
+  `tests/js/fixtures/golden-timeline.json`; Node replays it and JS drift fails
+  `tests/js/`.
+
+## Removed implementation (history, do not build from this)
+
+The sections below the browser notes that name `scoring.py`, `state.py`, `posture_needle.py`,
+`calibration.py`, `cues.py`, the FastAPI dashboard, `cv2`, `paplay`/`aplay` or `config.yaml` describe the
+Python desktop app that was deleted. They are kept because `docs/app/posture-core.js` is a port of that logic and
+the rules (gate order, smoothing, needle, calibration) are the same.
+
+### Removed architecture (Python desktop app)
 
 ```
 FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine ──> AudioWorker
@@ -35,19 +72,6 @@ FrameSource ──> PoseDetector ──> score_pose ──> PostureStateMachine 
 - `posture_needle.py` (new), `calibration.py` (new): see below.
 - `audio.py`: custom WAVs, `Nudge.RECOVERY`, `test_sound(kind)`, `aplay` fallback.
 - `config.py`: strict loader (`ConfigError`), `validate()`.
-
-## Browser version (`docs/app/`)
-- `posture-core.js`: pure ES module, a line-for-line port of `scoring.py`, `state.py`,
-  `posture_needle.py`, `calibration.py` and `PosturePipeline.process_once` (as
-  `PostureEngine.process(landmarks, now)`).
-- `app.js`: `getUserMedia` -> `PoseLandmarker.detectForVideo` (tasks-vision 0.10.14
-  self-hosted under docs/app/vendor/, lite model, GPU with CPU fallback) at 15 fps while visible; a
-  Blob worker's `setInterval` drives ~5 fps ticks while hidden (rAF and page timers
-  are throttled in background tabs; the state machine is frame-rate independent).
-  Missing `visibility` on a landmark is treated as 1.
-- Golden timeline: recorded once from the real Python pipeline (history) and kept as
-  `tests/js/fixtures/golden-timeline.json`; Node replays it and JS drift fails
-  `tests/js/`.
 
 ## Posture cues (`cues.py`)
 - `posture_cue(metrics, cfg, baseline, mirror)`: for each metric, candidates are the
