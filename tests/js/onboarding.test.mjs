@@ -9,6 +9,7 @@ import test from "node:test";
 import { DEFAULTS, Reason } from "../../docs/app/posture-core.js";
 import {
   ACK_VERSION,
+  calibrateNote,
   Diagnosis,
   markOnboarded,
   ONBOARDING_STEPS,
@@ -258,4 +259,15 @@ test("setupProgress ignores junk in the store", () => {
   const store = {};
   viewSetupStep(store, "calibrate");
   assert.equal(setupProgress(store).step, "calibrate");
+});
+
+test("calibrateNote tells the person to hold still while recording, and why a save failed", () => {
+  const idle = { active: null, remaining_s: null, error: null };
+  assert.match(calibrateNote(idle), /hold still for 3 seconds/);
+  assert.equal(calibrateNote({ active: "good", remaining_s: 2.2, error: null }), "Hold still… 3");
+  assert.equal(calibrateNote({ active: "good", remaining_s: 0.1, error: null }), "Hold still… 1");
+  assert.equal(calibrateNote({ active: "good", remaining_s: null, error: null }), "Hold still… 1");
+  const failed = { active: null, remaining_s: null, error: "good calibration failed: 0 scored frames" };
+  assert.match(calibrateNote(failed, true), /head and shoulders in view/);
+  assert.doesNotMatch(calibrateNote(failed, false), /Couldn't save/); // an old error from before this card
 });
