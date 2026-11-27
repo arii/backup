@@ -2039,10 +2039,19 @@ try {
         note: getComputedStyle(document.getElementById("demo-note")).display,
         overlay: getComputedStyle(document.getElementById("start-overlay")).display,
         firstRun: document.getElementById("first-run").hidden,
+        badge: getComputedStyle(document.getElementById("state-badge")).display,
+        setupPanel: document.getElementById("setup-panel").hidden,
+        avatar: document.getElementById("demo-avatar").hidden,
       }));
       check(
         "demo: Stop demo returns to the start screen",
-        stopped.pre && stopped.note === "none" && stopped.overlay !== "none" && stopped.firstRun,
+        stopped.pre &&
+          stopped.note === "none" &&
+          stopped.overlay !== "none" &&
+          stopped.firstRun &&
+          stopped.badge === "none" &&
+          stopped.setupPanel &&
+          stopped.avatar,
         stopped,
       );
       await page.click("#start-demo");
