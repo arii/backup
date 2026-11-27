@@ -51,6 +51,7 @@ function labelCursor(labels) {
 /** Replay one session. Returns confusion counts per row and a few coverage numbers. */
 export function runSession(session, config = DEFAULTS) {
   const engine = new PostureEngine(config);
+  engine.calibration.useNoisyDetector(session.path === "movenet");
   const rows = emptyRows();
   const labelAt = labelCursor(session.labels);
   const cal = session.calibration ?? null;
