@@ -510,11 +510,13 @@ function renderCalibration() {
   }
   if (!c.active && calibWasActive && !firstRun.open) {
     showRelaxBanner(
-      c.error
-        ? "Couldn't see you well enough. Try again"
-        : demo
-          ? "Posture saved for this demo only"
-          : "Posture saved. Reminders now measure from it; your stats are kept",
+      c.error_kind === "moved"
+        ? `You moved while it was saving. Hold still and try again${c.good ? "; your last saved posture is still in use" : ""}`
+        : c.error
+          ? "Couldn't see you well enough. Try again"
+          : demo
+            ? "Posture saved for this demo only"
+            : "Posture saved. Reminders now measure from it; your stats are kept",
     );
   }
   calibWasActive = !!c.active;
@@ -2705,6 +2707,7 @@ function preloadModel(canvas, gate) {
     loadSteps.done("download");
   };
   const progress = (got, total) => loadSteps.progress(got, total);
+  engine.calibration.useNoisyDetector(!canvas);
   entry.promise = canvas ? loadModel(canvas, progress, onDownloaded, gate) : loadMoveNet(progress, onDownloaded, gate);
   entry.promise.catch(() => {
     entry.failed = true; // handled where it is awaited; this only stops an unhandled rejection
