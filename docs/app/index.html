@@ -237,6 +237,9 @@
   #onboarding ul, dialog ul, #setup-panel ul { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
   #onboarding li, dialog li, #setup-panel li { margin: 3px 0; }
   #onboarding ul { font-size: 13px; }
+  /* The welcome card is never clipped: the stage grows to fit it, so its button needs no inner scroll. */
+  .stage:has(#onboarding:not([hidden])) { height: auto; aspect-ratio: auto; }
+  .stage:has(#onboarding:not([hidden])) #start-overlay { position: relative; inset: auto; min-height: 540px; }
   #onboarding .step-count { margin-bottom: 10px; }
   #onboarding h3 { padding: 2px 4px; margin-left: -4px; }
   #onboarding h3:focus-visible { outline-offset: 3px; }
