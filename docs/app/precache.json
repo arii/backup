@@ -1,6 +1,6 @@
 {
-  "version": "e81469cff43f1499",
-  "totalBytes": 33457729,
+  "version": "c6f955ee2cd32ce4",
+  "totalBytes": 33457693,
   "files": [
     {
       "url": "activity.js",
@@ -74,8 +74,8 @@
     },
     {
       "url": "posture-core.js",
-      "size": 34963,
-      "sha256": "82d6ea4f58f4468abfe06320a2c53cfb576d94d39d0c27db1ec93aeac935c498"
+      "size": 34927,
+      "sha256": "34ebfeb492d205a5b703adcc0bad17a0e88d9be504f75856ebe18b0c1ce1a09d"
     },
     {
       "url": "privacy.js",
