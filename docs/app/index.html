@@ -375,6 +375,7 @@
     box-shadow: 0 4px 20px rgba(76,195,106,0.1), 0 2px 8px rgba(0,0,0,0.3);
   }
   #first-run h3 { font-size: 18px; }
+  #first-run-note { margin: 6px 0 10px; font-size: 14px; color: var(--muted); }
 
   /* Unlock card: more prominent */
   .unlock-card {
@@ -604,6 +605,7 @@
     <div class="panel step-card" id="first-run" role="region" aria-labelledby="first-run-heading" hidden>
       <div class="step-count" id="first-run-count" role="status" aria-live="polite"></div>
       <h3 id="first-run-heading" tabindex="-1"></h3>
+      <p id="first-run-note" role="status" aria-live="polite" hidden></p>
       <button id="first-run-next">Continue</button>
       <button class="icon-x" id="first-run-skip" aria-label="Skip this step">&times;</button>
     </div>

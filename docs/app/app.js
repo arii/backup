@@ -30,6 +30,7 @@ import { angleTransform, gaugeView, tileStates, ZONE_COLOR } from "./mini-view.j
 import { SessionTimeline } from "./timeline.js";
 import { demoPose, practicePose } from "./demo-pose.js";
 import {
+  calibrateNote,
   DIAGNOSIS_TEXT,
   Diagnosis,
   markOnboarded,
@@ -2852,6 +2853,7 @@ $("start-demo").addEventListener("click", () => {
 // a breath check is on. "Show the intro again" (Not working?) reopens it by hand.
 
 const firstRun = { step: 0, open: false, manual: false };
+let firstRunTried = false; // Save was pressed on this card (an old engine error must not show)
 
 function renderFirstRun() {
   const step = SETUP_STEPS[firstRun.step];
@@ -2859,6 +2861,13 @@ function renderFirstRun() {
   $("first-run-heading").textContent = step.title;
   $("first-run-next").textContent = step.action;
   $("first-run-next").disabled = false;
+  setFirstRunNote(step.key === "calibrate" ? calibrateNote(engine.calibration.status, firstRunTried) : "");
+}
+
+function setFirstRunNote(text) {
+  const el = $("first-run-note");
+  if (el.textContent !== text) el.textContent = text;
+  el.hidden = text === "";
 }
 
 function setGettingStarted(on) {
@@ -2868,6 +2877,7 @@ function setGettingStarted(on) {
 function openFirstRun(key = SETUP_STEPS[0].key, manual = false) {
   firstRun.open = true;
   firstRun.manual = manual;
+  firstRunTried = false;
   firstRun.step = SETUP_STEPS.findIndex((s) => s.key === key);
   viewSetupStep(store, key);
   save();
@@ -2941,6 +2951,7 @@ function updateFirstRunLive() {
   if (!firstRun.open || SETUP_STEPS[firstRun.step].key !== "calibrate") return;
   const c = engine.calibration.status;
   $("first-run-next").disabled = !!c.active;
+  setFirstRunNote(calibrateNote(c, firstRunTried));
   if (firstRunSaving && !c.active) {
     firstRunSaving = false;
     if (c.good && !c.error) finishFirstRunStep();
@@ -2957,6 +2968,7 @@ function finishFirstRunStep() {
 $("first-run-next").addEventListener("click", () => {
   if (SETUP_STEPS[firstRun.step].key === "calibrate") {
     firstRunSaving = true;
+    firstRunTried = true;
     engine.calibration.start("good");
     return;
   }

@@ -68,6 +68,15 @@ export const SETUP_STEPS = Object.freeze([
   { key: "calibrate", stage: 2, title: "Sit comfortably", action: "Save my posture" },
 ]);
 
+/** The line under the "Sit comfortably" heading: what to do before, during and after pressing
+ *  Save. `status` is engine.calibration.status; `tried` is true once Save was pressed on this card, so an old error is not shown.
+ *  The card used to say nothing while the 3 s recording ran or when it failed. */
+export function calibrateNote(status, tried = false) {
+  if (status.active) return `Hold still… ${Math.max(1, Math.ceil(status.remaining_s ?? 0))}`;
+  if (tried && status.error) return "Couldn't save that. Sit with your head and shoulders in view, then try again.";
+  return "Sit the way you would on a good day. After you press the button, hold still for 3 seconds.";
+}
+
 const stepKeys = SETUP_STEPS.map((s) => s.key);
 const keyList = (v) => (Array.isArray(v) ? v.filter((k) => stepKeys.includes(k)) : []);
 
