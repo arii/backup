@@ -1,6 +1,6 @@
 {
-  "version": "8f590cb757ad5a3a",
-  "totalBytes": 33461733,
+  "version": "d651a2ecb0100301",
+  "totalBytes": 33462157,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 140636,
-      "sha256": "9b4865362f776c87d7a459428548d2128720995abd9bce7304316e162fa04529"
+      "size": 140632,
+      "sha256": "19516481e3c2b93d53b3a8ff3bc3b9b59b84f9c941c49e13060d02cea1b049b0"
     },
     {
       "url": "breaks.js",
@@ -33,14 +33,19 @@
       "sha256": "9371ec6a857ed34c455ef59742d14040741e291062ad0dd651ec81d70ac80102"
     },
     {
-      "url": "demo-avatar.svg",
-      "size": 1737,
-      "sha256": "d5fd4df01c40fb05122a3e62ba4a60c9fe771a9c39b58946e7053017ba826bb3"
+      "url": "demo-avatar-body.svg",
+      "size": 768,
+      "sha256": "aca1a3c0f1c7fba1fedbdc202190cea2256d8a1cf4193094a1a4c91ee3cc571d"
+    },
+    {
+      "url": "demo-avatar-head.svg",
+      "size": 1129,
+      "sha256": "0893cc330be59b48273e0a9a93e488bae18ee5c2971370445a665c6122c0294a"
     },
     {
       "url": "demo-pose.js",
-      "size": 2127,
-      "sha256": "ef8df181d414c82f04735fb46a3658f6e4a98538bd4449b941a38abae6e506e1"
+      "size": 2328,
+      "sha256": "6944310dcca77a48f35d6c343cbd075780e555aa141a1328ad15d9d77fa1e522"
     },
     {
       "url": "feedback.js",
@@ -49,8 +54,8 @@
     },
     {
       "url": "index.html",
-      "size": 66776,
-      "sha256": "82d0ca2adc2eb06d37c2e3ac47bef48c7f293677dcf1d889736ae26dfe25ceae"
+      "size": 66843,
+      "sha256": "dc18f27c830a808da10439a77ea4fbcbcab536f005c8409960d2fd2af2dc0f46"
     },
     {
       "url": "loading.js",

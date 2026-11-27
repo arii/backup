@@ -1575,14 +1575,12 @@ const SKELETON = [
   [23, 24],
 ];
 
-// Demo only: a synthetic cartoon figure (not a real person), drawn as ONE picture so the hair,
-// head and sweater stay joined. It is pinned at the shoulders, tilts with the shoulder line,
-// and leans toward the camera (grows from the shoulders) as the head drops, like a real slouch.
-const AVATAR = { w: 640, sh: [319, 410], shDist: 264 };
-const GOOD_GAP = (() => {
-  const p = demoPose(0);
-  return (p[11].y + p[12].y) / 2 - (p[7].y + p[8].y) / 2;
-})();
+// Demo only: a synthetic cartoon figure (not a real person), the provided avatar drawn at its
+// own proportions in two joined pieces: the body (hair behind, neck, sweater) and the head
+// (ears, face, front hair, glasses). The scripted pose uses the same proportions, so the body
+// sits on the shoulder landmarks and the head on the ear landmarks. A slouch moves the head
+// down over the collar, as a real head-forward slouch looks from the front.
+const AVATAR = { w: 640, sh: [319, 410], ear: [320, 226], shDist: 264 };
 function updateDemoAvatar(lm) {
   const wrap = $("demo-avatar");
   const on = Boolean(demo && lm);
@@ -1591,20 +1589,22 @@ function updateDemoAvatar(lm) {
   if (!on) return;
   const W = canvas.clientWidth;
   const H = canvas.clientHeight;
-  const img = $("demo-avatar-img");
   const s = Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H) / AVATAR.shDist;
-  const sx = (1 - (lm[11].x + lm[12].x) / 2) * W;
-  const sy = ((lm[11].y + lm[12].y) / 2) * H;
-  let tilt = (Math.atan2((lm[12].y - lm[11].y) * H, (lm[11].x - lm[12].x) * W) * 180) / Math.PI;
-  if (tilt > 90) tilt -= 180;
-  if (tilt < -90) tilt += 180;
-  const gap = (lm[11].y + lm[12].y) / 2 - (lm[7].y + lm[8].y) / 2;
-  const lean = 1 + Math.min(0.5, Math.max(0, (GOOD_GAP - gap) / GOOD_GAP)) * 0.9;
-  img.style.width = `${AVATAR.w * s}px`;
-  img.style.left = `${sx - AVATAR.sh[0] * s}px`;
-  img.style.top = `${sy - AVATAR.sh[1] * s}px`;
-  img.style.transformOrigin = `${AVATAR.sh[0] * s}px ${AVATAR.sh[1] * s}px`;
-  img.style.transform = `rotate(${tilt.toFixed(2)}deg) scale(${lean.toFixed(3)})`;
+  const tiltOf = (a, b) => {
+    let deg = (Math.atan2((b.y - a.y) * H, (a.x - b.x) * W) * 180) / Math.PI;
+    if (deg > 90) deg -= 180;
+    if (deg < -90) deg += 180;
+    return deg;
+  };
+  const pin = (img, a, b, anchor) => {
+    img.style.width = `${AVATAR.w * s}px`;
+    img.style.left = `${(1 - (a.x + b.x) / 2) * W - anchor[0] * s}px`;
+    img.style.top = `${((a.y + b.y) / 2) * H - anchor[1] * s}px`;
+    img.style.transformOrigin = `${anchor[0] * s}px ${anchor[1] * s}px`;
+    img.style.transform = `rotate(${tiltOf(a, b).toFixed(2)}deg)`;
+  };
+  pin($("demo-avatar-body"), lm[11], lm[12], AVATAR.sh);
+  pin($("demo-avatar-head"), lm[7], lm[8], AVATAR.ear);
 }
 
 function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
