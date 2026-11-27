@@ -2874,9 +2874,59 @@ $("start-demo").addEventListener("click", () => {
   demo = true;
   engine.setDriftBaselineEnabled(false); // synthetic poses: no desk baseline to adapt (#67)
   video.style.display = "none";
-  $("demo-note").style.display = "block";
+  $("demo-note").style.display = "flex";
   begin("demo");
+  // Nothing to find in a scripted demo: show the gauge now, not an empty "Finding you..." for 10 s.
+  reveal.settleNow();
+  applyReveal();
 });
+
+/** Leave the demo: back to the start screen with the camera and demo both on offer again. */
+function stopDemo() {
+  if (!demo) return;
+  setPaused(false);
+  guide.cancel();
+  breath.cancel?.();
+  activity.stop(ACTIVITY.BREATH_CHECK, clockS(), "cancelled");
+  if (card) endCard("done");
+  if (practice) stopPractice();
+  setup.reset();
+  if (firstRun.open) {
+    // The setup card belongs to a running session. Hide it without marking the guide done,
+    // so a real camera start still gets its first-run guide.
+    firstRun.open = false;
+    $("first-run").hidden = true;
+    setGettingStarted(false);
+    activity.stop(ACTIVITY.SETUP, clockS(), "cancelled");
+  }
+  demo = false;
+  engine.setDriftBaselineEnabled(true);
+  engine.restart();
+  clearCoaching();
+  owed.clear();
+  reveal.reset();
+  applyReveal();
+  $("demo-note").style.display = "none";
+  video.style.display = "";
+  $("pause").disabled = true;
+  setTrackingControls(false);
+  document.body.classList.add("pre-start");
+  delete document.body.dataset.source;
+  setSetupReason("start", false); // the start screen is clean: no "Not working?" card until something fails
+  updateDemoAvatar(null); // demo is already false, so this hides the avatar
+  drawSkeleton(null, "");
+  const badge = $("state-badge");
+  badge.className = "badge post-start"; // renderBadge drops post-start, which would show a stale state up top
+  badge.textContent = "waiting";
+  syncTabTitle();
+  $("start-status").textContent = "";
+  $("start-overlay").classList.remove("compact");
+  $("start-overlay").style.display = "";
+  $("start-camera").disabled = $("start-demo").disabled = false;
+  applyWebGLState();
+  $("start-demo").focus();
+}
+$("stop-demo").addEventListener("click", stopDemo);
 
 // -- first session (storyboard v3 frames 02 and 03, #98) -------------------------------------
 // Two cards in #first-run, one line and one button each, x to skip: "Head and shoulders in

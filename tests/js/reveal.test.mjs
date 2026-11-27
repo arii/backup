@@ -197,3 +197,28 @@ test("a returning user's tracked time and days come from store.days", () => {
   assert.equal(trackedDays(days), 1);
   assert.equal(trackedSecondsFromDays(undefined), 0);
 });
+
+test("settleNow skips the settle hold so a scripted demo shows the gauge at once", () => {
+  const r = new RevealStages();
+  assert.equal(r.stage, STAGES.idle);
+  const out = r.settleNow();
+  assert.equal(out.stage, STAGES.settled);
+  assert.equal(out.changed, true);
+  assert.equal(r.settleNow().changed, false);
+  r.update(OK, 0);
+  r.update(OK, 0.5);
+  assert.equal(r.stage, STAGES.settled);
+});
+
+test("reset forgets the session so a second demo or camera start begins from idle", () => {
+  const r = new RevealStages();
+  r.settleNow();
+  run(r, OK, 0, 20);
+  assert.ok(r.tracked > 0);
+  r.reset();
+  assert.equal(r.stage, STAGES.idle);
+  assert.equal(r.tracked, 0);
+  assert.equal(r.settled, false);
+  run(r, OK, 100, 5);
+  assert.equal(r.stage, STAGES.tracking);
+});

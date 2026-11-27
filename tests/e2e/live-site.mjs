@@ -293,7 +293,7 @@ try {
       note: getComputedStyle(document.getElementById("demo-note")).display,
       help: document.getElementById("webgl-help").hidden,
     }));
-    check("?demo starts the demo without a camera and strips the param", st.search === "" && st.note === "block", st);
+    check("?demo starts the demo without a camera and strips the param", st.search === "" && st.note === "flex", st);
     check("app: #webgl-help is hidden when WebGL works", st.help === true, st);
     check("?demo has no errors", errors.length === 0, errors);
     await page.close();
@@ -2005,8 +2005,14 @@ try {
       const { page, errors } = await newPage(browser, { extra: { firstRunDone: false } });
       await page.goto(`${base}app/?clockScale=10&v=${Date.now()}`);
       await page.click("#start-demo");
-      await page.waitForFunction(() => !document.getElementById("finding").hidden, null, { timeout: 5000 });
-      check("staged reveal (frame 02): 'Finding you' holds the gauge's place from the first scored frame", true);
+      // A scripted demo has nothing to find: the gauge shows at once, never an empty "Finding you...".
+      await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
+        timeout: 5000,
+      });
+      check(
+        "demo: the gauge shows from the first frame, no 'Finding you' hold",
+        await page.evaluate(() => document.getElementById("finding").hidden),
+      );
       await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
         timeout: 8000,
       });
@@ -2026,6 +2032,33 @@ try {
       check("staged reveal: at most 150 visible words below the stage at stage 2", d2.words <= 150, d2);
       await page.screenshot({ path: path.join(outDir, "reveal-stage2.png") });
       check("staged reveal: no errors through stage 2", errors.length === 0, errors);
+      // Stop demo: back to the start screen, and the demo can be entered again.
+      await page.click("#stop-demo");
+      const stopped = await page.evaluate(() => ({
+        pre: document.body.classList.contains("pre-start"),
+        note: getComputedStyle(document.getElementById("demo-note")).display,
+        overlay: getComputedStyle(document.getElementById("start-overlay")).display,
+        firstRun: document.getElementById("first-run").hidden,
+        badge: getComputedStyle(document.getElementById("state-badge")).display,
+        setupPanel: document.getElementById("setup-panel").hidden,
+        avatar: document.getElementById("demo-avatar").hidden,
+      }));
+      check(
+        "demo: Stop demo returns to the start screen",
+        stopped.pre &&
+          stopped.note === "none" &&
+          stopped.overlay !== "none" &&
+          stopped.firstRun &&
+          stopped.badge === "none" &&
+          stopped.setupPanel &&
+          stopped.avatar,
+        stopped,
+      );
+      await page.click("#start-demo");
+      await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
+        timeout: 5000,
+      });
+      check("demo: re-entry after Stop shows the gauge again", true);
       await page.close();
     }
 

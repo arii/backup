@@ -67,6 +67,19 @@ export class RevealStages {
     return { stage: this.stage, changed: this.stage !== before };
   }
 
+  /** A scripted demo has nothing to find: skip the settle hold and show the gauge at once. */
+  settleNow() {
+    this.settled = true;
+    const before = this.stage;
+    this.stage = Math.max(this.stage, STAGES.settled);
+    return { stage: this.stage, changed: this.stage !== before };
+  }
+
+  /** Back to the start screen: forget this session's reveal state. */
+  reset() {
+    Object.assign(this, new RevealStages({ cfg: this.cfg }));
+  }
+
   /** "Show all settings": everything, now. */
   forceAll() {
     const changed = this.stage !== STAGES.all;
