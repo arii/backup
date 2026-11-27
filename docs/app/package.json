@@ -1,5 +1,5 @@
 {
-  "name": "posture-guard-browser",
+  "name": "backup-browser",
   "private": true,
   "type": "module",
   "description": "Marks the browser app's .js files as ES modules for Node's test runner (tests/js/)."
