@@ -545,6 +545,49 @@ test("calibration records nothing until started, then produces centroids", () =>
   assert.equal(rec.status.calibrated, true);
 });
 
+test("a recording taken while moving into a posture is rejected, a steady one is kept", () => {
+  const rec = new CalibrationRecorder(DEFAULTS.calibration);
+  rec.start("good");
+  for (let t = 0; t <= 3.2; t += 0.2) rec.feed(metrics(t * 4), t); // 0 to ~13 degrees across the window
+  assert.equal(rec.centroids.good, null);
+  assert.match(rec.status.error, /moved while it was recording/);
+  assert.equal(rec.status.error_kind, "moved");
+  rec.start("good");
+  for (let t = 10; t <= 13.2; t += 0.2) rec.feed(metrics(2 + 0.4 * Math.sin(t * 7)), t); // small jitter
+  assert.equal(rec.status.error, null);
+  near(rec.centroids.good.head_forward_deg, 2, 0.5);
+});
+
+test("a rejected moving recording keeps the previously saved posture", () => {
+  const rec = new CalibrationRecorder(DEFAULTS.calibration);
+  rec.start("good");
+  for (let t = 0; t <= 3.2; t += 0.2) rec.feed(metrics(2), t);
+  const saved = rec.centroids.good;
+  const version = rec.version;
+  rec.start("good");
+  for (let t = 10; t <= 13.2; t += 0.2) rec.feed(metrics((t - 10) * 4), t);
+  assert.equal(rec.centroids.good, saved);
+  assert.equal(rec.version, version);
+  assert.equal(rec.status.error_kind, "moved");
+  rec.start("good");
+  assert.equal(rec.status.error_kind, null);
+});
+
+test("too few scored frames is reported as unseen, not moved", () => {
+  const rec = new CalibrationRecorder(DEFAULTS.calibration);
+  rec.start("good");
+  for (let t = 0; t <= 3.5; t += 0.2) rec.feed(unreliable(Reason.NO_POSE), t);
+  assert.equal(rec.status.error_kind, "unseen");
+});
+
+test("motion limit is judged per metric: one wandering metric rejects the recording", () => {
+  const rec = new CalibrationRecorder(DEFAULTS.calibration);
+  rec.start("bad");
+  for (let t = 0; t <= 3.2; t += 0.2) rec.feed(metrics(12, (t % 1) * 20, 0, 0), t);
+  assert.equal(rec.centroids.bad, null);
+  assert.match(rec.status.error, /bad calibration rejected/);
+});
+
 test("calibration progress is reported while recording", () => {
   const rec = new CalibrationRecorder(DEFAULTS.calibration);
   rec.start("good");
