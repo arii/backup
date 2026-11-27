@@ -1,6 +1,6 @@
 {
-  "version": "e81469cff43f1499",
-  "totalBytes": 33457729,
+  "version": "3e48ffe5dc7ec2b9",
+  "totalBytes": 33462093,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 139055,
-      "sha256": "3949a981ade3e5f51bff843a62d5b19165fbec1c61152cb27664d106e8738b6a"
+      "size": 140632,
+      "sha256": "19516481e3c2b93d53b3a8ff3bc3b9b59b84f9c941c49e13060d02cea1b049b0"
     },
     {
       "url": "breaks.js",
@@ -33,9 +33,19 @@
       "sha256": "9371ec6a857ed34c455ef59742d14040741e291062ad0dd651ec81d70ac80102"
     },
     {
+      "url": "demo-avatar-body.svg",
+      "size": 574,
+      "sha256": "9d2cea13a94b659c44c0ae48cb5111cfd485c7d5df307c95a246b6184ad65904"
+    },
+    {
+      "url": "demo-avatar-head.svg",
+      "size": 1259,
+      "sha256": "ca21f0f3b3747e1ed0c64f325e937dec83c3655b969d34e09a8b64cd621398db"
+    },
+    {
       "url": "demo-pose.js",
-      "size": 2127,
-      "sha256": "ef8df181d414c82f04735fb46a3658f6e4a98538bd4449b941a38abae6e506e1"
+      "size": 2328,
+      "sha256": "6944310dcca77a48f35d6c343cbd075780e555aa141a1328ad15d9d77fa1e522"
     },
     {
       "url": "feedback.js",
@@ -44,8 +54,8 @@
     },
     {
       "url": "index.html",
-      "size": 66029,
-      "sha256": "b414d62a7511d9b53458012c9d45047f2b65d8549f79541285139ea31f001358"
+      "size": 66843,
+      "sha256": "dc18f27c830a808da10439a77ea4fbcbcab536f005c8409960d2fd2af2dc0f46"
     },
     {
       "url": "loading.js",
@@ -74,8 +84,8 @@
     },
     {
       "url": "posture-core.js",
-      "size": 34963,
-      "sha256": "82d6ea4f58f4468abfe06320a2c53cfb576d94d39d0c27db1ec93aeac935c498"
+      "size": 34902,
+      "sha256": "91c6f2fc62c80c383979bff9fa35ec90fefcd27c7f31c7d3aa2683825d782cc2"
     },
     {
       "url": "privacy.js",

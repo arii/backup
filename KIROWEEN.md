@@ -15,7 +15,7 @@ BackUp runs MediaPipe Pose on your webcam, measures head-forward, head
 tilt, shoulder level and trunk lean, and runs a reminder state machine: a chime
 after 2 s of sustained slouching, a spoken prompt 10 s later, and a reward chime
 when you sit back up. Reminders say what is wrong and how to fix it ("Right
-shoulder dropped: lift your right shoulder and take your weight off that elbow"),
+shoulder dropped: level your shoulders"),
 using your own left and right even when the camera image is mirrored. A posture needle shows how close you are to slouching, and
 "Record good posture" / "Record slouch posture" calibrate it to your own desk.
 
