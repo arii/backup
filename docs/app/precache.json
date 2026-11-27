@@ -1,6 +1,6 @@
 {
-  "version": "13cac7364662dcad",
-  "totalBytes": 33456487,
+  "version": "766427112f914427",
+  "totalBytes": 33457799,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 138594,
-      "sha256": "2e2c1093d9363db2646fdf82c162a776cd5063200f8b6c883c3a235c9a2d2b85"
+      "size": 139069,
+      "sha256": "4e93992f24204e5dfa99d9c9018cf5247d3a6addbe0a478cce9685edadc16951"
     },
     {
       "url": "breaks.js",
@@ -44,8 +44,8 @@
     },
     {
       "url": "index.html",
-      "size": 65931,
-      "sha256": "fb5a3df9dffe24487925b6faaa1df4875405cf5dde92cc41ebccfd836279e89c"
+      "size": 66085,
+      "sha256": "8045ea8c09b790fb40896d60d3ed7be3facbffe14509780f8fbcb552396169d4"
     },
     {
       "url": "loading.js",
@@ -69,8 +69,8 @@
     },
     {
       "url": "onboarding.js",
-      "size": 11553,
-      "sha256": "1ae2550c7102fa54de1104608e9d53b8cd4fea008f0a52bec24f194b251755ba"
+      "size": 12236,
+      "sha256": "908ef4f1b8ec96f8d199492f0fce227f5690b1b7f59975aa4e8ab311b2c2e029"
     },
     {
       "url": "posture-core.js",
