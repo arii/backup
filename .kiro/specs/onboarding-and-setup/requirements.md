@@ -5,7 +5,7 @@ A first-time visitor to the browser app (`docs/app/`) should understand within a
 minute what BackUp does, how to place the camera, what they will see and hear,
 and what the app does with their video. If tracking does not work well, the app should
 say why in plain language and show the fix. This spec extends Requirement 8 (browser
-app) of `.kiro/specs/posture-guard/` and depends on `.kiro/specs/safety-and-disclaimers/`
+app) of `.kiro/specs/backup/` and depends on `.kiro/specs/safety-and-disclaimers/`
 for the safety notice text.
 
 The #98 PRD (storyboard v3) is the source for the main screen, onboarding, Settings and landing page; where this spec disagrees, the PRD wins.

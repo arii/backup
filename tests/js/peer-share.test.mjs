@@ -15,7 +15,7 @@ import {
 import { STORE_KEYS, clearStoredData } from "../../docs/app/privacy.js";
 import { PEER_KEYS, cleanNickname, isPeerRecord, peerLink, peerRecord, readPeerLink } from "../../docs/app/share.js";
 
-const BASE = "https://arii.github.io/posture-guard/app/";
+const BASE = "https://arii.github.io/backup/app/";
 const good = { nickname: "Ari", week: "2026-W15", tracked_s: 7260, score: 64, breaks: 5 };
 
 test("P8: the record has exactly the documented keys", () => {

@@ -289,9 +289,9 @@ const STATS = [
 
 const KIRO_TREE = [
   ".kiro/",
-  "  specs/posture-guard/requirements.md   9 EARS requirement groups",
-  "  specs/posture-guard/design.md         7 correctness properties",
-  "  specs/posture-guard/tasks.md          12 tasks, all checked",
+  "  specs/backup/requirements.md   9 EARS requirement groups",
+  "  specs/backup/design.md         7 correctness properties",
+  "  specs/backup/tasks.md          12 tasks, all checked",
   "  steering/architecture.md              the house rules",
   "  hooks/node-tests-on-change.json       tests on every save",
 ];
@@ -390,7 +390,7 @@ export const Outro: React.FC<{ p: VideoProps }> = ({ p }) => (
         <div style={{ fontSize: 64, fontWeight: 700 }}>Posture to Die For.</div>
       </Rise>
       <Rise delay={20}>
-        <div style={{ fontSize: 54, color: color.good, fontFamily: mono }}>arii.github.io/posture-guard</div>
+        <div style={{ fontSize: 54, color: color.good, fontFamily: mono }}>arii.github.io/backup</div>
       </Rise>
       <Rise delay={40}>
         <div style={{ fontSize: 40, color: color.muted }}>No install. No special camera. Sit up straight.</div>

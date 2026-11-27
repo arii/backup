@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeSharePayload, normalizeInstance, SHARE_TEXT, shareLinks, shareUrl } from "../../docs/app/share.js";
 
-const URL_ = "https://arii.github.io/posture-guard/";
+const URL_ = "https://arii.github.io/backup/";
 
 test("share text is the agreed sentence", () => {
   assert.equal(
@@ -62,7 +62,7 @@ test("mastodon instance must be a plain hostname", () => {
 
 test("native payload and share URL (no query, no hash)", () => {
   assert.deepEqual(nativeSharePayload(URL_), { title: "BackUp: Posture to Die For", text: SHARE_TEXT, url: URL_ });
-  assert.equal(shareUrl("https://arii.github.io/posture-guard/app/?clockScale=600#x"), URL_);
+  assert.equal(shareUrl("https://arii.github.io/backup/app/?clockScale=600#x"), URL_);
 });
 
 import { CARD, cardAltText, drawScoreCard, scoreCardData } from "../../docs/app/share.js";

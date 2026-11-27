@@ -8,7 +8,7 @@ Leave a browser tab open with your webcam on, and it watches how you sit. Slouch
 and it chimes. Keep slouching, and it tells you out loud exactly what is wrong and
 how to fix it. Everything runs on your computer; no video or landmark leaves it.
 
-**Try it: <https://arii.github.io/posture-guard/app/>** (press *Try the demo* if
+**Try it: <https://arii.github.io/backup/app/>** (press *Try the demo* if
 you have no camera).
 
 ![The browser app in demo mode on a desktop screen](docs/assets/app-desktop.png)
@@ -293,12 +293,12 @@ The browser app and its test suite were built with
 [Kiro](https://kiro.dev), spec-first; [`KIROWEEN.md`](KIROWEEN.md) has the build
 history. The `.kiro/` directory is committed so judges can read it:
 
-- `.kiro/specs/posture-guard/requirements.md`: EARS acceptance criteria for the
+- `.kiro/specs/backup/requirements.md`: EARS acceptance criteria for the
   camera modes, frame hardening, smoothing, needle, calibration, sounds, config and
   the browser version.
-- `.kiro/specs/posture-guard/design.md`: module design, the smoothing-window fix,
+- `.kiro/specs/backup/design.md`: module design, the smoothing-window fix,
   and the seven correctness properties the property tests check.
-- `.kiro/specs/posture-guard/tasks.md`: the implementation plan, checked off.
+- `.kiro/specs/backup/tasks.md`: the implementation plan, checked off.
 - `.kiro/steering/architecture.md`: standing rules for the agent (tuning defaults in
   one place, injected timestamps, frame-rate-independent EMAs, the precache step,
   headers on new files, safety and claims, feedback design).
@@ -329,7 +329,7 @@ stitched into one app. See [The monster](#the-monster-kiroween-2026-frankenstein
 above. [`KIROWEEN.md`](KIROWEEN.md) has the submission write-up, the build history
 and what Kiro did. Licensed under the [MIT License](LICENSE).
 
-Fastest path: open <https://arii.github.io/posture-guard/app/> and press
+Fastest path: open <https://arii.github.io/backup/app/> and press
 *Try the demo*, or *Start with webcam*.
 
 To run and test it locally, see [Development](#development).
@@ -400,7 +400,7 @@ bump `ONBOARDING_VERSION` or `ACK_VERSION` in `docs/app/onboarding.js`, update t
 hard-coded values too.
 
 The seeded property tests in `tests/js/posture-core.test.mjs` check the correctness
-properties in `.kiro/specs/posture-guard/design.md`:
+properties in `.kiro/specs/backup/design.md`:
 
 | Property | Checked over random input |
 |---|---|

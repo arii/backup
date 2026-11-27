@@ -2581,7 +2581,7 @@ function showError(message) {
 // No login or backend; the user reviews and submits it on GitHub. Never
 // includes video, images, landmarks or stored sounds.
 
-const ISSUE_URL = "https://github.com/arii/posture-guard/issues/new";
+const ISSUE_URL = "https://github.com/arii/backup/issues/new";
 // Issue title from a "HH:MM:SS message" entry: drop the time, cut at a word boundary.
 function bugTitle(entry, max = 71) {
   const msg = entry.slice(9);
@@ -3491,7 +3491,7 @@ $("progress-export").addEventListener("click", () => {
   const url = URL.createObjectURL(new Blob([exportJson(store)], { type: "application/json" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = "posture-guard-progress.json";
+  a.download = "backup-progress.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });

@@ -1,5 +1,5 @@
 {
-  "name": "posture-guard-tooling",
+  "name": "backup-tooling",
   "private": true,
   "description": "Dev tooling only. The app in docs/ has no build step.",
   "type": "module",

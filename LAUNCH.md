@@ -29,7 +29,7 @@ The sandbox couldn't reach WHOIS or RDAP, so **availability isn't verified**. Ch
   - `sitbackup.com`
 - **GitHub:** `backup` is an organization and `getbackup` is a user. `sitbackup`, `backupcam`, `posturetodiefor` and `backup-posture` returned "not found" through the API, so they're probably free.
 - **npm:** not checked (blocked from the sandbox). Use a scoped name like `@arii/backup`, since plain `backup` is certainly taken.
-- **Repo and Pages URL:** the app still lives at `arii.github.io/posture-guard/`. Renaming the repo would break that URL (GitHub redirects repos, not Pages sites). Do it at the same time as pointing a custom domain at Pages.
+- **Repo and Pages URL:** the repo is `arii/backup` and the app lives at `arii.github.io/backup/`. The old `arii.github.io/posture-guard/` URL no longer resolves (GitHub redirects repos, not Pages sites), so old links must be updated. Point a custom domain at Pages when one is chosen.
 
 ## Store and launch copy
 
@@ -65,7 +65,7 @@ All copy follows the wellness rules (#41, #51): it **notices, reminds and helps 
 ## Brand use in the product
 - **UI:** "BackUp", plain and functional. The tagline appears on the start screen, page titles and the share text.
 - **Audio:** clean chimes by default. An optional spooky chime pack is planned, to play up the tagline without making it the default.
-- **Internal names stay as they are:** the `posture-guard:v1` storage key (so existing users keep their data) and the repo URL until the domain move.
+- **Internal names stay as they are:** the `posture-guard:v1` storage key and the `posture-guard-` cache prefix (so existing users keep their data and caches are cleaned up). They are not shown to users.
 
 ## Owner-only checklist (issue #30)
 
@@ -73,7 +73,7 @@ These need the owner's accounts, hardware or voice, so an agent cannot do them. 
 
 - [x] **Default branch** is `main` (verified 2026-11-23 with `gh repo view`) (Settings, Branches). Check that the repo home page shows the BackUp README and LICENSE.
 - [ ] **WebGL in your Chrome** (best accuracy; without it the app uses a simpler fallback): `chrome://settings/system`, turn on "Use graphics acceleration when available", relaunch, then check `chrome://gpu` says "WebGL: Hardware accelerated".
-- [ ] **Manual webcam test with a real person.** CI only uses a drawn figure. Open [the app](https://arii.github.io/posture-guard/app/) and:
+- [ ] **Manual webcam test with a real person.** CI only uses a drawn figure. Open [the app](https://arii.github.io/backup/app/) and:
   1. Click Start, accept the notice, allow the camera. Expect the badge to leave "no one in view" and the fps and angle readouts to move.
   2. Sit upright for 30 seconds. Expect "good posture" and no reminder.
   3. Lean your head forward and hold. Expect a chime, then a spoken cue about your head within a few seconds.

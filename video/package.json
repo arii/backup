@@ -1,5 +1,5 @@
 {
-  "name": "posture-guard-video",
+  "name": "backup-video",
   "version": "1.0.0",
   "description": "Kiroween demo video for BackUp — Posture to Die For, made with Remotion",
   "private": true,
@@ -7,7 +7,7 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "capture": "node scripts/capture.mjs",
-    "render": "remotion render src/index.ts PostureGuardDemo out/posture-guard-demo.mp4 --props=public/capture.json",
+    "render": "remotion render src/index.ts BackUpDemo out/backup-demo.mp4 --props=public/capture.json",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

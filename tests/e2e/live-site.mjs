@@ -47,7 +47,7 @@ import https from "node:https";
 import path from "node:path";
 import { chromium } from "playwright";
 
-const [base = "https://arii.github.io/posture-guard/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
+const [base = "https://arii.github.io/backup/", y4m, outDir = "live-site-report"] = process.argv.slice(2);
 mkdirSync(outDir, { recursive: true });
 const bust = `?v=${Date.now()}`;
 const report = { base, checks: [] };
@@ -1267,7 +1267,7 @@ try {
     const body = issue.searchParams.get("body") || "";
     check(
       "bug report: pre-fills a GitHub issue with diagnostics",
-      issue.pathname === "/arii/posture-guard/issues/new" && body.includes("WebGL:") && body.includes("Browser:"),
+      issue.pathname === "/arii/backup/issues/new" && body.includes("WebGL:") && body.includes("Browser:"),
       { href: href.slice(0, 200) },
     );
     await page.screenshot({ path: path.join(outDir, "demo-praise-pause.png") });
@@ -1695,7 +1695,7 @@ try {
     check(
       "share: the text and link are shown",
       /Nothing is uploaded/.test(await page.textContent("#share-text")) &&
-        /\/posture-guard\/|^http/.test(await page.inputValue("#share-link")),
+        /\/backup\/|^http/.test(await page.inputValue("#share-link")),
     );
     await page.fill("#share-instance", "https://evil.example/x");
     check(

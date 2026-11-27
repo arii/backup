@@ -15,7 +15,7 @@ import { chromium } from "playwright";
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const [base = "https://arii.github.io/posture-guard/", y4m, out = "public"] = process.argv.slice(2);
+const [base = "https://arii.github.io/backup/", y4m, out = "public"] = process.argv.slice(2);
 const footageDir = path.join(out, "footage");
 mkdirSync(footageDir, { recursive: true });
 const SIZE = { width: 1280, height: 800 };
