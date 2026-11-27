@@ -28,7 +28,7 @@ function page({ connection, webgl = true } = {}) {
       return Promise.resolve({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
     },
     navigator: { connection },
-    location: { href: "https://example.test/posture-guard/" },
+    location: { href: "https://example.test/backup/" },
     WebAssembly: { validate: () => true },
     URL,
     Uint8Array,
@@ -53,8 +53,8 @@ test("pointer down prefetches the model and wasm once, same origin", () => {
   assert.deepEqual(
     p.added.map((f) => f.url),
     [
-      "https://example.test/posture-guard/app/vendor/pose_landmarker_lite.task",
-      "https://example.test/posture-guard/app/vendor/wasm/vision_wasm_internal.wasm",
+      "https://example.test/backup/app/vendor/pose_landmarker_lite.task",
+      "https://example.test/backup/app/vendor/wasm/vision_wasm_internal.wasm",
     ],
   );
 });
