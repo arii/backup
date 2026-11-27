@@ -81,7 +81,7 @@ Not legal advice. Findings from reading public pages on 20 Nov 2026.
 | Owner-only | Privacy lawyer review (BIPA, MHMDA and similar, FTC health guidance, GDPR), trademark clearance. |
 | Future | Face tension tool, Chrome extension, paid tier, any server-side data. Each reopens this checklist. |
 
-Tracking issue: [#51](https://github.com/arii/posture-guard/issues/51). Related: [#44](https://github.com/arii/posture-guard/issues/44), [#30](https://github.com/arii/posture-guard/issues/30).
+Tracking issue: [#51](https://github.com/arii/backup/issues/51). Related: [#44](https://github.com/arii/backup/issues/44), [#30](https://github.com/arii/backup/issues/30).
 
 ## Before charging money
 
