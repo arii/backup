@@ -1,6 +1,6 @@
 {
-  "version": "d651a2ecb0100301",
-  "totalBytes": 33462157,
+  "version": "3e48ffe5dc7ec2b9",
+  "totalBytes": 33462093,
   "files": [
     {
       "url": "activity.js",
@@ -34,13 +34,13 @@
     },
     {
       "url": "demo-avatar-body.svg",
-      "size": 768,
-      "sha256": "aca1a3c0f1c7fba1fedbdc202190cea2256d8a1cf4193094a1a4c91ee3cc571d"
+      "size": 574,
+      "sha256": "9d2cea13a94b659c44c0ae48cb5111cfd485c7d5df307c95a246b6184ad65904"
     },
     {
       "url": "demo-avatar-head.svg",
-      "size": 1129,
-      "sha256": "0893cc330be59b48273e0a9a93e488bae18ee5c2971370445a665c6122c0294a"
+      "size": 1259,
+      "sha256": "ca21f0f3b3747e1ed0c64f325e937dec83c3655b969d34e09a8b64cd621398db"
     },
     {
       "url": "demo-pose.js",
