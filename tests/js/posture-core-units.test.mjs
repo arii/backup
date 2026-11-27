@@ -589,6 +589,48 @@ test("a noisier detector gets a wider drift limit", () => {
   assert.equal(drifting(noisy).status.error_kind, "moved");
 });
 
+// Motion robustness of the drift gate: which shapes of movement inside the 3 s window are kept or rejected.
+function record(shape, noiseSd = 0) {
+  let a = 12345; // small seeded generator, never Math.random
+  const rnd = () => {
+    a = (a * 1664525 + 1013904223) % 4294967296;
+    return a / 4294967296 - 0.5;
+  };
+  const rec = new CalibrationRecorder(DEFAULTS.calibration);
+  rec.start("good");
+  for (let i = 0; i <= 16; i++) {
+    const t = i * 0.2;
+    rec.feed(metrics(shape(t) + noiseSd * 3.46 * rnd()), t);
+  }
+  return rec;
+}
+
+test("drift gate: a sustained step in the middle of the window is rejected", () => {
+  assert.equal(record((t) => (t < 1.5 ? 0 : 12)).status.error_kind, "moved");
+});
+
+test("drift gate: settling before the window and then holding still is kept (sudden lean already done)", () => {
+  const rec = record(() => 12);
+  assert.equal(rec.status.error, null);
+  near(rec.centroids.good.head_forward_deg, 12, 1e-6);
+});
+
+test("drift gate: a one-frame tracking spike is kept, and moves the average by under 3 degrees", () => {
+  const rec = record((t) => (Math.abs(t - 1.6) < 0.01 ? 30 : 2));
+  assert.equal(rec.status.error, null);
+  assert.ok(Math.abs(rec.centroids.good.head_forward_deg - 2) < 3);
+});
+
+test("drift gate: plain landmark noise of 2 degrees is kept", () => {
+  assert.equal(record(() => 5, 2).status.error, null);
+});
+
+test("drift gate: a slow sway around one posture is kept; a fast steady slide is rejected; a slow one passes (known gap)", () => {
+  assert.equal(record((t) => 5 + 2 * Math.sin(t * 4)).status.error, null);
+  assert.equal(record((t) => t * 5).status.error_kind, "moved"); // 5 deg/s
+  assert.equal(record((t) => t * 3).status.error, null); // known gap: a slide under about 3.5 deg/s passes the limit
+});
+
 test("too few scored frames is reported as unseen, not moved", () => {
   const rec = new CalibrationRecorder(DEFAULTS.calibration);
   rec.start("good");
