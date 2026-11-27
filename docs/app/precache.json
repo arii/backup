@@ -1,6 +1,6 @@
 {
-  "version": "3e48ffe5dc7ec2b9",
-  "totalBytes": 33462093,
+  "version": "df77f77a43ced974",
+  "totalBytes": 33462572,
   "files": [
     {
       "url": "activity.js",
@@ -44,8 +44,8 @@
     },
     {
       "url": "demo-pose.js",
-      "size": 2328,
-      "sha256": "6944310dcca77a48f35d6c343cbd075780e555aa141a1328ad15d9d77fa1e522"
+      "size": 2770,
+      "sha256": "05dd548227f85b52fbd98cff6dd4e5eb2915361e95ca37d6a4be2aa07cd4f0a6"
     },
     {
       "url": "feedback.js",
@@ -54,8 +54,8 @@
     },
     {
       "url": "index.html",
-      "size": 66843,
-      "sha256": "dc18f27c830a808da10439a77ea4fbcbcab536f005c8409960d2fd2af2dc0f46"
+      "size": 66880,
+      "sha256": "bedd016de5eac396cba77e350e4057fb9d05aa032ffee206eb1fe741ac58ba7a"
     },
     {
       "url": "loading.js",
