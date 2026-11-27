@@ -59,3 +59,23 @@ test("an uneven-shoulders pose reaches the engine and names the shoulder cue, wi
   assert.equal(CUE_SHORT.shoulder_level, "Level your shoulders");
   assert.ok(!JSON.stringify(cue).toLowerCase().includes("elbow"));
 });
+
+test("the main demo loop includes an uneven-shoulders phase that fires only the shoulder cue", async () => {
+  const { demoPose, DEMO_CYCLE_S } = await import("../../docs/app/demo-pose.js");
+  const { scorePose, DEFAULTS } = await import("../../docs/app/posture-core.js");
+  const cfg = DEFAULTS.scoring;
+  const slouch = scorePose(demoPose(1 * DEMO_CYCLE_S + 2), cfg);
+  const shoulders = scorePose(demoPose(3 * DEMO_CYCLE_S + 2), cfg);
+  const good = scorePose(demoPose(2 * DEMO_CYCLE_S + 2), cfg);
+  assert.ok(Math.abs(shoulders.shoulder_level_deg) > cfg.shoulder_level_deg, "uneven shoulders over threshold");
+  assert.ok(Math.abs(slouch.shoulder_level_deg) < cfg.shoulder_level_deg, "head-forward phase keeps shoulders level");
+  assert.ok(Math.abs(good.shoulder_level_deg) < cfg.shoulder_level_deg, "good phase is level");
+  assert.ok(
+    Math.abs(shoulders.head_forward_deg) < cfg.head_forward_deg - cfg.hysteresis_margin_deg,
+    "shoulder phase is not a head-forward fault",
+  );
+  assert.ok(
+    Math.abs(shoulders.head_tilt_deg) < cfg.head_tilt_deg - cfg.hysteresis_margin_deg,
+    "shoulder phase is not a head-tilt fault",
+  );
+});
