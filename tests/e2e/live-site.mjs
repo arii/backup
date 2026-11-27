@@ -2032,6 +2032,26 @@ try {
       check("staged reveal: at most 150 visible words below the stage at stage 2", d2.words <= 150, d2);
       await page.screenshot({ path: path.join(outDir, "reveal-stage2.png") });
       check("staged reveal: no errors through stage 2", errors.length === 0, errors);
+      // Gauge direction (Ari): good on the right, bad on the left, needle drawn inside the same flip.
+      const dir = await page.evaluate(() => {
+        const x = (e) => {
+          const r = e.getBoundingClientRect();
+          return r.left + r.width / 2;
+        };
+        const arcs = [...document.querySelectorAll("#gauge-svg path")];
+        const col = (c) => arcs.find((a) => a.getAttribute("stroke") === c);
+        const rotor = document.getElementById("needle-rotor");
+        return {
+          green: x(col("#4cc36a")),
+          red: x(col("#ff5c5c")),
+          needleFlipped: rotor.parentElement.getAttribute("transform").includes("scale(-1 1)"),
+        };
+      });
+      check(
+        "gauge: green (good) is on the right and red (bad) on the left",
+        dir.green > dir.red && dir.needleFlipped,
+        dir,
+      );
       // Stop demo: back to the start screen, and the demo can be entered again.
       await page.click("#stop-demo");
       const stopped = await page.evaluate(() => ({
