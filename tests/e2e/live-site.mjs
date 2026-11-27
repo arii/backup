@@ -2040,7 +2040,11 @@ try {
         overlay: getComputedStyle(document.getElementById("start-overlay")).display,
         firstRun: document.getElementById("first-run").hidden,
       }));
-      check("demo: Stop demo returns to the start screen", stopped.pre && stopped.note === "none" && stopped.overlay !== "none" && stopped.firstRun, stopped);
+      check(
+        "demo: Stop demo returns to the start screen",
+        stopped.pre && stopped.note === "none" && stopped.overlay !== "none" && stopped.firstRun,
+        stopped,
+      );
       await page.click("#start-demo");
       await page.waitForFunction(() => !document.querySelector("#needle-text").closest("[data-stage]").hidden, null, {
         timeout: 5000,
