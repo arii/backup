@@ -44,3 +44,18 @@ test("the demo pose keeps the avatar's proportions in every state", async () => 
   assert.ok(gap(demoPose(1)) > 0.17 && gap(demoPose(1)) < 0.2, "upright gap matches the avatar neck");
   assert.ok(gap(demoPose(25)) < gap(demoPose(1)) - 0.08, "slouch drops the head clearly");
 });
+
+test("an uneven-shoulders pose reaches the engine and names the shoulder cue, with no elbow claim", async () => {
+  const { practicePose } = await import("../../docs/app/demo-pose.js");
+  const { CUE_SHORT, DEFAULTS, PostureEngine } = await import("../../docs/app/posture-core.js");
+  const engine = new PostureEngine(DEFAULTS);
+  engine.setDriftBaselineEnabled(false);
+  let cue = null;
+  for (let t = 0; t < 60; t += 1 / 15) {
+    const out = engine.process(practicePose("shoulder_level", t % 20), t);
+    if (out.cue) cue = out.cue;
+  }
+  assert.equal(cue?.metric, "shoulder_level");
+  assert.equal(CUE_SHORT.shoulder_level, "Level your shoulders");
+  assert.ok(!JSON.stringify(cue).toLowerCase().includes("elbow"));
+});
