@@ -9,7 +9,7 @@ import { totalSeconds } from "./timeline";
 
 export const RemotionRoot: React.FC = () => (
   <Composition
-    id="PostureGuardDemo"
+    id="BackUpDemo"
     component={Main}
     fps={FPS}
     width={WIDTH}
