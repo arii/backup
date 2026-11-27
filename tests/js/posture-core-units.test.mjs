@@ -573,6 +573,22 @@ test("a rejected moving recording keeps the previously saved posture", () => {
   assert.equal(rec.status.error_kind, null);
 });
 
+test("a noisier detector gets a wider drift limit", () => {
+  const drifting = (rec) => {
+    rec.start("good");
+    for (let t = 0; t <= 3.2; t += 0.2) rec.feed(metrics(t * 2), t); // about 3.2 deg between halves
+    return rec;
+  };
+  assert.equal(drifting(new CalibrationRecorder(DEFAULTS.calibration)).status.error, null);
+  const strict = new CalibrationRecorder({ ...DEFAULTS.calibration, max_drift_deg: 1.0 });
+  assert.equal(drifting(strict).status.error_kind, "moved");
+  const noisy = new CalibrationRecorder({ ...DEFAULTS.calibration, max_drift_deg: 1.0, max_drift_deg_noisy: 7.0 });
+  noisy.useNoisyDetector(true);
+  assert.equal(drifting(noisy).status.error, null);
+  noisy.useNoisyDetector(false);
+  assert.equal(drifting(noisy).status.error_kind, "moved");
+});
+
 test("too few scored frames is reported as unseen, not moved", () => {
   const rec = new CalibrationRecorder(DEFAULTS.calibration);
   rec.start("good");
