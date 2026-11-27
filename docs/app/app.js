@@ -1644,6 +1644,23 @@ function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
   }
 }
 
+// A real camera that still finds no one after FRAMING_HELP_MS gets a short checklist and a way into the demo.
+const FRAMING_HELP_MS = 10000;
+let noPoseSince = null;
+function updateFramingHelp(result) {
+  const none = !demo && result.kind === "unreliable" && result.reason === Reason.NO_POSE;
+  if (!none) noPoseSince = null;
+  else noPoseSince ??= performance.now();
+  $("framing-help").hidden = !(none && performance.now() - noPoseSince >= FRAMING_HELP_MS);
+}
+$("framing-demo").addEventListener("click", () => {
+  stopCamera(new Error("camera stopped"));
+  showError("");
+  $("framing-help").hidden = true;
+  noPoseSince = null;
+  $("start-demo").click();
+});
+
 function causeFor(result, landmarks) {
   if (landmarks && landmarks[LEFT_EAR].y < 0.1) return "head near the top edge - lower the camera or sit lower";
   if (result.kind !== "unreliable") return "";
@@ -1804,6 +1821,7 @@ function render(out, landmarks) {
   const view = gaugeView(transition.state, result.kind === "scored", out.hold?.kind === "slipping", needle);
   renderBadge(transition, result, held, label, view.zone, out.hold);
   $("warnings").textContent = causeFor(result, landmarks);
+  updateFramingHelp(result);
   renderMetrics(out.relative, held ? "none" : view.zone, held ? null : out.cue);
   if (result.kind === "scored" || held) timeline.add(held ? "break" : view.zone, performance.now() / 1000);
   renderNeedle(view, held);
