@@ -293,7 +293,7 @@ try {
       note: getComputedStyle(document.getElementById("demo-note")).display,
       help: document.getElementById("webgl-help").hidden,
     }));
-    check("?demo starts the demo without a camera and strips the param", st.search === "" && st.note === "block", st);
+    check("?demo starts the demo without a camera and strips the param", st.search === "" && st.note === "flex", st);
     check("app: #webgl-help is hidden when WebGL works", st.help === true, st);
     check("?demo has no errors", errors.length === 0, errors);
     await page.close();
