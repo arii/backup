@@ -39,7 +39,7 @@ you have no camera).
 |---|---|---|
 | Head forward | Tech neck: your ears have wandered ahead of your shoulders | "Tuck your chin and bring your ears back over your shoulders." |
 | Head tilted | The puzzled dog | "Straighten your neck so your ears are level." |
-| Shoulder dropped | The one-elbow lean | "Level your shoulders and take your weight off that elbow." |
+| Shoulder dropped | Uneven shoulders | "Level your shoulders." |
 | Leaning sideways | The Leaning Tower of Pisa | "Sit up straight with your weight even on both hips." |
 
 The advice never names a side, so a mirrored webcam image cannot make it wrong. Sit up
@@ -94,8 +94,7 @@ Firefox, set `webgl.disabled` to `false` in `about:config`.
 
 - **Tells you what to fix.** Reminders name the problem and the fix, on screen and
   out loud: "Head forward: tuck your chin and bring your ears back over your
-  shoulders", "Shoulders uneven: level your shoulders and take your weight off that
-  elbow", "Head tilted: straighten your neck", "Leaning sideways: sit up with your
+  shoulders", "Shoulders uneven: level your shoulders", "Head tilted: straighten your neck", "Leaning sideways: sit up with your
   weight even". The advice is sideless, so a mirrored camera image never changes it.
   The needle shows no score number, only a one-word label.
 - **Recorded voice.** Prompts use pre-recorded Kokoro voices, with the browser's
