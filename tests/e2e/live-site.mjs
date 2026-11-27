@@ -2781,8 +2781,7 @@ try {
     try {
       const { page, errors } = await newPage(empty);
       await page.goto(`${base}app/${bust}`);
-      await page.click("#ob-ack");
-      await page.click("#start-camera");
+      await page.click("#start-camera"); // newPage pre-acknowledges the safety notice
       const helpHidden = () => page.evaluate(() => document.getElementById("framing-help").hidden);
       await page.waitForFunction(
         () => document.getElementById("warnings").textContent.includes("no one in view"),
