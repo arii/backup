@@ -5,8 +5,8 @@ watches how you sit, chimes when you slouch, and tells you out loud what to fix.
 Your camera feed never leaves your browser.
 
 - **Category:** Frankenstein
-- **Try it:** <https://arii.github.io/posture-guard/app/> (press *Try the demo* for no camera)
-- **Code:** <https://github.com/arii/posture-guard> (MIT License)
+- **Try it:** <https://arii.github.io/backup/app/> (press *Try the demo* for no camera)
+- **Code:** <https://github.com/arii/backup> (MIT License)
 - **Kiro artifacts:** [`.kiro/`](.kiro/) (spec, steering, one hook)
 
 ## What it does
@@ -87,7 +87,7 @@ What the Kiro phase changed (PRs #19 onward):
 
 ## How Kiro was used
 
-- **Spec-driven development.** [`.kiro/specs/posture-guard/`](.kiro/specs/posture-guard/)
+- **Spec-driven development.** [`.kiro/specs/backup/`](.kiro/specs/backup/)
   holds EARS-style requirements (9 requirement groups), a design with seven numbered
   correctness properties, and a 12-task plan that was checked off as each task's
   tests passed.
@@ -182,7 +182,7 @@ What the Kiro phase changed (PRs #19 onward):
 | Public repository | Yes |
 | OSI-approved license, visible | Yes: [MIT](LICENSE) |
 | `.kiro/` committed (not gitignored) | Yes: specs, steering, 1 hook |
-| Working demo link | Yes: <https://arii.github.io/posture-guard/app/> |
+| Working demo link | Yes: <https://arii.github.io/backup/app/> |
 | How Kiro was used | This file and the README's "Built with Kiro" section |
 | Category | Frankenstein |
 | Demo video | An earlier draft render of real footage of the live site (`video/1-backup-main-v18.mp4`) is in [`video/`](video/); it is not the final cut and is not uploaded to YouTube |
