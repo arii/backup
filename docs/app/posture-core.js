@@ -50,7 +50,7 @@ export const DEFAULTS = Object.freeze({
     recovery_chime: { enabled: true },
   },
   needle: { tau_s: 0.5 },
-  calibration: { window_s: 3.0, min_samples: 5 },
+  calibration: { window_s: 3.0, min_samples: 5, max_drift_deg: 4.7 },
 });
 
 export const Reason = Object.freeze({
@@ -669,6 +669,23 @@ function centroid(samples) {
   });
 }
 
+/** How far the posture moved during a recording: the largest per-metric difference (degrees)
+ *  between the mean of the first half and the mean of the second half. A person holding still
+ *  reads small because frame noise averages out; one moving into a posture reads large, and the
+ *  average of such a recording is a posture they never held. */
+function calibrationDrift(samples) {
+  const keys = ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"];
+  const h = Math.floor(samples.length / 2);
+  if (h < 1) return 0;
+  const mean = (arr, k) => arr.reduce((a, s) => a + s[k], 0) / arr.length;
+  let worst = 0;
+  for (const k of keys) {
+    const d = Math.abs(mean(samples.slice(0, h), k) - mean(samples.slice(h), k));
+    if (Number.isFinite(d) && d > worst) worst = d;
+  }
+  return worst;
+}
+
 export class CalibrationRecorder {
   constructor(cfg) {
     this.cfg = cfg;
@@ -680,6 +697,7 @@ export class CalibrationRecorder {
     this.centroids = { good: null, bad: null };
     this.counts = { good: 0, bad: 0 };
     this.error = null;
+    this.errorKind = null;
     this.version = 0;
   }
 
@@ -689,6 +707,7 @@ export class CalibrationRecorder {
     this.startedAt = null;
     this.samples = [];
     this.error = null;
+    this.errorKind = null;
   }
 
   reset() {
@@ -699,6 +718,7 @@ export class CalibrationRecorder {
     this.centroids = { good: null, bad: null };
     this.counts = { good: 0, bad: 0 };
     this.error = null;
+    this.errorKind = null;
     this.version += 1;
   }
 
@@ -732,6 +752,7 @@ export class CalibrationRecorder {
       good: this.centroids.good,
       bad: this.centroids.bad,
       error: this.error,
+      error_kind: this.errorKind,
     };
   }
 
@@ -762,11 +783,21 @@ export class CalibrationRecorder {
       this.error =
         `${kind} calibration failed: ${samples.length} scored frames ` +
         `(need ${needed}) - sit fully in frame and retry`;
+      this.errorKind = "unseen";
+      return;
+    }
+    const motion = calibrationDrift(samples);
+    if (motion > this.cfg.max_drift_deg) {
+      this.error =
+        `${kind} calibration rejected: you moved while it was recording ` +
+        `(${motion.toFixed(1)} deg drift, limit ${this.cfg.max_drift_deg}) - hold still and retry`;
+      this.errorKind = "moved";
       return;
     }
     this.centroids[kind] = centroid(samples);
     this.counts[kind] = samples.length;
     this.error = null;
+    this.errorKind = null;
     this.version += 1;
     const cal = this.calibration;
     if (cal && !axisOk(cal)) {

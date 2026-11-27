@@ -510,11 +510,13 @@ function renderCalibration() {
   }
   if (!c.active && calibWasActive && !firstRun.open) {
     showRelaxBanner(
-      c.error
-        ? "Couldn't see you well enough. Try again"
-        : demo
-          ? "Posture saved for this demo only"
-          : "Posture saved. Reminders now measure from it; your stats are kept",
+      c.error_kind === "moved"
+        ? `You moved while it was saving. Hold still and try again${c.good ? "; your last saved posture is still in use" : ""}`
+        : c.error
+          ? "Couldn't see you well enough. Try again"
+          : demo
+            ? "Posture saved for this demo only"
+            : "Posture saved. Reminders now measure from it; your stats are kept",
     );
   }
   calibWasActive = !!c.active;
