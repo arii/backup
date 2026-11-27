@@ -2772,6 +2772,46 @@ try {
     await page.close();
   }
 
+  // 4b. A camera that shows no one: after 10 s of "no one in view" the framing help appears, and its
+  // demo button leaves the camera for the demo. A separate browser without the figure feed.
+  {
+    const empty = await chromium.launch({
+      args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
+    });
+    try {
+      const { page, errors } = await newPage(empty);
+      await page.goto(`${base}app/${bust}`);
+      await page.click("#ob-ack");
+      await page.click("#start-camera");
+      const helpHidden = () => page.evaluate(() => document.getElementById("framing-help").hidden);
+      await page.waitForFunction(
+        () => document.getElementById("warnings").textContent.includes("no one in view"),
+        null,
+        { timeout: 120000 },
+      );
+      check("empty camera: framing help is not shown straight away", await helpHidden());
+      await page.waitForFunction(() => !document.getElementById("framing-help").hidden, null, { timeout: 30000 });
+      const tips = await page.evaluate(() => document.getElementById("framing-help").textContent);
+      check("empty camera: framing help lists head and shoulders in frame", /head and shoulders/.test(tips), tips);
+      await page.click("#framing-demo");
+      await page.waitForFunction(() => document.body.dataset.source === "demo", null, { timeout: 10000 });
+      const after = await page.evaluate(() => ({
+        help: document.getElementById("framing-help").hidden,
+        error: document.getElementById("start-error").textContent,
+        setup: document.getElementById("setup-panel").hidden,
+        note: getComputedStyle(document.getElementById("demo-note")).display,
+      }));
+      check(
+        "empty camera: the demo button leaves the camera for a clean demo",
+        after.help && after.error === "" && after.setup && after.note === "flex",
+        after,
+      );
+      check("empty camera: no page errors", errors.length === 0, errors);
+      await page.close();
+    } finally {
+      await empty.close();
+    }
+  }
   // 5. Self-hosting: vendored files are served, nothing left the origin.
   {
     const missing = [];
