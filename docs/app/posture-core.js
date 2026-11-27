@@ -818,11 +818,7 @@ export function cueText(metric, side) {
     ];
   }
   if (metric === "shoulder_level") {
-    return [
-      "Shoulders uneven",
-      "Level your shoulders.",
-      "Your shoulders are uneven. Level them out.",
-    ];
+    return ["Shoulders uneven", "Level your shoulders.", "Your shoulders are uneven. Level them out."];
   }
   return [
     "Leaning sideways",

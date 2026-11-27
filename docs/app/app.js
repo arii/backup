@@ -1575,6 +1575,29 @@ const SKELETON = [
   [23, 24],
 ];
 
+// Demo only: a synthetic cartoon figure (not a real person) follows the scripted landmarks.
+// The head layer is pinned to the ears and the body layer to the shoulders, so a slouch
+// moves the head forward over the shoulders instead of sliding a flat picture around.
+const AVATAR = { w: 640, ear: [320, 226], sh: [319, 410], shDist: 264 };
+function updateDemoAvatar(lm) {
+  const wrap = $("demo-avatar");
+  const on = Boolean(demo && lm);
+  wrap.hidden = !on;
+  wrap.parentElement.classList.toggle("demo-on", on);
+  if (!on) return;
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  // One scale for both layers (from the shoulders) so the head keeps natural proportions.
+  const s = Math.hypot((lm[11].x - lm[12].x) * W, (lm[11].y - lm[12].y) * H) / AVATAR.shDist;
+  const pin = (img, a, b, anchor) => {
+    img.style.width = `${AVATAR.w * s}px`;
+    img.style.left = `${(1 - (a.x + b.x) / 2) * W - anchor[0] * s}px`;
+    img.style.top = `${((a.y + b.y) / 2) * H - anchor[1] * s}px`;
+  };
+  pin($("demo-avatar-body"), lm[11], lm[12], AVATAR.sh);
+  pin($("demo-avatar-head"), lm[7], lm[8], AVATAR.ear);
+}
+
 function drawSkeleton(landmarks, color, cv = canvas, c = ctx, scale = 1) {
   cv.width = cv.clientWidth;
   cv.height = cv.clientHeight;
@@ -1790,6 +1813,7 @@ function render(out, landmarks) {
   cueLine.hidden = !cueVisible;
   if (cueVisible) cueLine.textContent = CUE_SHORT[out.cue.metric] || "Sit up";
   drawSkeleton(landmarks, held ? ZONE_COLOR.none : view.color);
+  updateDemoAvatar(landmarks);
   renderCalibration();
   updateFirstRunLive();
   renderStats();
