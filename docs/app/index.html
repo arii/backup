@@ -588,13 +588,16 @@
     <div class="panel finding" id="finding" data-stage="1" hidden>Finding you&hellip;</div>
     <div class="panel gauge coaching" id="gauge" data-stage="2" hidden>
       <svg viewBox="0 0 200 128" style="width:100%;max-width:300px;display:block;margin:0 auto" id="gauge-svg" role="img" aria-label="Posture: waiting">
+        <!-- Mirrored (Ari): good on the right, bad on the left. The needle keeps its angle maths and is flipped with the arcs. -->
+        <g transform="translate(200 0) scale(-1 1)">
         <path d="M14 100 A 86 86 0 0 1 57 25.5" fill="none" stroke="#4cc36a" stroke-width="14"/>
         <path d="M57 25.5 A 86 86 0 0 1 143 25.5" fill="none" stroke="#ffb340" stroke-width="14"/>
         <path d="M143 25.5 A 86 86 0 0 1 186 100" fill="none" stroke="#ff5c5c" stroke-width="14"/>
-        <text x="41" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Good</text>
+        </g>
+        <text x="159" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Good</text>
         <text x="100" y="28" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Drift</text>
-        <text x="159" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Bad</text>
-        <g id="needle-rotor" transform="rotate(0 100 100)"><line x1="100" y1="100" x2="34" y2="100" stroke="#e8ebf0" stroke-width="5" stroke-linecap="round"/></g>
+        <text x="41" y="70" text-anchor="middle" font-size="9" fill="#8b95a3" aria-hidden="true">Bad</text>
+        <g transform="translate(200 0) scale(-1 1)"><g id="needle-rotor" transform="rotate(0 100 100)"><line x1="100" y1="100" x2="34" y2="100" stroke="#e8ebf0" stroke-width="5" stroke-linecap="round"/></g></g>
         <circle cx="100" cy="100" r="7" fill="#e8ebf0"/>
         <text id="needle-text" x="100" y="124" text-anchor="middle" font-size="14" fill="#e8ebf0">--</text>
       </svg>
