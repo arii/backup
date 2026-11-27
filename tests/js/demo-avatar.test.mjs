@@ -12,8 +12,8 @@ const app = new URL("../../docs/app/", import.meta.url);
 
 test("the demo avatar layers point at a precached SVG that has no background rect", () => {
   const html = readFileSync(new URL("index.html", app), "utf8");
-  assert.match(html, /id="demo-avatar-body" src="demo-avatar\.svg"/);
-  assert.match(html, /id="demo-avatar-head" src="demo-avatar\.svg"/);
+  assert.match(html, /id="demo-avatar-img" src="demo-avatar\.svg"/);
+  assert.equal((html.match(/demo-avatar\.svg/g) || []).length, 1, "one picture, no split layers");
   const svg = readFileSync(new URL("demo-avatar.svg", app), "utf8");
   assert.ok(svg.startsWith("<svg"), "an SVG");
   assert.ok(!svg.includes('<rect width="640"'), "the stage supplies the background");
@@ -24,9 +24,8 @@ test("the demo avatar layers point at a precached SVG that has no background rec
   );
 });
 
-test("app.js pins the avatar head to the ears and the body to the shoulders, in demo only", () => {
+test("app.js pins one avatar picture at the shoulders, in demo only", () => {
   const js = readFileSync(new URL("app.js", app), "utf8");
   assert.match(js, /const on = Boolean\(demo && lm\)/);
-  assert.match(js, /pin\(\$\("demo-avatar-head"\), lm\[7\], lm\[8\]/);
-  assert.match(js, /pin\(\$\("demo-avatar-body"\), lm\[11\], lm\[12\]/);
+  assert.match(js, /rotate\(\$\{tilt/);
 });
