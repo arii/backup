@@ -2891,7 +2891,14 @@ function stopDemo() {
   if (card) endCard("done");
   if (practice) stopPractice();
   setup.reset();
-  closeFirstRun(); // the "Head and shoulders in frame" card belongs to a running session
+  if (firstRun.open) {
+    // The setup card belongs to a running session. Hide it without marking the guide done,
+    // so a real camera start still gets its first-run guide.
+    firstRun.open = false;
+    $("first-run").hidden = true;
+    setGettingStarted(false);
+    activity.stop(ACTIVITY.SETUP, clockS(), "cancelled");
+  }
   demo = false;
   engine.setDriftBaselineEnabled(true);
   engine.restart();
