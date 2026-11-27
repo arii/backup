@@ -2707,6 +2707,7 @@ function preloadModel(canvas, gate) {
     loadSteps.done("download");
   };
   const progress = (got, total) => loadSteps.progress(got, total);
+  engine.calibration.useNoisyDetector(!canvas);
   entry.promise = canvas ? loadModel(canvas, progress, onDownloaded, gate) : loadMoveNet(progress, onDownloaded, gate);
   entry.promise.catch(() => {
     entry.failed = true; // handled where it is awaited; this only stops an unhandled rejection

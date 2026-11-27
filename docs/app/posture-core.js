@@ -50,7 +50,7 @@ export const DEFAULTS = Object.freeze({
     recovery_chime: { enabled: true },
   },
   needle: { tau_s: 0.5 },
-  calibration: { window_s: 3.0, min_samples: 5, max_drift_deg: 4.7 },
+  calibration: { window_s: 3.0, min_samples: 5, max_drift_deg: 5.7, max_drift_deg_noisy: 7.0 },
 });
 
 export const Reason = Object.freeze({
@@ -689,6 +689,7 @@ function calibrationDrift(samples) {
 export class CalibrationRecorder {
   constructor(cfg) {
     this.cfg = cfg;
+    this.driftLimit = cfg.max_drift_deg;
     this.pending = null;
     this.active = null;
     this.startedAt = null;
@@ -699,6 +700,11 @@ export class CalibrationRecorder {
     this.error = null;
     this.errorKind = null;
     this.version = 0;
+  }
+
+  /** MoveNet landmarks are noisier than MediaPipe's, so a still person drifts more between halves. */
+  useNoisyDetector(noisy) {
+    this.driftLimit = noisy ? this.cfg.max_drift_deg_noisy : this.cfg.max_drift_deg;
   }
 
   start(kind) {
@@ -787,10 +793,10 @@ export class CalibrationRecorder {
       return;
     }
     const motion = calibrationDrift(samples);
-    if (motion > this.cfg.max_drift_deg) {
+    if (motion > this.driftLimit) {
       this.error =
         `${kind} calibration rejected: you moved while it was recording ` +
-        `(${motion.toFixed(1)} deg drift, limit ${this.cfg.max_drift_deg}) - hold still and retry`;
+        `(${motion.toFixed(1)} deg drift, limit ${this.driftLimit}) - hold still and retry`;
       this.errorKind = "moved";
       return;
     }
