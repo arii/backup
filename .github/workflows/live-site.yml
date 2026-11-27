@@ -58,7 +58,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "BASE_URL=http://127.0.0.1:8123/" >> "$GITHUB_ENV"
           else
-            echo "BASE_URL=https://arii.github.io/posture-guard/" >> "$GITHUB_ENV"
+            echo "BASE_URL=https://arii.github.io/backup/" >> "$GITHUB_ENV"
           fi
       - name: Wait for Pages to serve this commit
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -72,7 +72,7 @@ jobs:
             stale=""
             for f in $files; do
               want=$(sha256sum "docs/$f" | cut -d' ' -f1)
-              got=$(curl -fsS "https://arii.github.io/posture-guard/$f?run=${GITHUB_RUN_ID}-$i" | sha256sum | cut -d' ' -f1)
+              got=$(curl -fsS "https://arii.github.io/backup/$f?run=${GITHUB_RUN_ID}-$i" | sha256sum | cut -d' ' -f1)
               [ "$got" = "$want" ] || stale="$stale $f"
             done
             [ -z "$stale" ] && { echo "Pages serves this commit (attempt $i)"; exit 0; }

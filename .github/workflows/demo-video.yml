@@ -3,13 +3,13 @@ name: demo-video
 # Records real footage of the deployed app with Playwright, then renders the
 # Kiroween demo video with Remotion (video/). The app is self-hosted, so the
 # recording needs only the site itself. The MP4 is uploaded as the
-# "posture-guard-demo" artifact.
+# "backup-demo" artifact.
 on:
   workflow_dispatch:
     inputs:
       base:
         description: Site to record
-        default: https://arii.github.io/posture-guard/
+        default: https://arii.github.io/backup/
   push:
     paths:
       - "video/**"
@@ -30,7 +30,7 @@ jobs:
       run:
         working-directory: video
     env:
-      BASE_URL: ${{ inputs.base || 'https://arii.github.io/posture-guard/' }}
+      BASE_URL: ${{ inputs.base || 'https://arii.github.io/backup/' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,7 +58,7 @@ jobs:
       - name: Render with Remotion
         timeout-minutes: 25
         run: >
-          npx remotion render src/index.ts PostureGuardDemo out/posture-guard-demo.mp4
+          npx remotion render src/index.ts BackUpDemo out/backup-demo.mp4
           --props=public/capture.json --concurrency=2
       - name: Stills for review
         # One frame from each scene, plus a contact sheet, so the edit can be
@@ -66,7 +66,7 @@ jobs:
         run: |
           mkdir -p out/stills
           for t in 4 14 18.5 25.5 31 38 48.5 52 62 72 78.5 90 102 108; do
-            ffmpeg -loglevel error -y -ss "$t" -i out/posture-guard-demo.mp4 -frames:v 1 \
+            ffmpeg -loglevel error -y -ss "$t" -i out/backup-demo.mp4 -frames:v 1 \
               -vf scale=960:540 "out/stills/t$(printf '%05.1f' "$t").png"
           done
           ffmpeg -loglevel error -y -pattern_type glob -i 'out/stills/t*.png' \
@@ -76,16 +76,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: posture-guard-demo-stills
+          name: backup-demo-stills
           path: video/out/stills/
           if-no-files-found: warn
       - name: Upload video
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: posture-guard-demo
+          name: backup-demo
           path: |
-            video/out/posture-guard-demo.mp4
+            video/out/backup-demo.mp4
             video/public/capture.json
             video/public/footage/*.webm
           if-no-files-found: warn
