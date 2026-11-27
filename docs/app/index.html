@@ -470,14 +470,12 @@
   }
   #demo-avatar { position: absolute; inset: 0; overflow: hidden; }
   #demo-avatar img { position: absolute; max-width: none; pointer-events: none; }
-  #demo-avatar-body { clip-path: inset(37.5% 0 0 0); }
-  #demo-avatar-head { clip-path: inset(0 0 57.5% 0); }
   .stage.demo-on { background: #c4c8cd; }
   /* Wide screens: the camera and the gauge column use the width instead of a 1280 px strip. */
   @media (min-width: 821px) {
     main { max-width: 1760px; grid-template-columns: minmax(0, 3fr) minmax(320px, 1.2fr); }
     body.pre-start main { max-width: 720px; grid-template-columns: minmax(0, 1fr); }
-    main > div:first-child { display: flex; justify-content: center; }
+    .stage { margin-left: auto; margin-right: auto; }
     .stage { width: min(100%, calc((100vh - 120px) * 4 / 3)); min-height: 0; }
   }
 </style>
@@ -498,7 +496,7 @@
   <div>
     <div class="stage">
       <video id="video" playsinline muted></video>
-      <div id="demo-avatar" hidden aria-hidden="true"><img id="demo-avatar-body" src="demo-avatar.svg" alt=""><img id="demo-avatar-head" src="demo-avatar.svg" alt=""></div>
+      <div id="demo-avatar" hidden aria-hidden="true"><img id="demo-avatar-img" src="demo-avatar.svg" alt=""></div>
       <canvas id="overlay"></canvas>
       <div id="banner" role="status" aria-live="polite">Reminder</div>
       <div id="prompt-card" data-prompt="">
