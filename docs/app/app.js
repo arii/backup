@@ -2912,7 +2912,13 @@ function stopDemo() {
   setTrackingControls(false);
   document.body.classList.add("pre-start");
   delete document.body.dataset.source;
-  showSetupPanel();
+  setSetupReason("start", false); // the start screen is clean: no "Not working?" card until something fails
+  updateDemoAvatar(null); // demo is already false, so this hides the avatar
+  drawSkeleton(null, "");
+  const badge = $("state-badge");
+  badge.className = "badge post-start"; // renderBadge drops post-start, which would show a stale state up top
+  badge.textContent = "waiting";
+  syncTabTitle();
   $("start-status").textContent = "";
   $("start-overlay").classList.remove("compact");
   $("start-overlay").style.display = "";
