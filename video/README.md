@@ -9,8 +9,8 @@ recovered).
 ## Render it on GitHub (no setup)
 
 Run the **demo-video** workflow (Actions → demo-video → Run workflow). It records
-the live site, renders `out/posture-guard-demo.mp4`, and uploads it as the
-`posture-guard-demo` artifact. It also runs on every push that touches `video/`.
+the live site, renders `out/backup-demo.mp4`, and uploads it as the
+`backup-demo` artifact. It also runs on every push that touches `video/`.
 
 ## Render it locally
 
@@ -22,9 +22,9 @@ npm install
 npx playwright install chromium
 node ../scripts/make-fake-camera.mjs person.y4m --seconds 12 --tilt-after 5   # drawn figure -> fake webcam feed
 bash scripts/make-audio.sh                    # the app's chimes + the spoken cue
-npm run capture -- https://arii.github.io/posture-guard/ "$PWD/person.y4m" public
+npm run capture -- https://arii.github.io/backup/ "$PWD/person.y4m" public
 npm run studio                                # preview and tweak
-npm run render                                # -> out/posture-guard-demo.mp4
+npm run render                                # -> out/backup-demo.mp4
 ```
 
 ## Add yourself

@@ -2,7 +2,7 @@
 
 The delivered main video is `1-backup-main-v18.mp4`: 65.9 seconds, 1920 x 1080, 30 fps. No social cut is included. This is the original delivered render, not a new render.
 
-`2-backup-v18-editable-source.zip` contains the matching 36-file Remotion project, including the raw app capture, narration, music, chime and illustrated camera input. Extract it into a separate directory, then run `npm ci`, `npm run restore-footage`, and `npm run render`. Node requirements are in its package.json; restoration also requires FFmpeg. The technical composition ID remains `PostureGuardDemo`.
+`2-backup-v18-editable-source.zip` contains the matching 36-file Remotion project, including the raw app capture, narration, music, chime and illustrated camera input. Extract it into a separate directory, then run `npm ci`, `npm run restore-footage`, and `npm run render`. Node requirements are in its package.json; restoration also requires FFmpeg. The technical composition ID remains `BackUpDemo`.
 
 The existing parent video project is preserved. This archive keeps the final v18 timeline, source offsets and assets together without mixing them with older scripts or captures. Its optional SVG generator has an editing-environment-specific sharp import and output path, already documented in the archived README. It is not required for restoration or rendering. Legacy props remain for source fidelity.
 

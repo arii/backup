@@ -24,6 +24,6 @@ Narration, corrective speech, chime and music are editorial additions. The corre
 
 Privacy and stack claims are grounded in the current site and project source. Kiro claims are grounded in the repository's specifications, steering and hook configuration. No production app changes, external video upload or submission are included.
 
-- https://arii.github.io/posture-guard/
-- https://arii.github.io/posture-guard/app/
-- https://arii.github.io/posture-guard/privacy.html
+- https://arii.github.io/backup/
+- https://arii.github.io/backup/app/
+- https://arii.github.io/backup/privacy.html
