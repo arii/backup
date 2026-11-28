@@ -202,6 +202,8 @@ workflow runs it after rendering clips). Offline needs HTTPS or localhost.
 | Item | Status |
 |---|---|
 | *Your progress* panel: last 7 days of good % and good minutes, total minutes, no broken-streak messaging | Built (browser) |
+| Week view: stacked good/slouching bars, percent per day, a day-by-day list in words, and weekly slouch episodes and good runs (60 s+ of continuous good posture). Days recorded before episodes were counted show a dash, never an invented 0, and the panel says how many days are counted | Built (browser) |
+| *Your best days* on the main screen: your three best days by good %, days with 20+ tracked minutes only. Personal, kept on this device, never shared | Built (browser) |
 | Silent-test trend versus coached score, and the light-coaching suggestion | Built (browser) |
 | Export progress as JSON, *Delete my data* (clears `posture-guard:v1`) | Built (browser) |
 | Social leaderboard | **Spec only.** Opt-in, pseudonymous, aggregate scores only, no video or landmarks leave the machine, no account needed for the core app. It must reward consistency, breaks and relaxation, not rigid "good %", and count only tracked time |
