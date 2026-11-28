@@ -50,6 +50,7 @@ import {
   IMPORT_MAX_BYTES,
   migrateStore,
   PROGRESS,
+  countEpisodes,
   parseImport,
   previewImport,
   summarize,
@@ -1375,8 +1376,9 @@ function fireMilestone(minute) {
   }
 }
 
-let inBadRun = false; // a slouch episode is counted once, when a bad state begins
-let goodRunCounted = false; // a good run is counted once, when the streak first reaches PROGRESS.good_run_s
+// Episode bookkeeping (see countEpisodes): a slouch counts once when a bad state begins, a good run
+// once when the streak reaches PROGRESS.good_run_s. The flags reset when the day changes.
+const episodeFlags = { dayKey: null, inBadRun: false, goodRunCounted: false };
 
 /** Coached time: session, daily totals and the coaching policy. */
 function accountDay(state, now, dt) {
@@ -1392,21 +1394,13 @@ function accountDay(state, now, dt) {
       relaxed: hasConsent(store) && shoulderChecksOn(lowAccuracy) ? bracing.relaxed : null,
       streak: session.streak,
     });
-    inBadRun = false;
-    if (!goodRunCounted && session.streak >= PROGRESS.good_run_s) {
-      goodRunCounted = true;
-      day.good_runs = (day.good_runs || 0) + 1;
-    }
+    countEpisodes(episodeFlags, day, dayKey, "good", session.streak);
     const milestone = policy.onGood(now, dt);
     if (milestone !== null) fireMilestone(milestone);
   } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
     session.bad += dt;
     tallyDay(day, "bad", dt);
-    if (!inBadRun) {
-      inBadRun = true;
-      day.slouch_events = (day.slouch_events || 0) + 1;
-    }
-    goodRunCounted = false;
+    countEpisodes(episodeFlags, day, dayKey, "bad", 0);
     session.streak = 0;
     policy.onBad();
   }
