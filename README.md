@@ -182,13 +182,14 @@ How it works in the app: the first run requires an acknowledgement stored as
 everyone again. The same notice appears in the app footer, the landing page and under the *Relax, don't brace* panel. Full spec:
 [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/requirements.md).
 
-### Offline copy and browser caching (no longer offered)
+### Offline copy and browser caching
 
-Earlier versions had a **Make available offline** button. Since the Settings list was
-cut to eight rows (#96) it is not offered, and nothing installs a service worker.
-A copy made before stays until **Delete my data** (in *My week*) or clearing this
-site's data. Like any website, your browser
-may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video.
+**Make available offline** is in Settings and is opt-in: it is a button you press, never
+automatic (the copy is about 32 MB). Pressing it registers a service worker that stores the
+app's own files in one versioned cache, so the app runs with Wi-Fi off. **Remove offline copy**
+and **Delete my data** (in *My week*) unregister the worker and delete the cache. Like any
+website, your browser may also keep the pose model in its normal HTTP cache after you start
+the app; that is not the offline copy and holds no video.
 The landing page may start fetching the model when you point at, focus or press its link to the app
 (never on load, and not on Save-Data or slow connections). Video is never stored, with or
 without an offline copy; the cache holds only the app's own files.
