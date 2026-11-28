@@ -430,3 +430,28 @@ export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRES
   }
   return rows;
 }
+
+/** Counts sustained episodes into `day` (one day's record). `flags` holds {dayKey, inBadRun,
+ *  goodRunCounted} between calls. A slouch counts once when a bad state begins; a good run counts
+ *  once when the streak first reaches cfg.good_run_s. When the day changes the flags reset, so an
+ *  episode already under way at midnight still counts on the new day, never silently dropped. */
+export function countEpisodes(flags, day, dayKey, kind, streak, cfg = PROGRESS) {
+  if (flags.dayKey !== dayKey) {
+    flags.dayKey = dayKey;
+    flags.inBadRun = false;
+    flags.goodRunCounted = false;
+  }
+  if (kind === "good") {
+    flags.inBadRun = false;
+    if (!flags.goodRunCounted && streak >= cfg.good_run_s) {
+      flags.goodRunCounted = true;
+      day.good_runs = (day.good_runs || 0) + 1;
+    }
+  } else if (kind === "bad") {
+    if (!flags.inBadRun) {
+      flags.inBadRun = true;
+      day.slouch_events = (day.slouch_events || 0) + 1;
+    }
+    flags.goodRunCounted = false;
+  }
+}
