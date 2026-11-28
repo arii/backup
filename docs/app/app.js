@@ -51,6 +51,7 @@ import {
   migrateStore,
   PROGRESS,
   countEpisodes,
+  orDetached,
   parseImport,
   previewImport,
   summarize,
@@ -147,6 +148,9 @@ const HIDDEN_TICK_MS = 200; // ~5 fps from a worker timer while hidden
 const STORE = "posture-guard:v1";
 
 const $ = (id) => document.getElementById(id);
+// Elements added in the week/episodes release: if a cached older index.html is paired with this script,
+// writes go to a detached node instead of throwing and breaking the rest of the render.
+const $soft = (id) => orDetached($(id), () => document.createElement("div"));
 const video = $("video");
 const canvas = $("overlay");
 const ctx = canvas.getContext("2d");
@@ -1441,14 +1445,20 @@ function renderStats() {
   const tracked = day ? day.good + day.bad : 0;
   const pct = tracked > 0 ? Math.round((100 * day.good) / tracked) : null;
   $("good-pct").textContent = pct === null ? "-" : `${pct}%`;
-  $("good-today-label").textContent = tracked > 0 ? `good of ${minutesText(tracked)} today` : "good today";
+  $soft("good-today-label").textContent = tracked > 0 ? `good of ${minutesText(tracked)} today` : "good today";
   $("best-streak").textContent = mmss(Math.max(session.best, day?.best || 0));
   $("reminder-count").textContent = String(reminderCount);
   // Episodes today: counted since this build, so a day tracked before it shows a dash, not 0.
   const hasEpisodes = day && Number.isFinite(day.slouch_events);
-  $("today-slouch-events").textContent = !day ? "-" : hasEpisodes ? String(day.slouch_events) : day.bad > 0 ? "-" : "0";
-  $("today-slouch-label").textContent = day?.slouch_events === 1 ? "slouch episode" : "slouch episodes";
-  $("today-good-runs").textContent = !day
+  $soft("today-slouch-events").textContent = !day
+    ? "-"
+    : hasEpisodes
+      ? String(day.slouch_events)
+      : day.bad > 0
+        ? "-"
+        : "0";
+  $soft("today-slouch-label").textContent = day?.slouch_events === 1 ? "slouch episode" : "slouch episodes";
+  $soft("today-good-runs").textContent = !day
     ? "-"
     : Number.isFinite(day.good_runs)
       ? String(day.good_runs)
@@ -3460,7 +3470,7 @@ function renderDayList(s) {
     }
     return li;
   });
-  $("day-list").replaceChildren(...rows);
+  $soft("day-list").replaceChildren(...rows);
 }
 
 const minutesText = (sec) =>
@@ -3505,7 +3515,7 @@ function renderWeekStats(s) {
 }
 /** Personal best days on the main dashboard (this device only, no sharing). */
 function renderBestDays(s) {
-  const box = $("best-days");
+  const box = $soft("best-days");
   const { top, ranked_days: n, today_rank: rank } = s.board;
   box.hidden = top.length === 0;
   if (!top.length) return;
@@ -3521,8 +3531,8 @@ function renderBestDays(s) {
     if (r.today) li.className = "me";
     return li;
   });
-  $("best-days-list").replaceChildren(...items);
-  $("best-days-note").textContent =
+  $soft("best-days-list").replaceChildren(...items);
+  $soft("best-days-note").textContent =
     rank === null
       ? `Your best days (20+ min tracked). Today ranks once it has 20 minutes.`
       : `Today ranks ${rank} of ${n} tracked days.`;
