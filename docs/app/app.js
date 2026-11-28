@@ -49,6 +49,7 @@ import {
   exportJson,
   IMPORT_MAX_BYTES,
   migrateStore,
+  PROGRESS,
   parseImport,
   previewImport,
   summarize,
@@ -859,7 +860,8 @@ function renderCard() {
   $("prompt-done").hidden = !ui.done || card.finished;
   $("prompt-snooze").hidden = !ui.snooze || card.finished;
   $("prompt-never").hidden = !ui.never || card.finished;
-  $("prompt-notnow").hidden = card.finished;
+  // A finished water card keeps a dismiss button, so "I didn't drink" ends it without counting a drink.
+  $("prompt-notnow").hidden = card.finished && !ui.dismissible;
   $("prompt-notnow").textContent = ui.stop || "Not now"; // #111: it ends the break, not tracking
   el.dataset.prompt = card.id;
   el.classList.add("show");
@@ -1180,7 +1182,7 @@ function demoStep(first = false) {
         sayPrompt(card.text);
       }
       if (card.kind === "water") {
-        card.ui = { action: true, actionLabel: "I drank" };
+        card.ui = { action: true, actionLabel: "I drank", stop: "Didn't drink", dismissible: true };
       }
       renderCard();
       showFigure("");
@@ -1373,10 +1375,13 @@ function fireMilestone(minute) {
   }
 }
 
+let inBadRun = false; // a slouch episode is counted once, when a bad state begins
+let goodRunCounted = false; // a good run is counted once, when the streak first reaches PROGRESS.good_run_s
+
 /** Coached time: session, daily totals and the coaching policy. */
 function accountDay(state, now, dt) {
   const dayKey = todayKey();
-  store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0 };
+  store.days[dayKey] = store.days[dayKey] || { good: 0, bad: 0, slouch_events: 0, good_runs: 0 };
   const day = store.days[dayKey];
   if (state === State.GOOD) {
     session.good += dt;
@@ -1387,11 +1392,21 @@ function accountDay(state, now, dt) {
       relaxed: hasConsent(store) && shoulderChecksOn(lowAccuracy) ? bracing.relaxed : null,
       streak: session.streak,
     });
+    inBadRun = false;
+    if (!goodRunCounted && session.streak >= PROGRESS.good_run_s) {
+      goodRunCounted = true;
+      day.good_runs = (day.good_runs || 0) + 1;
+    }
     const milestone = policy.onGood(now, dt);
     if (milestone !== null) fireMilestone(milestone);
   } else if (state === State.BAD_CHIME || state === State.BAD_VOICE) {
     session.bad += dt;
     tallyDay(day, "bad", dt);
+    if (!inBadRun) {
+      inBadRun = true;
+      day.slouch_events = (day.slouch_events || 0) + 1;
+    }
+    goodRunCounted = false;
     session.streak = 0;
     policy.onBad();
   }
@@ -1434,6 +1449,17 @@ function renderStats() {
   $("good-pct").textContent = pct === null ? "-" : `${pct}%`;
   $("best-streak").textContent = mmss(Math.max(session.best, day?.best || 0));
   $("reminder-count").textContent = String(reminderCount);
+  // Episodes today: counted since this build, so a day tracked before it shows a dash, not 0.
+  const hasEpisodes = day && Number.isFinite(day.slouch_events);
+  $("today-slouch-events").textContent = !day ? "-" : hasEpisodes ? String(day.slouch_events) : day.bad > 0 ? "-" : "0";
+  $("today-slouch-label").textContent = day?.slouch_events === 1 ? "slouch episode" : "slouch episodes";
+  $("today-good-runs").textContent = !day
+    ? "-"
+    : Number.isFinite(day.good_runs)
+      ? String(day.good_runs)
+      : day.good > 0
+        ? "-"
+        : "0";
   const next = breaks.nextIn();
   $("break-ring-arc").setAttribute("stroke-dashoffset", String(RING_LEN * (next ? 1 - next.fraction : 1)));
   // The number in the ring is breaks taken today (restored after #98 v3 dropped it).
@@ -1742,6 +1768,9 @@ function renderBadge(transition, result, held, label, zone, hold) {
 /** Body-part tiles (frames 04 to 06, #98): the angle, and the icon colour from tileStates.
  *  Both use the angles from the saved posture, the same ones the reminders use, so a tile
  *  can't be amber while the gauge is green because of where the camera sits. */
+const LEAN_UNAVAILABLE_NOTE =
+  "Lean needs both hips in view. They were not visible enough to measure it, so Lean is left out of your score.";
+
 function renderMetrics(relative, zone, cue) {
   const values = {};
   for (const key of ["head_forward_deg", "head_tilt_deg", "shoulder_level_deg", "trunk_lean_deg"]) {
@@ -1750,6 +1779,20 @@ function renderMetrics(relative, zone, cue) {
     values[key] = v;
     $(`m-${key}`).textContent = v === null ? "-" : `${Math.abs(Math.round(v))}\u00b0`; // how far off, either way
   }
+  // Lean is measured from shoulders to hips. When the hips are not visible enough, there is no
+  // value, so the tile says why (hover, focus or long-press) instead of a bare dash.
+  const leanTile = $("t-trunk_lean");
+  const leanMissing = Boolean(relative) && !relative.trunk_lean_available;
+  if (leanMissing) {
+    leanTile.title = LEAN_UNAVAILABLE_NOTE;
+    leanTile.setAttribute("aria-label", `Lean: no value. ${LEAN_UNAVAILABLE_NOTE}`);
+    leanTile.tabIndex = 0;
+  } else {
+    leanTile.removeAttribute("title");
+    leanTile.removeAttribute("aria-label");
+    leanTile.removeAttribute("tabindex");
+  }
+  leanTile.classList.toggle("na", leanMissing);
   const states = tileStates(zone, cue?.metric ?? null, values, DEFAULTS.scoring);
   for (const [metric, st] of Object.entries(states)) {
     const tile = $(`t-${metric}`);
@@ -3371,18 +3414,58 @@ function renderProgress() {
       const fill = document.createElement("div");
       fill.style.height = `${d.pct ?? 0}%`;
       track.append(fill);
+      if (d.pct !== null) {
+        const bad = document.createElement("div");
+        bad.className = "bad";
+        bad.style.height = `${100 - d.pct}%`;
+        track.append(bad);
+      }
       const label = document.createElement("span");
       const date = new Date(`${d.date}T00:00:00Z`);
       label.textContent = date.toLocaleDateString(undefined, { weekday: "narrow", timeZone: "UTC" });
       col.setAttribute(
         "aria-label",
-        `${date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" })}: ${d.pct === null ? "no data" : `${d.pct}% good`}`,
+        `${date.toLocaleDateString(undefined, { weekday: "long", timeZone: "UTC" })}: ${d.pct === null ? "no data" : `${d.pct}% good, ${100 - d.pct}% slouching`}`,
       );
-      col.append(track, label);
+      const pctText = document.createElement("small");
+      pctText.textContent = d.pct === null ? "-" : `${d.pct}%`;
+      col.append(track, label, pctText);
       return col;
     }),
   );
+  renderDayList(s);
   renderWeekStats(s);
+  renderBestDays(s);
+}
+
+/** Day by day, in words and numbers, so good vs bad never depends on colour alone. A day with
+ *  too little tracked time is "not enough tracked", never counted as bad. */
+function renderDayList(s) {
+  const rows = [...s.days].reverse().map((d) => {
+    const li = document.createElement("li");
+    const date = new Date(`${d.date}T00:00:00Z`);
+    const name = date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+    const b = document.createElement("b");
+    b.textContent = name;
+    if (d.tracked_s <= 0) {
+      li.append(b, " no data (camera was not tracking)");
+    } else if (d.pct === null) {
+      li.append(b, ` not enough tracked yet (${minutesText(d.tracked_s)})`);
+    } else {
+      const bad = d.tracked_s - d.good_s;
+      li.append(
+        b,
+        ` ${d.pct}% good: ${minutesText(d.good_s)} good, ${minutesText(bad)} slouching, ${minutesText(d.tracked_s)} tracked`,
+      );
+    }
+    return li;
+  });
+  $("day-list").replaceChildren(...rows);
 }
 
 const minutesText = (sec) =>
@@ -3390,6 +3473,12 @@ const minutesText = (sec) =>
 
 /** Three numbers under the bars (frame 12 plus the totals people missed): good time so far,
  *  the latest silent test, and water this week. A missing number shows a dash. */
+/** Counts exist only for days recorded since episodes were counted. When some tracked days of the
+ *  week lack them, say so, so a partial total never reads as the whole week. */
+function coverage(s) {
+  const tracked = s.days.filter((d) => d.tracked_s > 0).length;
+  return s.count_days_known < tracked ? `, ${s.count_days_known} of ${tracked} days counted` : "";
+}
 function renderWeekStats(s) {
   const n = s.tests.length;
   const latest = !n ? "-" : n === 1 ? `${s.tests[0].pct}%` : `${s.tests[0].pct}\u2192${s.tests[n - 1].pct}%`;
@@ -3397,6 +3486,10 @@ function renderWeekStats(s) {
     [s.empty ? "-" : minutesText(s.cumulative_good_s), "good so far"],
     [latest, n > 1 ? "silent tests" : "silent test"],
     [String(s.water_7d || 0), "drinks this week"],
+    [s.empty ? "-" : minutesText(s.bad_s_7d), "slouching this week"],
+    // Episodes exist only for days recorded since they were counted: older days stay unknown, not 0.
+    [s.slouch_events_7d === null ? "-" : String(s.slouch_events_7d), `slouch episodes${coverage(s)}`],
+    [s.good_runs_7d === null ? "-" : String(s.good_runs_7d), `good runs (${PROGRESS.good_run_s}s+)${coverage(s)}`],
   ];
   $("week-stats").replaceChildren(
     ...cells.map(([value, label]) => {
@@ -3414,6 +3507,30 @@ function renderWeekStats(s) {
     ? "Your latest silent test is as good as your coached time. You could try light coaching."
     : "";
   $("progress-light").hidden = !suggest;
+}
+/** Personal best days on the main dashboard (this device only, no sharing). */
+function renderBestDays(s) {
+  const box = $("best-days");
+  const { top, ranked_days: n, today_rank: rank } = s.board;
+  box.hidden = top.length === 0;
+  if (!top.length) return;
+  const items = top.map((r, i) => {
+    const li = document.createElement("li");
+    const date = new Date(`${r.date}T00:00:00Z`);
+    const name = r.today
+      ? "Today"
+      : date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+    const b = document.createElement("b");
+    b.textContent = `${r.pct}%`;
+    li.append(`${i + 1}. ${name} `, b, ` good, ${minutesText(r.tracked_s)} tracked`);
+    if (r.today) li.className = "me";
+    return li;
+  });
+  $("best-days-list").replaceChildren(...items);
+  $("best-days-note").textContent =
+    rank === null
+      ? `Your best days (20+ min tracked). Today ranks once it has 20 minutes.`
+      : `Today ranks ${rank} of ${n} tracked days.`;
 }
 $("progress-light").addEventListener("click", () => {
   setCoachingLevel("light");
