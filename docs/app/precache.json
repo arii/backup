@@ -1,6 +1,6 @@
 {
-  "version": "cae36dd07084ae13",
-  "totalBytes": 33477957,
+  "version": "3de0b031dc13cf76",
+  "totalBytes": 33478481,
   "files": [
     {
       "url": "activity.js",
@@ -9,8 +9,8 @@
     },
     {
       "url": "app.js",
-      "size": 148491,
-      "sha256": "5f4251e68a2117f78d4f624567682e39e4dd9bb58de08176d1c1b7db105c3ebd"
+      "size": 148845,
+      "sha256": "0829b54bc65802bdcaeed585e72ef5bb89aa2d270d3309c993bd359435df69a0"
     },
     {
       "url": "breaks.js",
@@ -94,8 +94,8 @@
     },
     {
       "url": "progress.js",
-      "size": 19357,
-      "sha256": "c91ebb2c9f43814b076486eeedb584a1fb1ad8fe6d161af7d1e99b14c0667ab0"
+      "size": 19527,
+      "sha256": "63c72784432c5190476cc40a7b63dcca602d7b2be331b47026eb0580dbab68d2"
     },
     {
       "url": "prompts.js",
