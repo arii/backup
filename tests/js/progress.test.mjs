@@ -161,3 +161,43 @@ test("export and import keep the episode counts", async () => {
   assert.equal(parsed.days["2026-11-24"].slouch_events, 4);
   assert.equal(parsed.days["2026-11-24"].good_runs, 5);
 });
+
+import { countEpisodes } from "../../docs/app/progress.js";
+
+test("episodes: a slouch counts once per run, and again after a good stretch", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const d = {};
+  for (let i = 0; i < 5; i++) countEpisodes(f, d, "2026-11-28", "bad", 0);
+  countEpisodes(f, d, "2026-11-28", "good", 3);
+  for (let i = 0; i < 3; i++) countEpisodes(f, d, "2026-11-28", "bad", 0);
+  assert.equal(d.slouch_events, 2);
+});
+
+test("episodes: a good run counts once at the threshold, not per frame", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const d = {};
+  for (let s = 1; s <= 200; s++) countEpisodes(f, d, "2026-11-28", "good", s);
+  assert.equal(d.good_runs, 1);
+});
+
+test("episodes: a slouch still under way at midnight counts on the new day", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const mon = {};
+  const tue = {};
+  countEpisodes(f, mon, "2026-11-28", "bad", 0);
+  countEpisodes(f, tue, "2026-11-29", "bad", 0);
+  countEpisodes(f, tue, "2026-11-29", "bad", 0);
+  assert.equal(mon.slouch_events, 1);
+  assert.equal(tue.slouch_events, 1);
+});
+
+test("episodes: a good streak across midnight counts one run on each day", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const mon = {};
+  const tue = {};
+  countEpisodes(f, mon, "2026-11-28", "good", 70);
+  countEpisodes(f, tue, "2026-11-29", "good", 75);
+  countEpisodes(f, tue, "2026-11-29", "good", 80);
+  assert.equal(mon.good_runs, 1);
+  assert.equal(tue.good_runs, 1);
+});
