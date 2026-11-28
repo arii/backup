@@ -849,7 +849,9 @@ try {
     await page.goto(`${base}app/${bust}`);
     const prog = await page.evaluate(() => ({
       bars: [...document.querySelectorAll("#progress-days .week-bar")].map((b) => b.getAttribute("aria-label")),
-      heights: [...document.querySelectorAll("#progress-days .week-bar .track div")].map((d) => d.style.height),
+      heights: [...document.querySelectorAll("#progress-days .week-bar .track div:not(.bad)")].map(
+        (d) => d.style.height,
+      ),
       overflow: document.documentElement.scrollWidth > window.innerWidth,
     }));
     check(
