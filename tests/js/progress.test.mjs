@@ -107,3 +107,130 @@ test("export contains only whitelisted keys and drops sounds and calibration", (
   assert.deepEqual(Object.keys(out.tests[0]).sort(), ["at", "bad", "good", "minutes"]);
   assert.equal(out.exportedAt, new Date(NOW).toISOString());
 });
+
+// -- weekly bad time, episodes and the personal best-days board ---------------------------
+import { bestDays as bestDaysFn, summarize as summarizeFn } from "../../docs/app/progress.js";
+
+test("best days: needs 20 tracked minutes, highest good share first, personal only", () => {
+  const store = {
+    schema: 2,
+    days: {
+      "2026-11-20": { good: 1100, bad: 100 }, // 92%
+      "2026-11-21": { good: 1800, bad: 600 }, // 75%
+      "2026-11-22": { good: 100, bad: 0 }, // 100% but too little tracked: does not rank
+      "2026-11-23": { good: 3000, bad: 200 }, // 94%
+      "2026-11-24": { good: 1300, bad: 300 }, // 81%
+    },
+  };
+  const b = bestDaysFn(store, new Date(2026, 10, 24, 12).getTime());
+  assert.deepEqual(
+    b.top.map((r) => r.date),
+    ["2026-11-23", "2026-11-20", "2026-11-24"],
+  );
+  assert.equal(b.ranked_days, 4);
+  assert.equal(b.today_rank, 3);
+  assert.equal(b.top[2].today, true);
+});
+
+test("weekly summary: bad time is totalled, unknown episode counts stay null, not zero", () => {
+  const now = new Date(2026, 10, 24, 12).getTime();
+  const old = { schema: 2, days: { "2026-11-23": { good: 600, bad: 300 } } };
+  const s = summarizeFn(old, now);
+  assert.equal(s.bad_s_7d, 300);
+  assert.equal(s.slouch_events_7d, null);
+  assert.equal(s.good_runs_7d, null);
+  const fresh = {
+    schema: 2,
+    days: {
+      "2026-11-23": { good: 600, bad: 300 },
+      "2026-11-24": { good: 600, bad: 60, slouch_events: 4, good_runs: 5 },
+    },
+  };
+  const t = summarizeFn(fresh, now);
+  assert.equal(t.slouch_events_7d, 4); // the old day is unknown, so only known days add up
+  assert.equal(t.good_runs_7d, 5);
+  assert.equal(t.bad_s_7d, 360);
+  assert.equal(t.count_days_known, 1); // 1 of 2 tracked days has counts, so the UI says "1 of 2 days counted"
+});
+
+test("export and import keep the episode counts", async () => {
+  const { exportJson, parseImport } = await import("../../docs/app/progress.js");
+  const store = { schema: 2, days: { "2026-11-24": { good: 600, bad: 60, slouch_events: 4, good_runs: 5 } } };
+  const parsed = parseImport(exportJson(store));
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.days["2026-11-24"].slouch_events, 4);
+  assert.equal(parsed.days["2026-11-24"].good_runs, 5);
+});
+
+import { countEpisodes } from "../../docs/app/progress.js";
+
+test("episodes: a slouch counts once per run, and again after a good stretch", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const d = {};
+  for (let i = 0; i < 5; i++) countEpisodes(f, d, "2026-11-28", "bad", 0);
+  countEpisodes(f, d, "2026-11-28", "good", 3);
+  for (let i = 0; i < 3; i++) countEpisodes(f, d, "2026-11-28", "bad", 0);
+  assert.equal(d.slouch_events, 2);
+});
+
+test("episodes: a good run counts once at the threshold, not per frame", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const d = {};
+  for (let s = 1; s <= 200; s++) countEpisodes(f, d, "2026-11-28", "good", s);
+  assert.equal(d.good_runs, 1);
+});
+
+test("episodes: a slouch still under way at midnight counts on the new day", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const mon = {};
+  const tue = {};
+  countEpisodes(f, mon, "2026-11-28", "bad", 0);
+  countEpisodes(f, tue, "2026-11-29", "bad", 0);
+  countEpisodes(f, tue, "2026-11-29", "bad", 0);
+  assert.equal(mon.slouch_events, 1);
+  assert.equal(tue.slouch_events, 1);
+});
+
+test("episodes: a good streak across midnight counts one run on each day", () => {
+  const f = { dayKey: null, inBadRun: false, goodRunCounted: false };
+  const mon = {};
+  const tue = {};
+  countEpisodes(f, mon, "2026-11-28", "good", 70);
+  countEpisodes(f, tue, "2026-11-29", "good", 75);
+  countEpisodes(f, tue, "2026-11-29", "good", 80);
+  assert.equal(mon.good_runs, 1);
+  assert.equal(tue.good_runs, 1);
+});
+
+import { readFileSync } from "node:fs";
+import { orDetached } from "../../docs/app/progress.js";
+
+test("mixed cache: a missing element becomes a detached stand-in, not a crash", () => {
+  const made = orDetached(null, () => ({ textContent: "", replaceChildren() {}, hidden: false }));
+  assert.doesNotThrow(() => {
+    made.textContent = "x";
+    made.replaceChildren();
+    made.hidden = true;
+  });
+  const real = { id: "real" };
+  assert.equal(
+    orDetached(real, () => ({})),
+    real,
+  );
+});
+
+test("mixed cache: new episode, day-list and best-days elements are never written through a bare $()", () => {
+  const app = readFileSync(new URL("../../docs/app/app.js", import.meta.url), "utf8");
+  for (const id of [
+    "good-today-label",
+    "today-slouch-events",
+    "today-slouch-label",
+    "today-good-runs",
+    "day-list",
+    "best-days",
+    "best-days-list",
+    "best-days-note",
+  ]) {
+    assert.ok(!app.includes(`$("${id}")`), `${id} must be read with $soft`);
+  }
+});

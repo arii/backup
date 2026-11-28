@@ -12,6 +12,9 @@ export const PROGRESS = Object.freeze({
   min_tracked_s: 60, // a day with less tracked time shows "no data", not a percentage
   window_days: 7,
   max_tests: 10,
+  board_min_tracked_s: 20 * 60, // a day needs 20 tracked minutes to rank on the personal best-days board
+  board_size: 3,
+  good_run_s: 60, // a good run is a sustained stretch of good posture, not a single frame
 });
 
 export const SCHEMA = 2; // 1: UTC day keys. 2: local day keys from store.dayKeyCutover.
@@ -19,7 +22,15 @@ export const IMPORT_MAX_BYTES = 1024 * 1024;
 const MAX_TESTS_STORED = 50;
 const MAX_IMPORT_DAYS = 3660;
 const DAY_MS = 86400000;
-const DAY_EXTRAS = Object.freeze(["relaxed_s", "shoulder_s", "best", "brace_events", "breaks"]);
+const DAY_EXTRAS = Object.freeze([
+  "relaxed_s",
+  "shoulder_s",
+  "best",
+  "brace_events",
+  "breaks",
+  "slouch_events",
+  "good_runs",
+]);
 const DAY_MAX_S = 86400; // a day has 86400 seconds; no seconds field may exceed it
 const SECONDS_FIELDS = Object.freeze(["good", "bad", "relaxed_s", "shoulder_s", "best"]);
 
@@ -126,6 +137,10 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
       relaxed_pct: enough && base > 0 ? pctOf(relaxed, base - relaxed) : null,
       best_s: Math.min(secs(d.best), good),
       brace_events: Math.floor(secs(d.brace_events)),
+      bad_s: bad,
+      // Days saved before episodes were counted have no field: unknown (null), never an invented zero.
+      slouch_events: Number.isFinite(d.slouch_events) ? Math.floor(secs(d.slouch_events)) : null,
+      good_runs: Number.isFinite(d.good_runs) ? Math.floor(secs(d.good_runs)) : null,
     });
   }
   let cumulative = 0;
@@ -149,7 +164,16 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
   const latest = tests[tests.length - 1];
   const water = store?.water && typeof store.water === "object" ? store.water : {};
   const waterOf = (date) => Math.floor(secs(water[date]));
+  const counted = (key) => {
+    const known = days.filter((d) => d[key] !== null);
+    return known.length ? known.reduce((a, d) => a + d[key], 0) : null;
+  };
   return {
+    count_days_known: days.filter((d) => d.tracked_s > 0 && d.slouch_events !== null).length,
+    slouch_events_7d: counted("slouch_events"),
+    good_runs_7d: counted("good_runs"),
+    bad_s_7d: days.reduce((a, d) => a + d.bad_s, 0),
+    board: bestDays(store, now, cfg),
     water_today: waterOf(days[days.length - 1].date),
     water_7d: days.reduce((a, d) => a + waterOf(d.date), 0),
     days,
@@ -159,6 +183,26 @@ export function summarize(store, now = Date.now(), cfg = PROGRESS) {
     try_light: Boolean(latest && coached !== null && withData.length >= 2 && latest.pct >= coached),
     empty: withData.length === 0 && tests.length === 0 && cumulative === 0,
   };
+}
+
+/** Personal best days, highest good-posture share first (ties: more good time). Only days with
+ *  enough tracked time rank, so one lucky minute cannot top the board. Purely this device's own
+ *  history: no names, no sharing, no ranking against other people. `today` marks today's row. */
+export function bestDays(store, now = Date.now(), cfg = PROGRESS) {
+  const stored = store?.days && typeof store.days === "object" ? store.days : {};
+  const today = dayKeyFor(store, now);
+  const rows = [];
+  for (const [key, d] of Object.entries(stored)) {
+    if (!DATE_KEY.test(key) || !d || typeof d !== "object") continue;
+    const good = secs(d.good);
+    const bad = secs(d.bad);
+    if (good + bad < cfg.board_min_tracked_s) continue;
+    rows.push({ date: key, pct: pctOf(good, bad), good_s: good, tracked_s: good + bad, today: key === today });
+  }
+  rows.sort((a, b) => b.pct - a.pct || b.good_s - a.good_s || (a.date < b.date ? 1 : -1));
+  const top = rows.slice(0, cfg.board_size);
+  const rank = rows.findIndex((r) => r.today);
+  return { top, ranked_days: rows.length, today_rank: rank === -1 ? null : rank + 1 };
 }
 
 /** JSON of the whitelisted fields only (no sounds, calibration or settings). */
@@ -385,4 +429,34 @@ export function summarizeWeeks(store, now = Date.now(), weeks = 8, cfg = PROGRES
     delete row._shoulder;
   }
   return rows;
+}
+
+/** Counts sustained episodes into `day` (one day's record). `flags` holds {dayKey, inBadRun,
+ *  goodRunCounted} between calls. A slouch counts once when a bad state begins; a good run counts
+ *  once when the streak first reaches cfg.good_run_s. When the day changes the flags reset, so an
+ *  episode already under way at midnight still counts on the new day, never silently dropped. */
+export function countEpisodes(flags, day, dayKey, kind, streak, cfg = PROGRESS) {
+  if (flags.dayKey !== dayKey) {
+    flags.dayKey = dayKey;
+    flags.inBadRun = false;
+    flags.goodRunCounted = false;
+  }
+  if (kind === "good") {
+    flags.inBadRun = false;
+    if (!flags.goodRunCounted && streak >= cfg.good_run_s) {
+      flags.goodRunCounted = true;
+      day.good_runs = (day.good_runs || 0) + 1;
+    }
+  } else if (kind === "bad") {
+    if (!flags.inBadRun) {
+      flags.inBadRun = true;
+      day.slouch_events = (day.slouch_events || 0) + 1;
+    }
+    flags.goodRunCounted = false;
+  }
+}
+
+/** The element when it exists, otherwise a detached stand-in, so a missing id never throws on write. */
+export function orDetached(el, make) {
+  return el || make();
 }

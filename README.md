@@ -104,10 +104,11 @@ Firefox, set `webgl.disabled` to `false` in `about:config`.
   model and its WASM runtime are self-hosted in `docs/app/vendor/`, so no third-party
   server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
-  hidden. Chimes play through Web Audio and the prompt through recorded clips or the
+  hidden (iOS Safari may still pause the camera, see Requirements). Chimes play through Web Audio and the prompt through recorded clips or the
   browser's speech synthesis.
 - **Remembers you.** Calibration, settings, the camera you last used and daily
-  good/slouch totals persist in `localStorage`.
+  good/slouch totals persist in this browser's `localStorage`. They stay on this device and
+  are lost if you clear site data or switch browsers; *Export* saves a copy.
 - **Share.** The sponsor card's *Share instead* opens plain links (no third-party
   scripts) and a *Share your score* PNG card drawn in the tab from this session's
   good-posture percentage and best streak. It never contains a camera frame.
@@ -181,13 +182,14 @@ How it works in the app: the first run requires an acknowledgement stored as
 everyone again. The same notice appears in the app footer, the landing page and under the *Relax, don't brace* panel. Full spec:
 [`.kiro/specs/safety-and-disclaimers`](.kiro/specs/safety-and-disclaimers/requirements.md).
 
-### Offline copy and browser caching (no longer offered)
+### Offline copy and browser caching
 
-Earlier versions had a **Make available offline** button. Since the Settings list was
-cut to eight rows (#96) it is not offered, and nothing installs a service worker.
-A copy made before stays until **Delete my data** (in *My week*) or clearing this
-site's data. Like any website, your browser
-may keep the pose model in its normal HTTP cache after you start the app. This is not the Offline mode and holds no video.
+**Make available offline** is in Settings and is opt-in: it is a button you press, never
+automatic (the copy is about 32 MB). Pressing it registers a service worker that stores the
+app's own files in one versioned cache, so the app runs with Wi-Fi off. **Remove offline copy**
+and **Delete my data** (in *My week*) unregister the worker and delete the cache. Like any
+website, your browser may also keep the pose model in its normal HTTP cache after you start
+the app; that is not the offline copy and holds no video.
 The landing page may start fetching the model when you point at, focus or press its link to the app
 (never on load, and not on Save-Data or slow connections). Video is never stored, with or
 without an offline copy; the cache holds only the app's own files.
@@ -202,6 +204,8 @@ workflow runs it after rendering clips). Offline needs HTTPS or localhost.
 | Item | Status |
 |---|---|
 | *Your progress* panel: last 7 days of good % and good minutes, total minutes, no broken-streak messaging | Built (browser) |
+| Week view: stacked good/slouching bars, percent per day, a day-by-day list in words, and weekly slouch episodes and good runs (60 s+ of continuous good posture). Days recorded before episodes were counted show a dash, never an invented 0, and the panel says how many days are counted | Built (browser) |
+| *Your best days* on the main screen: your three best days by good %, days with 20+ tracked minutes only. Personal, kept on this device, never shared | Built (browser) |
 | Silent-test trend versus coached score, and the light-coaching suggestion | Built (browser) |
 | Export progress as JSON, *Delete my data* (clears `posture-guard:v1`) | Built (browser) |
 | Social leaderboard | **Spec only.** Opt-in, pseudonymous, aggregate scores only, no video or landmarks leave the machine, no account needed for the core app. It must reward consistency, breaks and relaxation, not rigid "good %", and count only tracked time |
