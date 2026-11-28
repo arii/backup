@@ -1447,6 +1447,7 @@ function renderStats() {
   const tracked = day ? day.good + day.bad : 0;
   const pct = tracked > 0 ? Math.round((100 * day.good) / tracked) : null;
   $("good-pct").textContent = pct === null ? "-" : `${pct}%`;
+  $("good-today-label").textContent = tracked > 0 ? `good of ${minutesText(tracked)} today` : "good today";
   $("best-streak").textContent = mmss(Math.max(session.best, day?.best || 0));
   $("reminder-count").textContent = String(reminderCount);
   // Episodes today: counted since this build, so a day tracked before it shows a dash, not 0.
