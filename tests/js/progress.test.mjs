@@ -201,3 +201,36 @@ test("episodes: a good streak across midnight counts one run on each day", () =>
   assert.equal(mon.good_runs, 1);
   assert.equal(tue.good_runs, 1);
 });
+
+import { readFileSync } from "node:fs";
+import { orDetached } from "../../docs/app/progress.js";
+
+test("mixed cache: a missing element becomes a detached stand-in, not a crash", () => {
+  const made = orDetached(null, () => ({ textContent: "", replaceChildren() {}, hidden: false }));
+  assert.doesNotThrow(() => {
+    made.textContent = "x";
+    made.replaceChildren();
+    made.hidden = true;
+  });
+  const real = { id: "real" };
+  assert.equal(
+    orDetached(real, () => ({})),
+    real,
+  );
+});
+
+test("mixed cache: new episode, day-list and best-days elements are never written through a bare $()", () => {
+  const app = readFileSync(new URL("../../docs/app/app.js", import.meta.url), "utf8");
+  for (const id of [
+    "good-today-label",
+    "today-slouch-events",
+    "today-slouch-label",
+    "today-good-runs",
+    "day-list",
+    "best-days",
+    "best-days-list",
+    "best-days-note",
+  ]) {
+    assert.ok(!app.includes(`$("${id}")`), `${id} must be read with $soft`);
+  }
+});
