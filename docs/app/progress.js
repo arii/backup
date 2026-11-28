@@ -455,3 +455,8 @@ export function countEpisodes(flags, day, dayKey, kind, streak, cfg = PROGRESS) 
     flags.goodRunCounted = false;
   }
 }
+
+/** The element when it exists, otherwise a detached stand-in, so a missing id never throws on write. */
+export function orDetached(el, make) {
+  return el || make();
+}
