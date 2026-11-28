@@ -104,10 +104,11 @@ Firefox, set `webgl.disabled` to `false` in `about:config`.
   model and its WASM runtime are self-hosted in `docs/app/vendor/`, so no third-party
   server is contacted.
 - **Works in the background.** Tracking continues at about 5 fps when the tab is
-  hidden. Chimes play through Web Audio and the prompt through recorded clips or the
+  hidden (iOS Safari may still pause the camera, see Requirements). Chimes play through Web Audio and the prompt through recorded clips or the
   browser's speech synthesis.
 - **Remembers you.** Calibration, settings, the camera you last used and daily
-  good/slouch totals persist in `localStorage`.
+  good/slouch totals persist in this browser's `localStorage`. They stay on this device and
+  are lost if you clear site data or switch browsers; *Export* saves a copy.
 - **Share.** The sponsor card's *Share instead* opens plain links (no third-party
   scripts) and a *Share your score* PNG card drawn in the tab from this session's
   good-posture percentage and best streak. It never contains a camera frame.
